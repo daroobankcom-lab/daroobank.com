@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import Http404, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from .comparisons import product_comparison_context
 from .intake import IntakeError, ReviewConflict, require_staff, review_product, stage_products
 from .models import ProductCandidate, ProductCandidateReview
 from .staff_forms import ProductReviewForm, ProductUploadForm
@@ -72,7 +73,7 @@ def detail_response(request, candidate, *, form=None, status=200):
     return render(request, 'staff/product_detail.html', {
         'page_title': 'نامزد فرآورده | داروبانک', 'description': 'جزئیات داخلی نامزد فرآورده.',
         'noindex': True, 'private_staff': True, 'candidate': candidate, 'reviews': reviews,
-        'can_review': can_review, 'review_form': form,
+        'can_review': can_review, 'review_form': form, 'comparison': product_comparison_context(candidate),
     }, status=status)
 
 

@@ -113,7 +113,7 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
                     source_url=source_url, source_record_id=row['source_record_id'],
                     payload_sha256=fingerprint(source_name, source_url, row),
                     defaults={'source_name': source_name, 'source_fields': row, 'staged_by': actor,
-                              'source_rights_attested': True},
+                              'source_rights_attested': True, 'irc_normalized': normalize_search(row['irc'])},
                 )
                 counts['created' if created else 'duplicates'] += 1
     return counts
@@ -138,6 +138,7 @@ def review_product(*, candidate_id, actor, decision, reason, expected_review, ex
         except IntakeError as exc:
             raise ReviewConflict('داده ثبت‌شده معتبر نیست.') from exc
         if (candidate.source_record_id != candidate.source_fields['source_record_id']
+                or candidate.irc_normalized != normalize_search(candidate.source_fields['irc'])
                 or candidate.payload_sha256 != digest or expected_hash != digest):
             raise ReviewConflict('اطلاعات رکورد تغییر کرده است؛ صفحه را تازه کنید.')
         latest = candidate.reviews.order_by('-pk').first()

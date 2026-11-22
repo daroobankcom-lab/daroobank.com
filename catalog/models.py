@@ -49,6 +49,7 @@ class ProductCandidate(models.Model):
     source_url = models.URLField(max_length=200)
     source_record_id = models.CharField(max_length=160)
     source_fields = models.JSONField()
+    irc_normalized = models.CharField(max_length=80, blank=True, default='', db_index=True, editable=False)
     payload_sha256 = models.CharField(max_length=64)
     staged_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='staged_product_candidates')
     source_rights_attested = models.BooleanField(default=False)

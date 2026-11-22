@@ -368,3 +368,14 @@
 .staff-review-item strong { color: var(--ink-strong); font-size: 13px; }
 .staff-review-item p { margin: 4px 0; font-size: 13px; overflow-wrap: anywhere; }
 .staff-review-item small, .staff-upload-result p { color: #526e68; font-size: 12px; }
+
+.comparison-differences {
+  padding-inline-start: 22px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 2;
+  overflow-wrap: anywhere;
+}
+.comparison-differences small {
+  color: #526e68;
+}

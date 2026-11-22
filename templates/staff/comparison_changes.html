@@ -1,0 +1,3 @@
+{% if changes %}<ul class="comparison-differences">{% for change in changes %}
+  <li><strong>{{ change.label }}:</strong> این رکورد: <bdi>{{ change.current|default:'نامشخص' }}</bdi>؛ رکورد دیگر: <bdi>{{ change.other|default:'نامشخص' }}</bdi>{% if change.normalized_equal %} <small>(یکسان پس از نرمال‌سازی جست‌وجو؛ نه اثبات معادل بودن)</small>{% endif %}</li>
+{% endfor %}</ul>{% else %}<p class="staff-panel-note">در فیلدهای مقایسه‌شده تفاوت متنی مشاهده نشد؛ این نتیجه اثبات یکسانی نیست.</p>{% endif %}

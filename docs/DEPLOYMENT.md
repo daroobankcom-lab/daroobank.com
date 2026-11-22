@@ -13,6 +13,8 @@ TLS-terminating reverse proxy → independent Django web processes → PostgreSQ
 - Test proxy host/origin and cookies, health endpoints, database migrations, worker isolation and no internet dependency for web health. Production release requires explicit user authorization and clinical/data-source sign-off for published data.
 - Use expand/contract migrations and versioned API; snapshot/backup before destructive change. Define rollback including content/cache and migration compatibility before release. Reverse proxy caching must respect private responses and invalidation.
 
-## Proposed CI/CD
+## Development CI and proposed CI/CD
 
-On PR: lint/type checks, unit/integration/security and dependency scanning, migration checks, RTL/accessibility checks and contract tests. On a separately authorized release: build immutable artifact, run staged smoke tests, require approval, deploy and observe. This is a plan, not an existing pipeline.
+A basic `.github/workflows/checks.yml` runs on pushes and pull requests with read-only repository contents permission: pinned Python dependencies are installed, then pip check, Django check, migration drift check and synthetic tests run. It does not deploy, upload backups or establish production readiness. Actions are referenced by major tags, not immutable SHAs; this is not supply-chain hardening. Hosted results depend on GitHub Actions being enabled.
+
+Additional proposed gates on PR: lint/type checks, unit/integration/security and dependency scanning, migration checks, RTL/accessibility checks and contract tests. On a separately authorized release: build immutable artifact, run staged smoke tests, require approval, deploy and observe. Those additional gates and release steps are plans, not implemented.

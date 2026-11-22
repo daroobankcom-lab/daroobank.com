@@ -29,6 +29,8 @@ Successful development web CSV staging also records a limited, permission-scoped
 
 The debug-only [clinical drafting workspace](docs/DEVELOPMENT_GUIDE.md#development-only-clinical-draft-triage) supports synthetic statement drafts, bounded supplementary reference assertions and independent preliminary triage snapshots. It contains no reviewed clinical content and cannot approve or publish.
 
+A standalone [local SQLite snapshot and isolated restore drill](docs/DEVELOPMENT_GUIDE.md#local-sqlite-snapshots-and-isolated-restore-drill) and basic GitHub Actions development checks are available; snapshots are unencrypted and not a production backup solution.
+
 ## Documentation
 
 - [Implementation changelog](docs/CHANGELOG.md) · [Gap analysis](docs/GAP_ANALYSIS.md) · [Resource review](docs/RESOURCE_REVIEW.md) · [Design system](docs/DESIGN_SYSTEM.md)

@@ -1,6 +1,6 @@
 # Operations runbook
 
-This is a prospective checklist; only a local development web process exists. No production services, dashboards, alerts or on-call rotation currently exist. Create concrete commands, owners and escalation contacts before production.
+This is mostly a prospective checklist; a local development web process and a synthetic SQLite snapshot utility exist. No production services, dashboards, alerts or on-call rotation currently exist. Create concrete commands, owners and escalation contacts before production.
 
 ## Source or worker incident
 
@@ -19,3 +19,8 @@ Before deployment, define ownership, encrypted backup cadence, off-host retentio
 ## Security/privacy incident
 
 Contain, preserve evidence, restrict access/rotate exposed credentials and engage security, legal and clinical owners. Assess PHI exposure and regulatory notification duties with qualified counsel; keep sensitive data out of incident tickets. Verify recovery and review access/audit logs after restoration. Define the on-call chain before enabling patient accounts.
+
+
+## Local synthetic restore drill
+
+For the local SQLite development database only, follow the commands and isolation steps in the [development guide](DEVELOPMENT_GUIDE.md#local-sqlite-snapshots-and-isolated-restore-drill). Create a new snapshot, verify it, copy it into a new isolated same-version checkout, run `migrate --check` and `check`, and inspect expected synthetic data. Never overwrite a running or existing database. Record the outcome locally without sensitive details, then dispose of the copies appropriately. These local checks are not a production restore exercise, and no cadence, encryption, off-host retention, recovery objectives, alerting, external asset recovery or production access controls are implemented.

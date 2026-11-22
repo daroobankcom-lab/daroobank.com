@@ -9,4 +9,6 @@
 
 - [0006: bounded clinical reference assertions](0006-clinical-evidence-assertions.md) — development-only implementation, 22 November 2026.
 
+- [0007: local SQLite snapshots and isolated restore drill](0007-local-sqlite-snapshots.md) — development-only implementation, 22 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

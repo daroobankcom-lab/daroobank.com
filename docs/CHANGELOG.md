@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — local SQLite snapshots and development CI
+
+**Changes:** Added a non-overwriting, private-mode SQLite online snapshot and structural/foreign-key check utility; the same utility creates isolated restore copies. Added synthetic WAL, failure and migrated-application restore-drill tests, usage and limits, and a GitHub Actions workflow for dependency, configuration, migration and test checks.
+
+**Limits:** Snapshots contain sensitive database contents and are unencrypted, local and development-only. Checks do not establish application correctness or production recovery; no scheduler, retention, off-host storage, encryption, monitoring or external-file backup is implemented. The deadline and cleanup are best effort. CI is not a deploy, hosted execution is not assumed, and action references are tags rather than immutable SHAs.
+
 ## 2026-11-22 — supplementary clinical reference assertions
 
 **Changes:** Added up to ten unverified supplementary reference assertions per draft version, explicit asserted relationship labels, deduplication, separate-recorder review separation, sequential evidence-set stale checks and bounded review snapshots. Staff can inspect historical snapshot metadata and see whether its fingerprint differs from the current set; old reviews are explicitly marked without a snapshot. Added synthetic tests for role separation, caps, corruption, migration and public exclusion.

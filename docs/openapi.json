@@ -1,0 +1,270 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "DarooBank development public API",
+    "version": "1.0.0",
+    "description": "Development only. Product flags and timestamps are not clinical approval or proof of rights. No prices, clinical guidance or availability. No consistent snapshot or production-readiness guarantee."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/v1/search/": {
+      "get": {
+        "operationId": "searchPresentations",
+        "summary": "Search public presentation records",
+        "description": "Empty queries return no results. The first 120 characters are used after trimming. Each page validates at most 150 candidates and returns at most 30; the database may scan more. A next cursor can be present even on an empty page. Reuse it with the same normalized query within one hour; data changes may invalidate it or change page membership. Results are not a snapshot. Search terms may appear in access logs.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid, stale or expired cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{id}/": {
+      "get": {
+        "operationId": "getPresentation",
+        "summary": "Retrieve an eligible presentation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presentation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Presentation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not eligible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "operationId": "getOpenApi",
+        "summary": "Retrieve this development API contract",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.0 document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "This OpenAPI document."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Presentation": {
+        "type": "object",
+        "required": [
+          "id",
+          "name_fa",
+          "name_en",
+          "manufacturer",
+          "strength",
+          "dosage_form",
+          "package_description",
+          "irc",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name_fa": {
+            "type": "string"
+          },
+          "name_en": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "strength": {
+            "type": "string"
+          },
+          "dosage_form": {
+            "type": "string"
+          },
+          "package_description": {
+            "type": "string"
+          },
+          "irc": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "object",
+            "required": [
+              "name",
+              "url",
+              "verified_at"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "verified_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "SearchPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Presentation"
+            },
+            "maxItems": 30
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "limit",
+              "candidate_scan_limit",
+              "pagination_available",
+              "next_cursor"
+            ],
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "enum": [
+                  30
+                ]
+              },
+              "candidate_scan_limit": {
+                "type": "integer",
+                "enum": [
+                  150
+                ]
+              },
+              "pagination_available": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              },
+              "next_cursor": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 512
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

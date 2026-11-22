@@ -6,6 +6,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('search/', views.search, name='search'),
     path('api/v1/search/', views.search_api, name='search_api'),
+    path('api/v1/openapi.json', views.openapi_document, name='openapi_document'),
     path('products/<int:pk>/', views.presentation_detail, name='presentation_detail'),
     path('api/v1/products/<int:pk>/', views.presentation_api, name='presentation_api'),
     path('prices/', views.prices, name='prices'),

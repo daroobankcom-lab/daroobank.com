@@ -113,6 +113,6 @@ class PresentationDetailTests(TestCase):
         response = self.client.get(reverse('search_api'), {'q': 'سازنده فرضی'})
         self.assertEqual(response.json()['data'], [])
         self.assertEqual(response.json()['meta']['candidate_scan_limit'], MAX_SEARCH_CANDIDATES)
-        self.assertContains(self.client.get(reverse('search'), {'q': 'سازنده فرضی'}), 'جست‌وجو ممکن است کامل نباشد')
+        self.assertContains(self.client.get(reverse('search'), {'q': 'سازنده فرضی'}), 'می‌توانید بخش بعدی را بررسی کنید')
         # A separately addressed valid record is still available despite the search cap.
         self.assertEqual(self.client.get(self.urls(self.product.pk)[1]).status_code, 200)

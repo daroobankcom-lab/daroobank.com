@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="section"><div class="container"><div class="empty-state spacious">
+  <span class="empty-icon" aria-hidden="true">⌕</span><h1>ادامه جست‌وجو در دسترس نیست</h1>
+  <p>نشانی ادامه جست‌وجو نامعتبر یا منقضی شده، یا داده‌ها تغییر کرده‌اند. لطفاً جست‌وجو را دوباره آغاز کنید.</p>
+  {% include 'partials/search_form.html' %}
+</div></div></section>
+{% endblock %}

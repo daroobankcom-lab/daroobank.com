@@ -1,8 +1,11 @@
+import json
+from pathlib import Path
+
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_safe
-from .services import (MAX_QUERY_LENGTH, MAX_RESULTS, MAX_SEARCH_CANDIDATES, get_public_presentation,
-                       search_products, serialize_presentation)
+from .services import (MAX_QUERY_LENGTH, MAX_RESULTS, MAX_SEARCH_CANDIDATES, InvalidSearchCursor,
+                       get_public_presentation, search_product_page, serialize_presentation)
 
 SITE_URL = 'https://daroobank.com'
 
@@ -19,8 +22,15 @@ def home(request):
 @require_safe
 def search(request):
     query = request.GET.get('q', '').strip()[:MAX_QUERY_LENGTH]
-    results = search_products(query)
-    response = render_page(request, 'search.html', title='جست‌وجوی دارو | داروبانک', description='جست‌وجو در اطلاعات دارویی منتشرشده داروبانک.', noindex=True, query=query, results=results)
+    try:
+        results, next_cursor = search_product_page(query, request.GET.get('cursor', ''))
+        response = render_page(request, 'search.html', title='جست‌وجوی دارو | داروبانک', description='جست‌وجو در اطلاعات دارویی منتشرشده داروبانک.', noindex=True, query=query, results=results, next_cursor=next_cursor)
+    except InvalidSearchCursor:
+        response = render(request, 'search_cursor_error.html', {
+            'page_title': 'ادامه جست‌وجو | داروبانک', 'description': 'ادامه جست‌وجو در دسترس نیست.',
+            'noindex': True, 'query': query,
+        }, status=400)
+        response['X-Robots-Tag'] = 'noindex, follow'
     response['Cache-Control'] = 'no-store'
     response['Referrer-Policy'] = 'no-referrer'
     return response
@@ -45,8 +55,15 @@ def sitemap(request):
 @require_safe
 def search_api(request):
     query = request.GET.get('q', '').strip()[:MAX_QUERY_LENGTH]
-    data = [serialize_presentation(product) for product in search_products(query)]
-    response = JsonResponse({'data': data, 'meta': {'limit': MAX_RESULTS, 'candidate_scan_limit': MAX_SEARCH_CANDIDATES, 'pagination_available': False}})
+    try:
+        results, next_cursor = search_product_page(query, request.GET.get('cursor', ''))
+        data = [serialize_presentation(product) for product in results]
+        response = JsonResponse({'data': data, 'meta': {
+            'limit': MAX_RESULTS, 'candidate_scan_limit': MAX_SEARCH_CANDIDATES,
+            'pagination_available': True, 'next_cursor': next_cursor,
+        }})
+    except InvalidSearchCursor:
+        response = JsonResponse({'error': {'code': 'invalid_cursor', 'message': 'Search cursor is invalid or expired; restart the search.'}}, status=400)
     response['X-Robots-Tag'] = 'noindex, follow'
     response['Cache-Control'] = 'no-store'
     response['Referrer-Policy'] = 'no-referrer'
@@ -82,6 +99,19 @@ def presentation_api(request, pk):
         response = JsonResponse({'data': serialize_presentation(product)})
     except Http404:
         response = JsonResponse({'error': {'code': 'not_found', 'message': 'Presentation not found.'}}, status=404)
+    response['X-Robots-Tag'] = 'noindex, follow'
+    response['Cache-Control'] = 'no-store'
+    response['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@require_safe
+def openapi_document(request):
+    # Bundled, static contract for implemented public endpoints only.
+    path = Path(__file__).resolve().parent.parent / 'docs' / 'openapi.json'
+    with path.open(encoding='utf-8') as stream:
+        document = json.load(stream)
+    response = JsonResponse(document)
     response['X-Robots-Tag'] = 'noindex, follow'
     response['Cache-Control'] = 'no-store'
     response['Referrer-Policy'] = 'no-referrer'

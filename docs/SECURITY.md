@@ -48,3 +48,7 @@ Upload requires view and add permissions, explicit source-rights attestation to 
 ## Presentation read surface
 
 HTML and JSON details share search's eligibility checks and reject unpublished, undated, incomplete or invalid-source records, including HTTPS URLs with embedded userinfo. Read-side checks cannot establish source legitimacy, rights or content accuracy and do not repair stale search indexes caused by bulk writes. Source URLs, including query parameters, are public; operators must not store secrets or personal information there. Detail pages are deliberately noindex/no-store, not a security boundary for published data. No third-party assessment or production release is implied.
+
+## Search cursors
+
+Forward cursors are size-limited, timestamped and signed with the Django secret, tied to the normalized query and anchor identity, and expire after one hour. Raw queries and anchor names are not embedded: keyed digests are used, but an anchor ID remains visible. Signed tokens are not encrypted and do not provide authorization. Secret rotation, anchor deletion or changes can invalidate a cursor. Search terms and cursors can still appear in access logs; avoid personal health data and implement redaction. Application candidate validation is bounded but SQLite can still scan/sort a large table, and there is no public rate limiting or production load/security assessment.

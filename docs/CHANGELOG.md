@@ -1,5 +1,11 @@
 # Implementation changelog
 
+## 2026-11-22 — price revision triage and safer suggestions
+
+**Changes:** Added a staff price-queue filter for the latest preliminary review, combinable with the original match-status filter. Detail pages show up to 10 same-source/ID revisions and a conditional exact whole-Rial difference only when source name, unit/category and nonempty normalized identity fields match. Dates and original currencies remain explicit; no price or trend is approved/published. Hardened matching against invalid/normalization-empty identifiers and conservatively marks more than 100 same-IRC indexed presentations ambiguous. Malformed Unicode in stored JSON is not rendered as valid staff data. All 99 Django tests, system/migration checks, pip check and a synthetic price CSV dry run passed.
+
+**Limits:** Comparisons are advisory and not captured/rechecked on review; normalized identity does not prove equivalence or rights, and the source URL is outside the existing price payload hash. Existing invalid rows fail current validation, but are not automatically corrected. DB work, stale indexes, concurrency, immutability and production security remain unresolved. No clinical/source verification, real data, browser/accessibility, penetration or production testing. Previous entries are historical snapshots.
+
 ## 2026-11-22 — advisory product comparisons
 
 **Changes:** Added normalized candidate IRC index with historical backfill and controlled staging population; inconsistent indexes fail closed for preliminary review. Staff product details now show bounded source-record revision differences and normalized IRC comparison clues for other private candidates and eligible public presentations. The view explicitly excludes catalog drafts and warns about truncation, normalization uncertainty and absent IRC. No automatic match, merge or publication is performed. The full 85-test Django suite, historical migration test, local migration, system/migration checks and pip check passed.

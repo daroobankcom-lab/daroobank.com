@@ -1,0 +1,16 @@
+<section class="staff-panel staff-review-block" aria-labelledby="price-comparison-heading">
+  <h2 id="price-comparison-heading">نسخه‌های دیگر همین رکورد منبع</h2>
+  <p class="staff-panel-note">فقط رکوردهای مرحله‌ای با همان نشانی منبع و شناسه منبع نمایش داده می‌شوند. ترتیب بر اساس شناسه ثبت داخلی است، نه تاریخ اثر. نشانی منبع در اثر انگشت محتوای قیمت قرار ندارد؛ این مقایسه تأیید هویت، قیمت، حقوق منبع یا روند بازار نیست و در رویداد بازبینی ذخیره یا دوباره کنترل نمی‌شود.</p>
+  {% if not comparison.available %}<div class="staff-alert">اطلاعات این رکورد ناسازگار است؛ مقایسه متوقف شد.</div>{% else %}
+  {% for item in comparison.revisions %}<article class="staff-review-item">
+    <strong><a class="staff-detail-link" href="{% url 'staff_price_detail' item.candidate.pk %}">نامزد {{ item.candidate.pk }} ←</a></strong>
+    {% if not item.valid %}<p>داده این نسخه ناسازگار است؛ محاسبه‌ای انجام نشد.</p>{% else %}
+    <p>مقدار اصلی نسخه دیگر: <bdi>{{ item.candidate.original_amount }}</bdi> {% if item.candidate.original_currency == 'TOMAN' %}تومان{% else %}ریال{% endif %} · معادل محاسباتی: <bdi>{{ item.candidate.amount_rial }}</bdi> ریال</p>
+    <p>دسته: {{ item.candidate.price_category }} · واحد: {{ item.candidate.unit }} · تاریخ اثر (میلادی): {% if item.candidate.effective_date %}{{ item.candidate.effective_date|date:'Y-m-d' }}{% else %}نامشخص{% endif %} · تاریخ انتشار منبع: {% if item.candidate.source_published_date %}{{ item.candidate.source_published_date|date:'Y-m-d' }}{% else %}نامشخص{% endif %}</p>
+    <p>زمان جمع‌آوری نسخه دیگر (میلادی، تهران): <time datetime="{{ item.candidate.collected_at|date:'c' }}">{{ item.candidate.collected_at|date:'Y-m-d H:i' }}</time></p>
+    {% if item.comparable %}<p>تفاضل حسابی مشروط (مقدار این رکورد منهای نسخه دیگر): <bdi dir="ltr">{{ item.delta_rial }}</bdi> ریال. برابری فیلدهای نرمال‌شده اثبات یکسانی فرآورده نیست.</p>{% else %}<p>تفاضل محاسبه نشد؛ فیلدهای متفاوت: {% for label in item.differences %}{{ label }}{% if not forloop.last %}، {% endif %}{% endfor %}.</p>{% endif %}
+    {% endif %}
+  </article>{% empty %}<p class="staff-panel-note">نسخه دیگری برای این نشانی و شناسه منبع در محدوده بررسی دیده نشد.</p>{% endfor %}
+  {% if comparison.limited %}<p class="staff-panel-note">بیش از ۱۰ نسخه وجود دارد؛ فقط ۱۰ نسخه اخیر بر اساس شناسه داخلی بررسی شدند.</p>{% endif %}
+  {% endif %}
+</section>

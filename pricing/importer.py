@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import re
+import unicodedata
 from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
@@ -20,6 +21,8 @@ from .models import PriceCandidate
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 5000
 MAX_RIAL = 9_223_372_036_854_775_807
+MAX_MATCH_CANDIDATES = 100
+IDENTITY_FIELDS = ('irc', 'manufacturer', 'strength', 'dosage_form', 'package_description')
 FIELDS = (
     'source_record_id', 'irc', 'manufacturer', 'strength', 'dosage_form',
     'package_description', 'amount', 'currency', 'category', 'unit',
@@ -123,8 +126,9 @@ def parse_csv(path):
                     raise ImportValidationError('Unknown category or unit.')
                 if category == 'unit' and unit == 'package':
                     raise ImportValidationError('Unit price cannot use package as its unit.')
-                if not normalize_search(row['irc']) or len(normalize_search(row['irc'])) > 80:
-                    raise ImportValidationError('IRC is required.')
+                if (not match_fields_valid(row) or not normalize_search(row['source_record_id'])
+                        or any(unicodedata.category(c) in ('Cc', 'Cs') for c in row['source_record_id'])):
+                    raise ImportValidationError('Identifier and identity fields must be nonempty after normalization.')
                 value = amount_to_rial(row['amount'], currency)
                 effective = parse_date(row['effective_date'], 'effective_date')
                 published = parse_date(row['source_published_date'], 'source_published_date')
@@ -138,14 +142,32 @@ def parse_csv(path):
         raise ImportValidationError('Invalid CSV format.') from exc
 
 
+def match_fields_valid(row):
+    if not isinstance(row, dict):
+        return False
+    for field in IDENTITY_FIELDS:
+        value = row.get(field)
+        if (not isinstance(value, str) or len(value) > LIMITS[field] or not normalize_search(value)
+                or any(unicodedata.category(c) in ('Cc', 'Cs') for c in value)):
+            return False
+    return len(normalize_search(row['irc'])) <= 80
+
+
 def suggest_product(row, *, lock=False):
-    """Suggest only an exact unique presentation; human verification remains required."""
-    possibilities = ProductPresentation.objects.filter(irc_normalized=normalize_search(row['irc']))
+    """Suggest only a unique exact presentation, conservatively bounded."""
+    if not match_fields_valid(row):
+        return PriceCandidate.MATCH_UNMATCHED, None
+    possibilities = ProductPresentation.objects.filter(irc_normalized=normalize_search(row['irc'])).order_by('pk')
     if lock:
         possibilities = possibilities.select_for_update()
-    fields = ('manufacturer', 'strength', 'dosage_form', 'package_description')
-    matches = [p for p in possibilities if normalize_search(p.irc) == normalize_search(row['irc']) and all(
-        normalize_search(getattr(p, field)) == normalize_search(row[field]) for field in fields
+    # Too many records must not become a false unique suggestion or false negative.
+    possibilities = list(possibilities[:MAX_MATCH_CANDIDATES + 1])
+    if len(possibilities) > MAX_MATCH_CANDIDATES:
+        return PriceCandidate.MATCH_AMBIGUOUS, None
+    fields = IDENTITY_FIELDS[1:]
+    normalized = {field: normalize_search(row[field]) for field in IDENTITY_FIELDS}
+    matches = [p for p in possibilities if normalize_search(p.irc) == normalized['irc'] and all(
+        normalize_search(getattr(p, field)) == normalized[field] for field in fields
     )]
     if len(matches) == 1:
         return PriceCandidate.MATCH_SUGGESTED, matches[0]
@@ -155,7 +177,7 @@ def suggest_product(row, *, lock=False):
 
 
 def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None):
-    if commit and not rights_attested:
+    if commit and rights_attested is not True:
         raise ImportValidationError('Staging requires an explicit source-rights attestation.')
     if staged_by is not None and (not staged_by.is_authenticated or not staged_by.is_active or not staged_by.is_staff
                                   or not staged_by.has_perm('pricing.view_pricecandidate')

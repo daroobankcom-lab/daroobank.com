@@ -1,21 +1,23 @@
 """Development-only, permission-gated price staging and preliminary review."""
+import unicodedata
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Count
-from django.http import HttpResponseBadRequest
+from django.db.models import Count, OuterRef, Subquery
+from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from .comparisons import price_revision_context
 from .forms import PriceReviewForm, PriceUploadForm
-from .importer import ImportValidationError, stage_csv, suggest_product
-from .models import PriceCandidate
+from .importer import ImportValidationError, match_fields_valid, stage_csv, suggest_product
+from .models import PriceCandidate, PriceCandidateReview
 from .reviews import ReviewConflict, product_fingerprint, record_preliminary_review
 
 STATUS_LABELS = {
-    'suggested': 'پیشنهاد تطبیق', 'ambiguous': 'تطبیق مبهم',
+    'suggested': 'پیشنهاد تطبیق', 'ambiguous': 'تطبیق مبهم یا بیش از سقف بررسی',
     'unmatched': 'بدون تطبیق', 'invalid': 'اطلاعات نامعتبر',
 }
 CATEGORY_LABELS = {
@@ -47,10 +49,18 @@ def _require_permission(user, extra=None):
         raise PermissionDenied
 
 
+def _display_source_fields(fields):
+    """Do not render malformed JSON values or invalid Unicode from bypassed writes."""
+    if not isinstance(fields, dict):
+        return {}
+    keys = ('irc', 'manufacturer', 'strength', 'dosage_form', 'package_description')
+    return {key: value for key in keys if isinstance((value := fields.get(key)), str)
+            and not any(unicodedata.category(c) in ('Cc', 'Cs') for c in value)}
+
+
 def _current_suggestion(candidate):
     fields = candidate.source_fields
-    required = ('irc', 'manufacturer', 'strength', 'dosage_form', 'package_description')
-    if not isinstance(fields, dict) or any(not isinstance(fields.get(key), str) or not fields[key].strip() for key in required):
+    if not match_fields_valid(fields):
         return 'invalid', None
     return suggest_product(fields)
 
@@ -68,11 +78,11 @@ def _detail_response(request, candidate, *, form=None, status=200):
         })
     return render(request, 'staff/price_detail.html', {
         'page_title': 'جزئیات نامزد قیمت | داروبانک', 'description': 'جزئیات داده قیمت برای بررسی داخلی.',
-        'noindex': True, 'private_staff': True, 'candidate': candidate, 'current_product': current_product,
+        'noindex': True, 'private_staff': True, 'candidate': candidate, 'source_fields': _display_source_fields(candidate.source_fields), 'current_product': current_product,
         'current_label': STATUS_LABELS[current_status], 'snapshot_label': STATUS_LABELS.get(candidate.match_status, STATUS_LABELS['invalid']),
         'category_label': CATEGORY_LABELS.get(candidate.price_category, 'نامشخص'),
         'unit_label': UNIT_LABELS.get(candidate.unit, 'نامشخص'), 'reviews': reviews,
-        'review_form': form, 'can_review': can_review,
+        'review_form': form, 'can_review': can_review, 'comparison': price_revision_context(candidate),
     }, status=status)
 
 
@@ -81,16 +91,24 @@ def _detail_response(request, candidate, *, form=None, status=200):
 def price_candidates(request):
     _require_permission(request.user)
     status = request.GET.get('status', '')
-    if status and status not in dict(PriceCandidate.MATCH_CHOICES):
+    review_status = request.GET.get('review', '')
+    if (status and status not in dict(PriceCandidate.MATCH_CHOICES)) or review_status not in ('', 'pending', 'accept_suggestion', 'reject', 'defer'):
         return HttpResponseBadRequest('Invalid filter.')
     stats = {item['match_status']: item['count'] for item in PriceCandidate.objects.values('match_status').annotate(count=Count('id'))}
-    rows = PriceCandidate.objects.select_related('suggested_product').order_by('-collected_at', '-pk')
+    latest = PriceCandidateReview.objects.filter(candidate_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
+    rows = PriceCandidate.objects.select_related('suggested_product').annotate(latest_decision=Subquery(latest)).order_by('-collected_at', '-pk')
     if status:
         rows = rows.filter(match_status=status)
+    if review_status == 'pending':
+        rows = rows.filter(latest_decision__isnull=True)
+    elif review_status:
+        rows = rows.filter(latest_decision=review_status)
     page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    for item in page.object_list:
+        item.display_fields = _display_source_fields(item.source_fields)
     return render(request, 'staff/prices.html', {
         'page_title': 'نامزدهای قیمت | داروبانک', 'description': 'بخش داخلی بررسی داده‌های قیمت.',
-        'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'stats': stats,
+        'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'review_status': review_status, 'stats': stats,
         'total': sum(stats.values()), 'can_import': request.user.has_perm('pricing.add_pricecandidate'),
         'can_products': request.user.has_perm('catalog.view_productcandidate'),
     })
@@ -118,11 +136,17 @@ def price_upload(request):
     })
 
 
+def _get_candidate(pk):
+    if not 1 <= pk <= 9_223_372_036_854_775_807:
+        raise Http404('Candidate not found')
+    return get_object_or_404(PriceCandidate.objects.select_related('suggested_product', 'staged_by'), pk=pk)
+
+
 @login_required(login_url='staff_login')
 @require_safe
 def price_candidate_detail(request, pk):
     _require_permission(request.user)
-    candidate = get_object_or_404(PriceCandidate.objects.select_related('suggested_product', 'staged_by'), pk=pk)
+    candidate = _get_candidate(pk)
     return _detail_response(request, candidate)
 
 
@@ -130,7 +154,7 @@ def price_candidate_detail(request, pk):
 @require_POST
 def price_review(request, pk):
     _require_permission(request.user, 'pricing.review_pricecandidate')
-    candidate = get_object_or_404(PriceCandidate.objects.select_related('staged_by'), pk=pk)
+    candidate = _get_candidate(pk)
     form = PriceReviewForm(request.POST)
     if not form.is_valid():
         return _detail_response(request, candidate, form=form, status=400)

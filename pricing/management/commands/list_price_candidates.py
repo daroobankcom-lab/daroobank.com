@@ -1,7 +1,7 @@
 import json
 
 from django.core.management.base import BaseCommand, CommandError
-from pricing.importer import suggest_product
+from pricing.importer import match_fields_valid, suggest_product
 from pricing.models import PriceCandidate
 
 
@@ -21,7 +21,10 @@ class Command(BaseCommand):
             records = records.filter(match_status=options['status'])
         data = []
         for item in records[:limit]:
-            current_status, current_product = suggest_product(item.source_fields)
+            if match_fields_valid(item.source_fields):
+                current_status, current_product = suggest_product(item.source_fields)
+            else:
+                current_status, current_product = 'invalid', None
             data.append({
                 'id': item.pk,
                 'review_required': True,

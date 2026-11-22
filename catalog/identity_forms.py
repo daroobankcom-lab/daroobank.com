@@ -71,3 +71,12 @@ class IdentityReviewForm(forms.Form):
     reason = forms.CharField(label='دلیل', min_length=12, max_length=1000, widget=forms.Textarea(attrs={'rows': 3}))
     expected_review = forms.IntegerField(min_value=0, max_value=9223372036854775807, widget=forms.HiddenInput)
     expected_graph_hash = forms.RegexField(regex=r'^[0-9a-f]{64}$', max_length=64, widget=forms.HiddenInput)
+
+
+class PackageRevisionForm(PackageForm):
+    # Corrections remain tied to the same product; changing the product needs a separate assertion.
+    product_id = None
+    change_reason = forms.CharField(label='دلیل اصلاح ادعایی', min_length=12, max_length=1000,
+                                    widget=forms.Textarea(attrs={'rows': 3}))
+    expected_graph_hash = forms.RegexField(regex=r'^[0-9a-f]{64}$', max_length=64, widget=forms.HiddenInput)
+    expected_review = forms.IntegerField(min_value=0, max_value=9223372036854775807, widget=forms.HiddenInput)

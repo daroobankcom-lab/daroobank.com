@@ -11,7 +11,7 @@ from django.db import transaction
 from catalog.normalization import normalize_search
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import (IngredientDraft, FormulationDraft, FormulationComponent,
-                     IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview)
+                     IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview, IdentityPackageRevision)
 
 VIEW = 'catalog.view_identityworkspace'
 ADD = 'catalog.add_identityworkspace'
@@ -240,6 +240,73 @@ def create_package(*, actor, data, product_id):
             product_sha256=product.payload_sha256, payload_sha256=digest(payload))
 
 
+def graph_authors(graph):
+    product = graph['product']
+    form = product['formulation']
+    return {graph['recorded_by_id'], product['recorded_by_id'], form['recorded_by_id'],
+            *(item['recorded_by_id'] for item in form['ingredients'])}
+
+
+def _revision_payload(parent_id, child_id, recorded_by_id, change_reason, parent_graph_sha256, child_graph_sha256):
+    return {'parent_id': parent_id, 'child_id': child_id, 'recorded_by_id': recorded_by_id,
+            'change_reason': change_reason, 'parent_graph_sha256': parent_graph_sha256,
+            'child_graph_sha256': child_graph_sha256}
+
+
+def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash, expected_review):
+    """Create a new assertion and an immediate-parent link; parallel branches are allowed."""
+    require_staff(actor, VIEW, ADD)
+    validate_data(data, PACKAGE_FIELDS)
+    if (not _valid_id(parent_id) or not valid_review_reason(change_reason) or
+            not _is_hash(expected_graph_hash) or type(expected_review) is not int or not 0 <= expected_review <= MAX_ID):
+        raise IdentityConflict('اطلاعات نسخه جدید معتبر نیست.')
+    change_reason = change_reason.strip()
+    with transaction.atomic():
+        parent = (IdentityPackageDraft.objects.select_for_update(of=('self',))
+                  .select_related('product__formulation').filter(pk=parent_id).first())
+        if parent is None: raise IdentityConflict('بسته پیشین در دسترس نیست.')
+        parent_graph = safe_snapshot(parent, package_snapshot)
+        if not parent_graph or digest(parent_graph) != expected_graph_hash:
+            raise IdentityConflict('بسته پیشین یا وابستگی آن تغییر کرده یا ناسازگار است.')
+        latest = parent.reviews.order_by('-pk').first()
+        if (latest.pk if latest else 0) != expected_review:
+            raise IdentityConflict('بازبینی جدیدی برای بسته پیشین ثبت شده است.')
+        if latest and not review_is_consistent(latest, parent.pk):
+            raise IdentityConflict('بازبینی اخیر بسته پیشین ناسازگار است.')
+        if canonical(data) == {key: parent_graph[key] for key in PACKAGE_FIELDS}:
+            raise IdentityError('حداقل یکی از داده‌های بسته یا منبع باید تغییر کند.')
+        child = create_package(actor=actor, data=data, product_id=parent.product_id)
+        child_graph = safe_snapshot(child, package_snapshot)
+        if (not child_graph or child.pk <= parent.pk or child_graph['product'] != parent_graph['product']):
+            raise IdentityConflict('فرآورده زنجیره تغییر کرده یا ناسازگار است.')
+        child_hash = digest(child_graph)
+        payload = _revision_payload(parent.pk, child.pk, actor.pk, change_reason, expected_graph_hash, child_hash)
+        IdentityPackageRevision.objects.create(parent=parent, child=child, recorded_by=actor, change_reason=change_reason,
+            parent_graph_sha256=expected_graph_hash, child_graph_sha256=child_hash, payload_sha256=digest(payload))
+        return child
+
+
+def valid_package_revision(link, child_id):
+    """Check an immediate link against both current graphs; no authenticity proof."""
+    try:
+        if (not _valid_id(link.parent_id) or not _valid_id(link.child_id) or link.child_id != child_id
+                or link.parent_id >= link.child_id or not _valid_id(link.recorded_by_id)
+                or not valid_review_reason(link.change_reason) or link.change_reason != link.change_reason.strip()
+                or not _is_hash(link.parent_graph_sha256) or not _is_hash(link.child_graph_sha256)
+                or not _is_hash(link.payload_sha256)):
+            return False
+        payload = _revision_payload(link.parent_id, link.child_id, link.recorded_by_id, link.change_reason,
+                                    link.parent_graph_sha256, link.child_graph_sha256)
+        if digest(payload) != link.payload_sha256: return False
+        parent = safe_snapshot(link.parent, package_snapshot)
+        child = safe_snapshot(link.child, package_snapshot)
+        return bool(parent and child and digest(parent) == link.parent_graph_sha256
+                    and digest(child) == link.child_graph_sha256 and child['recorded_by_id'] == link.recorded_by_id
+                    and parent['product'] == child['product'])
+    except (AttributeError, TypeError, ValueError, OverflowError, IdentityPackageDraft.DoesNotExist):
+        return False
+
+
 def review_package(*, actor, package_id, decision, reason, expected_review, expected_graph_hash):
     require_staff(actor, VIEW, REVIEW)
     if (not _valid_id(package_id) or decision not in dict(IdentityPackageReview.DECISIONS)
@@ -251,10 +318,7 @@ def review_package(*, actor, package_id, decision, reason, expected_review, expe
         if not package: raise IdentityConflict('بسته در دسترس نیست.')
         graph = safe_snapshot(package, package_snapshot)
         if not graph or digest(graph) != expected_graph_hash: raise IdentityConflict('اطلاعات زنجیره تغییر کرده یا ناسازگار است.')
-        authors = {graph['recorded_by_id'], graph['product']['recorded_by_id'],
-                   graph['product']['formulation']['recorded_by_id']}
-        authors.update(item['recorded_by_id'] for item in graph['product']['formulation']['ingredients'])
-        if actor.pk in authors: raise PermissionDenied
+        if actor.pk in graph_authors(graph): raise PermissionDenied
         latest = package.reviews.order_by('-pk').first()
         if (latest.pk if latest else 0) != expected_review: raise IdentityConflict('بازبینی جدیدی ثبت شده است.')
         return IdentityPackageReview.objects.create(package=package, reviewer=actor, decision=decision, reason=reason.strip(),
@@ -322,4 +386,17 @@ def valid_review_snapshot(graph, package_id):
         package.update(product_id=graph['product_id'], product_sha256=graph['product_sha256'])
         return digest(package) == graph['payload_sha256']
     except (IdentityError, TypeError, ValueError, KeyError, AttributeError, InvalidOperation, OverflowError, UnicodeError):
+        return False
+
+
+
+def review_is_consistent(review, package_id):
+    """Structural checks only; does not authenticate the reviewer or decision."""
+    try:
+        return (review.package_id == package_id and _valid_id(review.reviewer_id)
+                and valid_review_snapshot(review.graph_snapshot, package_id)
+                and _is_hash(review.graph_sha256) and digest(review.graph_snapshot) == review.graph_sha256
+                and review.decision in dict(IdentityPackageReview.DECISIONS)
+                and valid_review_reason(review.reason) and review.reviewer_id not in graph_authors(review.graph_snapshot))
+    except (AttributeError, TypeError, ValueError, UnicodeError):
         return False

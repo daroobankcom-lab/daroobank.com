@@ -31,6 +31,7 @@ urlpatterns = [
     path('staff/sources/<int:pk>/', source_staff_views.detail, name='staff_source_detail'),
     path('staff/catalog/identity/', identity_views.listing, name='staff_identity_list'),
     path('staff/catalog/identity/new/<str:kind>/', identity_views.create, name='staff_identity_create'),
+    path('staff/catalog/identity/package/<int:pk>/revise/', identity_views.revise, name='staff_identity_revise'),
     path('staff/catalog/identity/package/<int:pk>/review/', identity_views.review, name='staff_identity_review'),
     path('staff/catalog/identity/<str:kind>/<int:pk>/', identity_views.detail, name='staff_identity_detail'),
     path('staff/catalog/quality/', quality_views.quality, name='staff_catalog_quality'),

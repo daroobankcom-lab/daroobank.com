@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — synthetic package correction branches
+
+**Changes:** Added an additive PostgreSQL migration for private immediate-parent package correction links, fixed-product child creation, separate reason and graph hashes, latest-review and graph stale checks, atomic creation, and independent branch support. Staff can create corrections and browse validated links in bounded pages; old records and reviews remain unchanged. Synthetic migration, rollback, malformed data, permissions, CSRF, conflict and two-connection race tests included.
+
+**Limits:** These are asserted links, not equivalence, authenticity, ancestry-wide checks or approval. Reviews cover the new graph only, not revision provenance or the parent, and do not transfer. No ingredient/formulation/product corrections, public changes or source verification. Bulk/SQL bypass guards; hashes are not signatures. No browser, clinical, legal or production security validation. See [ADR 0013](ARCHITECTURE_DECISIONS/0013-synthetic-package-revisions.md).
+
 ## 2026-11-22 — formulation formset validation
 
 **Changes:** Ensure even an empty or malformed formulation component formset is validated and its errors rendered. The create-only form requires its fixed five management slots with no initial forms, rejects duplicate ingredient IDs before the service, and offers a fresh-form link if no component forms were rendered. The service retains its own bounds and uniqueness checks; no schema or public behavior changed.

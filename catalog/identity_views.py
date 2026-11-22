@@ -5,14 +5,14 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
-from daroobank.validation import valid_review_reason
 from .identity import (ADD, VIEW, REVIEW, MAX_ID, INGREDIENT_FIELDS, FORMULATION_FIELDS, PRODUCT_FIELDS, PACKAGE_FIELDS,
     IdentityConflict, IdentityError, create_ingredient, create_formulation, create_product, create_package,
-    digest, valid_review_snapshot, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot, require_staff, review_package, safe_snapshot)
-from .identity_forms import ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm
-from .models import IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview
+    digest, valid_package_revision, revise_package, review_is_consistent, graph_authors, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot, require_staff, review_package, safe_snapshot)
+from .identity_forms import ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm, PackageRevisionForm
+from .models import IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview, IdentityPackageRevision
 
 REVIEW_PAGE_SIZE = 25
+REVISION_PAGE_SIZE = 10
 
 KINDS = {
     'ingredient': (IngredientDraft, IngredientForm, INGREDIENT_FIELDS, ingredient_snapshot, 'ماده مؤثره'),
@@ -34,12 +34,6 @@ def _object(kind, pk):
     if kind == 'package': queryset = queryset.select_related('product__formulation')
     elif kind == 'product': queryset = queryset.select_related('formulation')
     return get_object_or_404(queryset, pk=pk)
-
-
-def _authors(graph):
-    product = graph['product']; form = product['formulation']
-    return {graph['recorded_by_id'], product['recorded_by_id'], form['recorded_by_id'],
-            *(ingredient['recorded_by_id'] for ingredient in form['ingredients'])}
 
 
 @login_required(login_url='staff_login')
@@ -90,29 +84,50 @@ def create(request, kind):
         'parts': parts, 'has_parts': parts is not None, 'kind': kind, 'label': label}, status=status)
 
 
-def _review_cursor(request):
+def _cursor(request, name):
     # Cursor is an ordering position, not an authorization token or a snapshot.
-    value = request.GET.get('before', '') if request.method in ('GET', 'HEAD') else ''
+    value = request.GET.get(name, '') if request.method in ('GET', 'HEAD') else ''
     if not value:
         return None
     if len(value) > 19 or not value.isascii() or not value.isdigit():
-        raise ValueError('Invalid review cursor')
+        raise ValueError('Invalid cursor')
     number = int(value)
     if not 1 <= number <= MAX_ID:
-        raise ValueError('Invalid review cursor')
+        raise ValueError('Invalid cursor')
     return number
+
+
+def _check_review(review, package_id, graph_hash):
+    review.safe = review_is_consistent(review, package_id)
+    review.is_current = review.safe and review.graph_sha256 == graph_hash
+    return review
 
 
 def _detail(request, kind, obj, *, review_form=None, status=200):
     snapshot = safe_snapshot(obj, _kind(kind)[3])
     reviews, can_review, next_before = [], False, None
-    before = None
+    parent_link, child_links, next_revision_before = None, [], None
+    before, revisions_before = None, None
     if kind == 'package':
         try:
-            before = _review_cursor(request)
+            before = _cursor(request, 'before')
+            revisions_before = _cursor(request, 'revisions_before')
         except ValueError:
-            return HttpResponseBadRequest('Invalid review cursor.')
+            return HttpResponseBadRequest('Invalid cursor.')
     if kind == 'package' and snapshot:
+        links = IdentityPackageRevision.objects.select_related('parent__product__formulation', 'child__product__formulation')
+        parent_link = links.filter(child_id=obj.pk).first()
+        if parent_link:
+            parent_link.safe = valid_package_revision(parent_link, obj.pk)
+        children = links.filter(parent_id=obj.pk).order_by('-pk')
+        if revisions_before is not None:
+            children = children.filter(pk__lt=revisions_before)
+        child_rows = list(children[:REVISION_PAGE_SIZE + 1])
+        child_links = child_rows[:REVISION_PAGE_SIZE]
+        if len(child_rows) > REVISION_PAGE_SIZE:
+            next_revision_before = child_links[-1].pk
+        for link in child_links:
+            link.safe = valid_package_revision(link, link.child_id)
         queryset = obj.reviews.order_by('-pk')
         if before is not None:
             queryset = queryset.filter(pk__lt=before)
@@ -121,25 +136,19 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
         if len(rows) > REVIEW_PAGE_SIZE:
             next_before = reviews[-1].pk
         graph_hash = digest(snapshot)
-        can_review = request.user.has_perm(REVIEW) and request.user.pk not in _authors(snapshot)
+        can_review = request.user.has_perm(REVIEW) and request.user.pk not in graph_authors(snapshot)
         if can_review and before is None and review_form is None and status != 409:
             # Use the newest review actually rendered, never a later unseen insert.
             latest_shown = reviews[0].pk if reviews else 0
             review_form = IdentityReviewForm(initial={'expected_review': latest_shown, 'expected_graph_hash': graph_hash})
         for review in reviews:
-            try:
-                review.safe = (valid_review_snapshot(review.graph_snapshot, obj.pk)
-                               and digest(review.graph_snapshot) == review.graph_sha256
-                               and review.decision in dict(IdentityPackageReview.DECISIONS)
-                               and valid_review_reason(review.reason)
-                               and review.reviewer_id not in _authors(review.graph_snapshot))
-                review.is_current = review.safe and review.graph_sha256 == graph_hash
-            except (TypeError, ValueError, UnicodeError):
-                review.safe = False
+            _check_review(review, obj.pk, graph_hash)
     return render(request, 'staff/identity_detail.html', {'page_title': 'جزئیات هویت ساختگی | داروبانک',
         'description': 'زنجیره ادعایی کاتالوگ.', 'private_staff': True, 'noindex': True, 'kind': kind,
         'label': _kind(kind)[4], 'obj': obj, 'snapshot': snapshot, 'reviews': reviews,
         'review_before': before, 'next_before': next_before, 'review_conflict': status == 409,
+        'parent_link': parent_link, 'child_links': child_links, 'revisions_before': revisions_before,
+        'next_revision_before': next_revision_before,
         'can_review': can_review, 'review_form': review_form, 'can_add': request.user.has_perm(ADD)}, status=status)
 
 
@@ -148,6 +157,41 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
 def detail(request, kind, pk):
     require_staff(request.user, VIEW)
     return _detail(request, kind, _object(kind, pk))
+
+
+def _latest_review_for_revision(package, graph_hash):
+    item = package.reviews.order_by('-pk').first()
+    if item:
+        _check_review(item, package.pk, graph_hash)
+    return item
+
+
+@login_required(login_url='staff_login')
+@require_http_methods(['GET', 'POST'])
+def revise(request, pk):
+    require_staff(request.user, VIEW, ADD)
+    parent = _object('package', pk)
+    graph = safe_snapshot(parent, package_snapshot)
+    graph_hash = digest(graph) if graph else None
+    latest = _latest_review_for_revision(parent, graph_hash) if graph else None
+    initial = {key: getattr(parent, key) for key in PACKAGE_FIELDS} if graph else {}
+    initial.update(expected_graph_hash=graph_hash, expected_review=latest.pk if latest else 0)
+    form = PackageRevisionForm(request.POST if request.method == 'POST' else None, initial=initial)
+    status = 200
+    if request.method == 'POST' and graph and form.is_valid():
+        try:
+            child = revise_package(actor=request.user, parent_id=parent.pk,
+                data={key: form.cleaned_data[key] for key in PACKAGE_FIELDS},
+                change_reason=form.cleaned_data['change_reason'], expected_graph_hash=form.cleaned_data['expected_graph_hash'],
+                expected_review=form.cleaned_data['expected_review'])
+            return redirect('staff_identity_detail', kind='package', pk=child.pk)
+        except IdentityError as exc:
+            form.add_error(None, str(exc))
+        except IdentityConflict as exc:
+            form.add_error(None, str(exc)); status = 409
+    return render(request, 'staff/identity_revision.html', {'page_title': 'اصلاح بسته ساختگی | داروبانک',
+        'description': 'نسخه اصلاحی خصوصی.', 'private_staff': True, 'noindex': True, 'parent': parent,
+        'graph': graph, 'latest': latest, 'form': form, 'conflict': status == 409}, status=status)
 
 
 @login_required(login_url='staff_login')

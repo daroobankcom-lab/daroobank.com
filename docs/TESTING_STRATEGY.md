@@ -75,3 +75,8 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 ## Synthetic catalog identity tests
 
 `catalog/test_identity.py` and `catalog/test_identity_migration.py` exercise the additive migration with pre-existing synthetic catalog data, database constraints, graph hash compatibility and query counts, and the private assertion chain, multi-ingredient ordering, validation and rollback, independent review, stale/conflicting graphs, corrupted dependencies and historical graphs, review separation and current/historical labels, escaped historical content, keyset review-history traversal, stale-review conflicts, malformed/empty management forms and duplicate components, permission and staff gate, CSRF, bounded list, public exclusion and two-connection competing PostgreSQL reviews. These synthetic tests do not prove audit integrity, clinical identity, browser accessibility, correctness against uncooperative writers or production readiness. See [ADR 0012](ARCHITECTURE_DECISIONS/0012-synthetic-identity-drafts.md).
+
+
+## Synthetic package correction tests
+
+`catalog/test_identity_revision.py` covers branch creation, immutability, reviewer separation, unchanged public records and parent reviews, source and form validation, malformed links and latest reviews, rollback, permissions, CSRF, scoped cursor paging and PostgreSQL two-connection correction/review races. `catalog/test_identity_revision_migration.py` migrates populated synthetic 0005 identity data to 0006 and checks preservation without backfill. Tests do not prove authenticity, whole ancestry, clinical equivalence, browser accessibility or production readiness. See [ADR 0013](ARCHITECTURE_DECISIONS/0013-synthetic-package-revisions.md).

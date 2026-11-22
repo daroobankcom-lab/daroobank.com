@@ -211,3 +211,29 @@ class IdentityPackageReview(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError('Identity reviews cannot be deleted through this model.')
+
+
+class IdentityPackageRevision(models.Model):
+    """An asserted correction link, not a verified identity or approval."""
+    parent = models.ForeignKey(IdentityPackageDraft, on_delete=models.PROTECT, related_name='revision_children')
+    child = models.OneToOneField(IdentityPackageDraft, on_delete=models.PROTECT, related_name='revision_parent')
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
+    change_reason = models.TextField(max_length=1000)
+    parent_graph_sha256 = models.CharField(max_length=64)
+    child_graph_sha256 = models.CharField(max_length=64)
+    payload_sha256 = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        default_permissions = ()
+        ordering = ['-pk']
+        constraints = [models.CheckConstraint(condition=models.Q(parent_id__lt=models.F('child_id')),
+                                               name='identity_revision_parent_before_child')]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('Identity revision links cannot be edited.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Identity revision links cannot be deleted through this model.')

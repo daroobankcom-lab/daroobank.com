@@ -41,6 +41,46 @@ async function checkLayout(page, label) {
   assert(state.scrollWidth <= state.width, `${label}: horizontal overflow ${state.scrollWidth} > ${state.width}`);
 }
 
+// Axe cannot reliably infer contrast through a gradient. Check these known
+// text colors against both opaque gradient endpoints; changes to the gradient
+// structure or transparency deliberately require a fresh review.
+async function checkHeroContrast(page) {
+  const values = await page.evaluate(() => {
+    const style = selector => getComputedStyle(document.querySelector(selector));
+    return {
+      background: style('.hero').backgroundImage,
+      colors: ['.hero-lead', '.hint-label', '.search-hint', '.hero-status span:not(.status-icon)']
+        .map(selector => [selector, style(selector).color]),
+      placeholder: getComputedStyle(document.querySelector('#drug-search'), '::placeholder').color,
+      inputBackground: style('.search-form').backgroundColor,
+    };
+  });
+  function rgb(value) {
+    const match = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/.exec(value);
+    assert(match, `Expected opaque RGB, got ${value}`);
+    return match.slice(1).map(Number);
+  }
+  function luminance(value) {
+    const channels = rgb(value).map(n => { const x = n / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  }
+  function ratio(a, b) { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  assert.equal(ratio('rgb(0, 0, 0)', 'rgb(255, 255, 255)'), 21);
+  const gradient = /^linear-gradient\([^,]+,\s*(rgb\(\d+,\s*\d+,\s*\d+\))\s+[\d.]+%,\s*(rgb\(\d+,\s*\d+,\s*\d+\))\s+[\d.]+%\)$/.exec(values.background);
+  assert(gradient, 'Hero needs exactly one two-stop opaque linear gradient; review any change');
+  const stops = gradient.slice(1);
+  const [first, second] = stops.map(rgb);
+  assert(first.every((v, i) => v >= second[i]) || first.every((v, i) => v <= second[i]),
+         'Non-monotonic gradient needs a new manual contrast review');
+  for (const [selector, color] of values.colors) {
+    const foreground = luminance(color), backgrounds = stops.map(luminance);
+    assert(backgrounds.every(value => foreground < value) || backgrounds.every(value => foreground > value),
+           `${selector} foreground lies inside gradient luminance range`);
+    for (const background of stops) assert(ratio(color, background) >= 4.5, `${selector} contrast below 4.5:1`);
+  }
+  assert(ratio(values.placeholder, values.inputBackground) >= 4.5, 'search placeholder contrast below 4.5:1');
+}
+
 async function auditAccessibility(page, label) {
   const result = await new AxeBuilder({page}).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
   const violations = result.violations.map(v => ({id: v.id, impact: v.impact,
@@ -97,7 +137,13 @@ async function run() {
     // container; never use this development-only runner with real data.
     const args = packed.args.filter(arg => !['--disable-web-security', '--allow-running-insecure-content',
                                              '--disable-site-isolation-trials', '--single-process', '--no-zygote',
-                                             '--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process'].includes(arg));
+                                             '--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process',
+                                             '--in-process-gpu', '--ignore-gpu-blocklist', '--use-gl=angle',
+                                             '--use-angle=swiftshader', '--enable-unsafe-swiftshader'].includes(arg));
+    // This SSR smoke suite needs no GPU/WebGL. Software rendering avoided repeatable
+    // intermittent startup crashes in the local lean Linux container; it does not
+    // establish GPU rendering correctness or guarantee stability on other hosts.
+    args.push('--disable-gpu');
     browser = await chromium.launch({executablePath: await packed.executablePath(), args, headless: true,
       env: {...process.env, LD_LIBRARY_PATH: [libraryPath, process.env.LD_LIBRARY_PATH || ''].filter(Boolean).join(':')}});
     const errors = [];
@@ -109,7 +155,7 @@ async function run() {
       await checkLayout(page, `home ${width}`);
       await page.keyboard.press('Tab');
       assert.equal(await page.evaluate(() => document.activeElement.className), 'skip-link');
-      if (width === 390) await auditAccessibility(page, 'home');
+      if (width === 390) { await auditAccessibility(page, 'home'); await checkHeroContrast(page); }
       await page.keyboard.press('Enter');
       await page.keyboard.press('Tab');
       assert.equal(await page.evaluate(() => document.activeElement.id), 'drug-search', 'skip link must bypass navigation');

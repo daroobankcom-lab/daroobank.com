@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — browser startup investigation and contrast review
+
+**Changes:** Investigated intermittent local headless Chromium startup failures. The isolated SSR smoke test now uses software rendering without the bundled GPU/SwiftShader flags, retaining normal web security. A local about:blank launch experiment recorded 4/30 failures with previous flags and 0/130 with GPU disabled; no automatic retry was added. Added computed-color contrast checks for selected home-page text and placeholder against the gradient endpoints and input background; a deliberately low-contrast mutation failed as expected. No product data or public layout were changed.
+
+**Limits:** This local experiment does not prove the crash's root cause or guarantee other environments; GPU/WebGL rendering is untested. Axe continues to report other inconclusive contrast items; manual, screen-reader and device evaluation remains necessary. See [Testing strategy](TESTING_STRATEGY.md#opt-in-synthetic-chromium-smoke-test).
+
 ## 2026-11-22 — focused accessibility and CSRF regression review
 
 **Changes:** Expanded the isolated synthetic Chromium workflow to public product detail, logout, invalid-form error associations, missing-token rejection and keyboard skip navigation. Added automated axe WCAG-tagged checks on ten representative page states, corrected three reported contrast issues and the home-link accessible name, and added same-origin, hostile/null Origin and HTTPS Referer CSRF regression cases with valid tokens. No clinical or published data were added.

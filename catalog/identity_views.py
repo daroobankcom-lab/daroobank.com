@@ -71,7 +71,7 @@ def create(request, kind):
     status = 200
     if request.method == 'POST':
         valid = form.is_valid()
-        parts_valid = parts.is_valid() if parts else True
+        parts_valid = parts.is_valid() if parts is not None else True
         if valid and parts_valid:
             data = {key: form.cleaned_data[key] for key in fields}
             try:
@@ -87,7 +87,7 @@ def create(request, kind):
                 form.add_error(None, str(exc)); status = 409
     return render(request, 'staff/identity_form.html', {'page_title': 'ثبت هویت ساختگی | داروبانک',
         'description': 'ثبت ساختار خصوصی.', 'private_staff': True, 'noindex': True, 'form': form,
-        'parts': parts, 'kind': kind, 'label': label}, status=status)
+        'parts': parts, 'has_parts': parts is not None, 'kind': kind, 'label': label}, status=status)
 
 
 def _review_cursor(request):

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — formulation formset validation
+
+**Changes:** Ensure even an empty or malformed formulation component formset is validated and its errors rendered. The create-only form requires its fixed five management slots with no initial forms, rejects duplicate ingredient IDs before the service, and offers a fresh-form link if no component forms were rendered. The service retains its own bounds and uniqueness checks; no schema or public behavior changed.
+
+**Limits:** The form structure check is not an authenticity or source validation mechanism. Only synthetic input is allowed. No browser/accessibility, clinical or production assessment was performed. See [ADR 0012](ARCHITECTURE_DECISIONS/0012-synthetic-identity-drafts.md).
+
 ## 2026-11-22 — identity graph read and migration checks
 
 **Changes:** Reconstruct each formulation and its ingredient snapshots from one joined component read, reusing the result throughout the graph rather than repeatedly reading it; staff package/product queries join their direct dependencies. Payload hashes and stored graph format are unchanged. Added synthetic compatibility, query-count, PostgreSQL constraint and populated 0004-to-0005 catalog migration tests.

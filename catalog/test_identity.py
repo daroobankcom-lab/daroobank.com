@@ -412,6 +412,55 @@ class IdentityTests(TestCase):
         self.assertEqual(FormulationComponent.objects.filter(formulation=self.formulation).count(), 1)
         self.assertEqual(IdentityPackageDraft.objects.get(pk=self.package.pk).quantity, Decimal('10'))
 
+    def test_formulation_management_errors_fail_closed_and_are_visible(self):
+        self.client.force_login(self.author)
+        url = reverse('staff_identity_create', args=['formulation'])
+        initial = FormulationDraft.objects.count()
+        get_response = self.client.get(url)
+        self.assertEqual(len(get_response.context['parts'].forms), 5)
+        self.assertContains(get_response, 'name="parts-TOTAL_FORMS"')
+        common = {**FORM, 'synthetic_ack': 'on',
+                  **{f'parts-0-{key}': str(value) for key, value in self.part.items()}}
+        cases = [
+            {}, {'parts-TOTAL_FORMS': '0', 'parts-INITIAL_FORMS': '0'},
+            {'parts-TOTAL_FORMS': '-1', 'parts-INITIAL_FORMS': '0'},
+            {'parts-TOTAL_FORMS': '1', 'parts-INITIAL_FORMS': '0'},
+            {'parts-TOTAL_FORMS': '5', 'parts-INITIAL_FORMS': '1'},
+            {'parts-TOTAL_FORMS': '5', 'parts-INITIAL_FORMS': '-1'},
+            {'parts-TOTAL_FORMS': '6', 'parts-INITIAL_FORMS': '0'},
+            {'parts-TOTAL_FORMS': 'x', 'parts-INITIAL_FORMS': '0'},
+            {'parts-TOTAL_FORMS': '9' * 100, 'parts-INITIAL_FORMS': '0'},
+        ]
+        for management in cases:
+            with self.subTest(management=management), patch('catalog.identity_views.create_formulation') as create:
+                response = self.client.post(url, {**common, **management})
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.context['parts'].is_valid())
+                self.assertTrue(response.context['parts'].non_form_errors())
+                self.assertContains(response, 'name="parts-TOTAL_FORMS"')
+                self.assertContains(response, 'یک تا پنج ماده')
+                create.assert_not_called()
+                self.assertEqual(FormulationDraft.objects.count(), initial)
+        response = self.client.post(url, common)
+        self.assertContains(response, 'صفحه ثبت را دوباره باز کنید')
+        self.assertIn('no-store', response['Cache-Control'])
+        csrf_client = Client(enforce_csrf_checks=True); csrf_client.force_login(self.author)
+        self.assertEqual(csrf_client.post(url, common).status_code, 403)
+
+    def test_duplicate_component_form_fails_before_service(self):
+        self.client.force_login(self.author)
+        url = reverse('staff_identity_create', args=['formulation'])
+        data = {**FORM, 'synthetic_ack': 'on', 'parts-TOTAL_FORMS': '5', 'parts-INITIAL_FORMS': '0',
+                **{f'parts-{i}-{key}': str(value) for i in (0, 1) for key, value in self.part.items()}}
+        with patch('catalog.identity_views.create_formulation') as create:
+            response = self.client.post(url, data)
+            self.assertContains(response, 'هر ماده فقط یک بار مجاز است')
+            create.assert_not_called()
+        data['parts-1-ingredient_id'] = str(create_ingredient(actor=self.author, data={**INGREDIENT, 'name_fa': 'ماده دوم'}).pk)
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(FormulationComponent.objects.filter(formulation=FormulationDraft.objects.latest('pk')).count(), 2)
+
     def test_component_order_and_modified_values_detected(self):
         self.assertIsNotNone(safe_snapshot(self.package, package_snapshot))
         FormulationComponent.objects.filter(formulation=self.formulation).update(numerator=Decimal('3'))

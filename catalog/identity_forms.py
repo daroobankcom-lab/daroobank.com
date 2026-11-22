@@ -1,8 +1,7 @@
 from decimal import Decimal
 from django import forms
-from django.forms import formset_factory
+from django.forms import BaseFormSet, formset_factory
 from .identity import MAX_COMPONENTS
-from .models import IdentityPackageReview
 
 
 class AssertionForm(forms.Form):
@@ -30,8 +29,25 @@ class ComponentForm(forms.Form):
     denominator_unit = forms.CharField(label='واحد مخرج', max_length=50)
 
 
-ComponentFormSet = formset_factory(ComponentForm, extra=MAX_COMPONENTS, min_num=1, validate_min=True,
-                                    max_num=MAX_COMPONENTS, validate_max=True, absolute_max=MAX_COMPONENTS)
+class BaseComponentFormSet(BaseFormSet):
+    def clean(self):
+        super().clean()
+        if not self.management_form.is_valid():
+            return
+        management = self.management_form.cleaned_data
+        # This is a fixed create-only form, never an edit formset.
+        if management['TOTAL_FORMS'] != MAX_COMPONENTS or management['INITIAL_FORMS'] != 0:
+            raise forms.ValidationError('ساختار فرم اجزا معتبر نیست؛ صفحه ثبت را دوباره باز کنید.')
+        if any(self.errors):
+            return
+        ingredient_ids = [form.cleaned_data['ingredient_id'] for form in self.forms if form.cleaned_data]
+        if len(ingredient_ids) != len(set(ingredient_ids)):
+            raise forms.ValidationError('هر ماده فقط یک بار مجاز است.')
+
+
+ComponentFormSet = formset_factory(ComponentForm, formset=BaseComponentFormSet, extra=MAX_COMPONENTS,
+                                    min_num=1, validate_min=True, max_num=MAX_COMPONENTS,
+                                    validate_max=True, absolute_max=MAX_COMPONENTS)
 
 
 class ProductForm(AssertionForm):

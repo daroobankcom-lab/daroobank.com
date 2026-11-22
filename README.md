@@ -23,6 +23,8 @@ The local SQLite database and `.env` are ignored by Git. `.env.example` is docum
 
 The debug-only staff portal also contains a source-rights assertion ledger with separate review permissions. These claims are unverified, do not authorize source use, and do not enable crawling or publication; use synthetic data only. See the [development guide](docs/DEVELOPMENT_GUIDE.md#development-only-source-rights-assertions).
 
+An [offline ingestion-window inspector](docs/DEVELOPMENT_GUIDE.md#offline-ingestion-window-inspection) calculates the default Tehran 23:00–01:00 interval or a per-request alternative. It does not save a schedule, contact sources or run a crawler.
+
 ## Documentation
 
 - [Implementation changelog](docs/CHANGELOG.md) · [Gap analysis](docs/GAP_ANALYSIS.md) · [Resource review](docs/RESOURCE_REVIEW.md) · [Design system](docs/DESIGN_SYSTEM.md)

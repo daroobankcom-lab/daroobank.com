@@ -22,6 +22,7 @@ export DAROOBANK_DEBUG=1
 - `catalog/`: narrow presentation model, public search and detail, and development-only private product candidate intake/review.
 - `pricing/`: local CSV candidate staging, inspection and preliminary independent review; no public prices or network crawler.
 - `sources/`: development-only source-rights assertion and preliminary review ledger, not an authorization gate.
+- `ingestion/`: offline time-window inspection only; no scheduler, source worker or network adapter.
 - `templates/`, `static/`: server-rendered Persian pages, shared tokens and locally hosted OFL-licensed Vazirmatn font.
 - `docs/`: product, decisions, source research and operational plans.
 
@@ -120,3 +121,19 @@ A claim records an asserted owner, source and evidence HTTPS URLs, optional non-
 A separate reviewer records further-review referral, rejection or deferral with reason and a snapshot; there is no approval decision. The queue is paginated by 20 and may be filtered by the latest review. Detail shows at most 25 recent reviews. Product and price candidate details show at most five newest claims for an **exact source URL** only to users with the separate source view permission; an invalid URL or no result is not evidence of no permission. These hints are not captured in candidate review snapshots and do not gate staging or review. Recording, reviewing or finding a claim never authorizes source use, collection, storage or publication and causes no network request or public write.
 
 The SQLite workflow is not a tamper-proof audit: model `save()`/`delete()` guards do not stop bulk ORM or direct SQL, and SQLite does not enforce `select_for_update` row locks. Sequential stale-form and fingerprint checks are not a concurrency guarantee. Production needs independently verified evidence and legal decisions, revocation enforcement, access control, durable audit, retention and tested database concurrency before any real source use. The existing CSV attestation is independent of this ledger and remains an operator assertion, not proof of rights.
+
+
+## Offline ingestion-window inspection
+
+No source access or scheduler is enabled. This command emits JSON for a supplied timezone-aware ISO-8601 instant (or the system clock if omitted):
+
+```sh
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py inspect_ingestion_window --at 2026-11-22T20:00:00Z
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py inspect_ingestion_window --start 09:00 --end 10:00 --timezone UTC --at 2026-11-22T09:30:00+00:00
+```
+
+Defaults are `23:00`–`01:00` in `Asia/Tehran`, from local date D to D+1. The start is inclusive and end exclusive; equal times are invalid. The output identifies current or next window, its UTC/local boundaries, the checked instant, and `dispatch_enabled: false`. Nonexistent or ambiguous local boundary times fail with a command error, rather than guessing. Inputs require ASCII `HH:MM` and a valid installed IANA timezone; `--at` must contain an offset. The OS or Python environment must provide current IANA timezone data; results also depend on a correct system clock. Results for future dates can change as timezone rules change.
+
+The debug-only `/staff/operations/window/` page provides the same read-only calculation for active staff with at least one of `catalog.view_productcandidate`, `pricing.view_pricecandidate` or `sources.view_sourceclaim`. Parameters are per request and never stored. It links from each authorized queue; GET/HEAD only, staff privacy headers and the normal debug gate apply. Neither page nor command changes the source ledger or candidates, contacts sources, starts jobs, checks rights, saves schedule configuration or enforces a real window. Production requires the safeguards listed in [ADR 0002](ARCHITECTURE_DECISIONS/0002-offline-ingestion-window.md).
+
+Private product, price and source intake now consistently reject URLs with even empty `?`/`#` delimiters, empty credentials, controls or invalid Unicode, in addition to the existing HTTPS/no-secret rules. Review reasons reject invalid Unicode and non-text control characters. Previously staged records with newly invalid URLs are not rewritten and fail preliminary review until investigated through a future controlled repair workflow; do not use direct DB edits to bypass review. These checks do not prove a URL or source is legitimate, licensed or safe to fetch.

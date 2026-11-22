@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+  <div class="staff-topline"><div><div class="kicker"><span></span> عملیات داخلی · فقط محاسبه</div><h1>بررسی پنجره جمع‌آوری</h1><p>پیش‌فرض: ۲۳:۰۰ تا ۰۱:۰۰ روز بعد، به وقت تهران.</p></div><form method="post" action="{% url 'staff_logout' %}">{% csrf_token %}<button class="staff-logout" type="submit">خروج از حساب</button></form></div>
+  {% if can_products %}<p><a class="staff-detail-link" href="{% url 'staff_products' %}">صف فرآورده ←</a></p>{% endif %}{% if can_prices %}<p><a class="staff-detail-link" href="{% url 'staff_prices' %}">صف قیمت ←</a></p>{% endif %}{% if can_sources %}<p><a class="staff-detail-link" href="{% url 'staff_sources' %}">ادعاهای منبع ←</a></p>{% endif %}
+  <div class="staff-alert">این صفحه فقط محاسبه می‌کند؛ هیچ زمان‌بند یا خزنده‌ای اجرا نمی‌شود، مجوز منبع بررسی نمی‌شود و انتشار انجام نمی‌گیرد. تنظیمات این فرم ذخیره نمی‌شوند.</div>
+  <div class="staff-detail-grid"><section class="staff-panel"><h2>پارامترهای آزمایشی</h2><p class="staff-panel-note">زمان محلی و نام منطقه زمانی را وارد کنید. شروع شامل پنجره و پایان خارج از آن است؛ شروع و پایان برابر پذیرفته نیستند.</p>
+    <form method="get" class="staff-review-form">{{ form.non_field_errors }}<label for="id_start">{{ form.start.label }}</label>{{ form.start }}{{ form.start.errors }}<label for="id_end">{{ form.end.label }}</label>{{ form.end }}{{ form.end.errors }}<label for="id_zone">{{ form.zone.label }}</label>{{ form.zone }}{{ form.zone.errors }}<button class="staff-button" type="submit">محاسبه مجدد</button></form></section>
+    <section class="staff-panel"><h2>نتیجه محاسبه</h2>{% if plan %}<p class="staff-badge">{% if plan.is_open %}اکنون در پنجره محاسبه‌شده{% else %}اکنون خارج از پنجره؛ زمان بعدی{% endif %}</p><dl class="staff-definition">
+      <div><dt>منطقه زمانی</dt><dd><bdi dir="ltr">{{ plan.zone }}</bdi></dd></div>
+      <div><dt>شروع محلی</dt><dd><bdi dir="ltr">{{ plan.start_local }}</bdi></dd></div><div><dt>پایان محلی</dt><dd><bdi dir="ltr">{{ plan.end_local }}</bdi></dd></div>
+      <div><dt>شروع UTC</dt><dd><bdi dir="ltr">{{ plan.start_utc }}</bdi></dd></div><div><dt>پایان UTC</dt><dd><bdi dir="ltr">{{ plan.end_utc }}</bdi></dd></div>
+      <div><dt>زمان محاسبه UTC</dt><dd><bdi dir="ltr">{{ plan.checked_at_utc }}</bdi></dd></div><div><dt>عبور از نیمه‌شب</dt><dd>{% if plan.crosses_midnight %}بله{% else %}خیر{% endif %}</dd></div>
+    </dl><p class="staff-panel-note">نتیجه فقط در لحظه محاسبه معتبر است و وضعیت اجرای واقعی یا مجوز جمع‌آوری نیست. درستی آن به ساعت سیستم و داده‌های منطقه زمانی وابسته است.</p>{% else %}<p>نتیجه‌ای محاسبه نشد؛ خطاهای فرم را بررسی کنید.</p>{% if planning_error %}<p>{{ planning_error }}</p>{% endif %}{% endif %}</section></div>
+</div></section>{% endblock %}

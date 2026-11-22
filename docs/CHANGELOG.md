@@ -1,5 +1,11 @@
 # Implementation changelog
 
+## 2026-11-22 — offline ingestion-window inspection and input hardening
+
+**Changes:** Added a pure offline current/next window calculator with configurable per-call IANA timezone and local HH:MM boundaries, default Tehran 23:00–01:00, a JSON management command and a permission-gated Persian debug-only staff view. Rejects ambiguous/nonexistent local boundaries and converts to UTC using timezone rules. Shared validators now reject unsafe source URL edge cases and invalid review text across product, price and source workflows. Added synthetic timezone, permission and validation tests.
+
+**Limits:** No persisted schedule, scheduler, worker, rights check, network collection or publication. Clock and IANA data must be maintained; an open interval is not authorization or evidence of a run. Existing candidate records with newly invalid URLs fail review and require investigation, not silent rewriting. No concurrency, browser accessibility, penetration, source-rights or production testing.
+
 ## 2026-11-22 — source assertions and independent preliminary triage
 
 **Changes:** Added a development-only internal ledger of source-rights assertions with explicit scopes, owner, evidence URL, claimed dates, recorder, duplicate detection and a separate preliminary reviewer. Added a paginated/filterable Persian staff queue and exact-URL, permission-gated, capped links from product and price candidate details. Validation and synthetic tests cover access boundaries, CSRF, sequential conflicts and integrity, date labels and no public writes.

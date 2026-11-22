@@ -1,6 +1,6 @@
 # Crawler and ingestion architecture
 
-The system includes a local CSV candidate-staging command, but no network source adapter, crawler, scheduler, credentials, source permissions or inspected Iranian source API exists. The crawler architecture below is design only. Do not operate an adapter or republish data until permission, permitted rate, scope, retention and terms are recorded and validated.
+The system includes local CSV candidate staging and an offline, non-persistent window inspection utility, but no network source adapter, crawler, scheduler, credentials, source permissions or inspected Iranian source API exists. Except for the explicitly described window inspection utility, the crawler architecture below is design only. Do not operate an adapter or republish data until permission, permitted rate, scope, retention and terms are recorded and validated.
 
 ## Source discovery gate
 
@@ -8,7 +8,7 @@ For each source record owner/contact, rights/licence, approved fields, access me
 
 ## Independent lifecycle
 
-A scheduler dispatches a single run under a DB lease/lock to a separate constrained worker, not the web process. Default intended window is **23:00–01:00 Asia/Tehran**, starting on local date D at 23:00 and ending D+1 at 01:00; store timezone-aware UTC instants and compute using IANA timezone rules for each date, not a fixed UTC offset. Settings are audited and validated; handle timezone rule changes and duplicate scheduler events. At window end stop issuing new requests, checkpoint unfinished work and mark run partial; do not call it successful. Resume only under an explicit policy and a new/linked run. Schedule settings and controls are future admin functions, not implemented.
+A scheduler dispatches a single run under a DB lease/lock to a separate constrained worker, not the web process. Default intended window is **23:00–01:00 Asia/Tehran**, starting on local date D at 23:00 and ending D+1 at 01:00; store timezone-aware UTC instants and compute using IANA timezone rules for each date, not a fixed UTC offset. Settings are audited and validated; handle timezone rule changes and duplicate scheduler events. At window end stop issuing new requests, checkpoint unfinished work and mark run partial; do not call it successful. Resume only under an explicit policy and a new/linked run. Actual persisted schedule settings and controls are future admin functions, not implemented.
 
 ## Pipeline and adapter contract
 
@@ -23,3 +23,8 @@ A scheduler dispatches a single run under a DB lease/lock to a separate constrai
 ## Controls and failure
 
 Manual start, pause, resume and retry are authorized, auditable and idempotent; do not run two active jobs for one source unless a proven partitioned design exists. A source schema/pagination change, unexpectedly empty response, incomplete pagination, expired rights, format drift, excessive error rate or identity ambiguity fails closed and alerts operations; do not publish data from that affected run automatically. Full reconciliation is considered complete only with source-specific reliable coverage evidence; unknown total is not evidence of completeness. Reprocessing after a crash cannot duplicate observations or approvals. Worker failure or queue outage must leave verified data intact and public requests available.
+
+
+## Implemented offline window inspection
+
+`ingestion/schedule.py` computes the current or next half-open daily interval for a supplied aware instant, defaulting to 23:00–01:00 Asia/Tehran. Per-invocation start, end and IANA timezone are configurable; equal times are rejected. It returns local and UTC boundaries, distinguishing same-day from overnight, and rejects ambiguous or nonexistent local boundary times. It consults installed timezone data rather than assuming a fixed Tehran offset. See [ADR 0002](ARCHITECTURE_DECISIONS/0002-offline-ingestion-window.md) and the [development guide](DEVELOPMENT_GUIDE.md#offline-ingestion-window-inspection) for usage and limitations. There is no schedule persistence, rights check, scheduler, worker, network access, dispatch, run history, lock, checkpoint or publication. An open window must never be treated as authorization to operate a source.

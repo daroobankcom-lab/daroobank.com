@@ -1,6 +1,6 @@
 # Price data model and publication rules
 
-Proposed; no verified data or pricing system exists. The development catalog has no price fields and never displays a price.
+A local CSV staging slice exists, but no verified prices, approval workflow or public pricing system exists. `pricing.PriceCandidate` is a source assertion for later review, not an approved price; staged amounts are never shown on public pages. The full model below remains proposed.
 
 ## Identity, categories and units
 
@@ -19,3 +19,9 @@ A previous amount and percentage are calculated only against a prior comparable 
 ## Controls
 
 New package candidates require reviewer approval. Incoming price changes require matching presentation, declared unit/currency and source evidence; configure an anomaly threshold only after baseline analysis (no invented threshold). Suspicious changes, conflicting sources or unusual price changes require review. No missing source row means discontinuation. On stale data, keep the last approved record with timestamp and an explicit stale warning; freshness windows are source/category-specific policy, not guessed globally. Manual correction is a separate sourced decision and never erases the original observation.
+
+## Implemented candidate staging (development only)
+
+`pricing.PriceCandidate` retains source name/URL/record ID, the selected validated input fields and their content hash, original amount/currency, exact integer Rial conversion, category/unit, optional effective/source-publication dates, collection timestamp and an optional **suggested** presentation. Repeated identical source URL + record ID + payload hashes do not duplicate; changed payloads create new candidate rows. The tool does not delete or alter earlier rows, but the database does not enforce immutability against direct edits. Rights, source verification, product identity, review and publication are not established by an operator flag or by this table.
+
+`stage_price_csv` defaults to dry run; `--commit` requires an operator assertion of collection/storage rights. Full-file validation precedes a transaction; a bad row cannot produce a partial file import. Only normalized exact IRC plus manufacturer, strength, form and package can yield a suggestion. Duplicate exact candidates are ambiguous, and a changed catalog record can make an earlier suggestion stale; the listing command computes a fresh comparison. Fuzzy names cannot attach or publish a price. All candidates still require human review and cannot be displayed publicly by existing views. Full process and file format: [development guide](DEVELOPMENT_GUIDE.md).

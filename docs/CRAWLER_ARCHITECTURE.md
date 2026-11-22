@@ -1,6 +1,6 @@
 # Crawler and ingestion architecture
 
-Design only. No crawler, scheduler, credentials, source permissions or inspected Iranian source API exist. Do not operate an adapter or republish data until permission, permitted rate, scope, retention and terms are recorded and validated.
+The system includes a local CSV candidate-staging command, but no network source adapter, crawler, scheduler, credentials, source permissions or inspected Iranian source API exists. The crawler architecture below is design only. Do not operate an adapter or republish data until permission, permitted rate, scope, retention and terms are recorded and validated.
 
 ## Source discovery gate
 

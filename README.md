@@ -4,7 +4,7 @@ DarooBank is planned as a Persian-first pharmaceutical knowledge and Iranian pro
 
 ## Current state
 
-The repository now has an early **development-only Django vertical slice**: Persian RTL home, search, about and price-status pages; a versioned read-only search endpoint; and a source-backed product-presentation model. The database starts empty. There are no verified clinical monographs, prices, ingestion, user accounts, review workflow or production deployment. The publication flag is a technical filter, **not** a complete clinical/data governance workflow. No source rights have been established. Do not deploy to production without explicit authorization and security/clinical review.
+The repository now has an early **development-only Django vertical slice**: Persian RTL home, search, about and price-status pages; a versioned read-only search endpoint; and a source-backed product-presentation model. The database starts empty. There is now a local, review-only CSV price-candidate staging command; it does not publish or crawl. There are no verified clinical monographs or prices, automated ingestion, user accounts, approval workflow or production deployment. The publication flag is a technical filter, **not** a complete clinical/data governance workflow. No source rights have been established. Do not deploy to production without explicit authorization and security/clinical review.
 
 ## Run locally
 

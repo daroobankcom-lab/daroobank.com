@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from sources.services import related_claims
-from ingestion.receipts import stage_price_with_receipt
+from ingestion.receipts import related_receipts, stage_price_with_receipt
 
 from .comparisons import price_revision_context
 from .forms import PriceReviewForm, PriceUploadForm
@@ -90,6 +90,7 @@ def _detail_response(request, candidate, *, form=None, status=200):
         'unit_label': UNIT_LABELS.get(candidate.unit, 'نامشخص'), 'reviews': reviews,
         'review_form': form, 'can_review': can_review, 'comparison': price_revision_context(candidate),
         'source_claims': related_claims(request.user, candidate.source_url),
+        'receipt_refs': related_receipts(request.user, candidate, 'price'),
     }, status=status)
 
 

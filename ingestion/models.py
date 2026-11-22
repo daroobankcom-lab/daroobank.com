@@ -15,6 +15,7 @@ class ImportReceipt(models.Model):
     source_url = models.URLField(max_length=200)
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='import_receipts')
     created_at = models.DateTimeField(auto_now_add=True)
+    manifest_version = models.PositiveSmallIntegerField(null=True, blank=True)
     rows = models.PositiveIntegerField()
     created = models.PositiveIntegerField()
     duplicates = models.PositiveIntegerField()
@@ -26,6 +27,8 @@ class ImportReceipt(models.Model):
         default_permissions = ()  # Views use candidate-domain permissions, not a broad receipt permission.
         ordering = ['-pk']
         constraints = [
+            models.CheckConstraint(condition=Q(manifest_version__isnull=True) | Q(manifest_version=1),
+                                   name='receipt_manifest_version_supported'),
             models.CheckConstraint(condition=Q(rows__gt=0) & Q(rows=F('created') + F('duplicates')),
                                    name='receipt_total_consistent'),
             models.CheckConstraint(condition=(
@@ -43,3 +46,38 @@ class ImportReceipt(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError('Import receipts cannot be deleted through this model.')
+
+
+class ImportReceiptItem(models.Model):
+    """A normalized input-row outcome, not a raw file or independent evidence."""
+    receipt = models.ForeignKey(ImportReceipt, on_delete=models.PROTECT, related_name='items')
+    ordinal = models.PositiveIntegerField()
+    source_record_id = models.CharField(max_length=160)
+    payload_sha256 = models.CharField(max_length=64)
+    was_created = models.BooleanField()
+    product_candidate = models.ForeignKey('catalog.ProductCandidate', null=True, blank=True,
+                                          on_delete=models.PROTECT, related_name='receipt_items')
+    price_candidate = models.ForeignKey('pricing.PriceCandidate', null=True, blank=True,
+                                        on_delete=models.PROTECT, related_name='receipt_items')
+    match_status = models.CharField(max_length=12, blank=True, default='')
+
+    class Meta:
+        default_permissions = ()
+        ordering = ['ordinal']
+        constraints = [
+            models.UniqueConstraint(fields=['receipt', 'ordinal'], name='receipt_item_unique_ordinal'),
+            models.CheckConstraint(condition=Q(ordinal__gte=1, ordinal__lte=5000), name='receipt_item_bounded_ordinal'),
+            models.CheckConstraint(condition=(
+                Q(product_candidate__isnull=False, price_candidate__isnull=True, match_status='') |
+                Q(product_candidate__isnull=True, price_candidate__isnull=False,
+                  match_status__in=['suggested', 'ambiguous', 'unmatched'])
+            ), name='receipt_item_single_domain'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('Import receipt items cannot be edited through this model.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Import receipt items cannot be deleted through this model.')

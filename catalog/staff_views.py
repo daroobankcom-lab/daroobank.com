@@ -7,7 +7,7 @@ from django.http import Http404, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from sources.services import related_claims
-from ingestion.receipts import stage_product_with_receipt
+from ingestion.receipts import related_receipts, stage_product_with_receipt
 
 from .comparisons import product_comparison_context
 from .intake import IntakeError, ReviewConflict, require_staff, review_product, stage_products
@@ -83,6 +83,7 @@ def detail_response(request, candidate, *, form=None, status=200):
         'noindex': True, 'private_staff': True, 'candidate': candidate, 'reviews': reviews,
         'can_review': can_review, 'review_form': form, 'comparison': product_comparison_context(candidate),
         'source_claims': related_claims(request.user, candidate.source_url),
+        'receipt_refs': related_receipts(request.user, candidate, 'product'),
     }, status=status)
 
 

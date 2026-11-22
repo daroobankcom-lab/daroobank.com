@@ -171,7 +171,10 @@ def suggest_product(row, *, lock=False):
     return PriceCandidate.MATCH_UNMATCHED, None
 
 
-def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None):
+def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None, on_staged=None):
+    # Internal row callback runs inside the transaction; it must not cause external side effects.
+    if on_staged is not None and (not commit or not callable(on_staged)):
+        raise ImportValidationError('Row outcomes require staged commit mode.')
     if commit and rights_attested is not True:
         raise ImportValidationError('Staging requires an explicit source-rights attestation.')
     if staged_by is not None and (not staged_by.is_authenticated or not staged_by.is_active or not staged_by.is_staff
@@ -190,7 +193,7 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
                 continue
             payload = json.dumps({'source_name': source_name, 'fields': row}, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
             digest = hashlib.sha256(payload.encode('utf-8')).hexdigest()
-            _, created = PriceCandidate.objects.get_or_create(
+            candidate, created = PriceCandidate.objects.get_or_create(
                 source_url=source_url, source_record_id=row['source_record_id'], payload_sha256=digest,
                 defaults={
                     'source_name': source_name, 'source_fields': row,
@@ -202,4 +205,6 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
                 },
             )
             counts['created' if created else 'duplicates'] += 1
+            if on_staged is not None:
+                on_staged(candidate.pk, row['source_record_id'], digest, created, match_status)
     return counts

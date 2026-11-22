@@ -1,5 +1,13 @@
 # Implementation changelog
 
+Entries describe the state at each change; later entries can supersede earlier limitations.
+
+## 2026-11-22 — intake row outcomes and receipt navigation
+
+**Changes:** New receipt-backed product and price imports atomically record bounded per-data-row outcomes linking to candidates, including duplicates, content fingerprints and request-time price suggestions. Receipt details validate structure and candidate consistency, paginate rows and hide inconsistent links. Candidate pages show capped, domain-scoped recent receipt clues. Existing receipts are explicitly marked as lacking row details; no backfill is invented. Added synthetic rollback, permissions, corruption, replay, constraints and migration tests.
+
+**Limits:** No raw file or file-level hash is kept; this cannot prove original contents, source permission or immutable audit. Hashes are not signatures and price payload hashes omit source URLs. CLI/direct imports, preview, failures and older receipts remain outside row manifests. FKs protect ordinary deletion, but bulk ORM/SQL bypass guards; retention and production concurrency/crash behavior are unresolved. No source, clinical, browser or production validation was performed.
+
 ## 2026-11-22 — web intake receipts
 
 **Changes:** Added minimal successful-web-stage receipts for product/price CSV imports, written transactionally with candidates, plus permission-filtered Persian list/detail pages and links from uploads and queues. Stored counts distinguish created and duplicate rows; price match counts include duplicates and reflect that request's catalog. Added count constraints and synthetic rollback, permission, replay, CSRF and pagination tests.

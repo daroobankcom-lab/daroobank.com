@@ -68,7 +68,7 @@ def receipt_detail(request, pk):
     from django.http import Http404
     from django.shortcuts import get_object_or_404
     from .models import ImportReceipt
-    from .receipts import visible_kinds
+    from .receipts import manifest_context, visible_kinds
 
     kinds = visible_kinds(request.user)
     if not kinds:
@@ -79,4 +79,5 @@ def receipt_detail(request, pk):
     return render(request, 'staff/import_receipt_detail.html', {
         'page_title': 'رسید ورود فایل | داروبانک', 'description': 'خلاصه یک ثبت داخلی.',
         'noindex': True, 'private_staff': True, 'receipt': receipt,
+        'manifest': manifest_context(receipt, request.GET.get('page', 1)),
     })

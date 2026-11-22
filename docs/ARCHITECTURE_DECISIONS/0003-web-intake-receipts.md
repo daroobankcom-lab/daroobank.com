@@ -1,6 +1,6 @@
 # ADR 0003: development-only web intake receipts
 
-Status: implemented for development, 22 November 2026.
+Status: implemented for development, 22 November 2026; the no-row-membership decision is partially superseded by [ADR 0004](0004-intake-row-manifest.md). The text below records the original decision.
 
 ## Context and decision
 

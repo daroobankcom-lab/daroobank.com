@@ -94,8 +94,11 @@ def fingerprint(source_name, source_url, fields):
     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
 
-def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False):
+def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False, on_staged=None):
+    # Internal row callback runs inside the transaction; it must not cause external side effects.
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.add_productcandidate')
+    if on_staged is not None and (not commit or not callable(on_staged)):
+        raise IntakeError('ثبت جزئیات ردیف فقط در حالت ثبت مرحله‌ای ممکن است.')
     if commit and rights_attested is not True:
         raise IntakeError('برای ثبت باید مجوز ذخیره داخلی را اظهار کنید.')
     valid_source(source_name, source_url)
@@ -104,13 +107,16 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
     with transaction.atomic():
         if commit:
             for row in rows:
-                _, created = ProductCandidate.objects.get_or_create(
+                digest = fingerprint(source_name, source_url, row)
+                candidate, created = ProductCandidate.objects.get_or_create(
                     source_url=source_url, source_record_id=row['source_record_id'],
-                    payload_sha256=fingerprint(source_name, source_url, row),
+                    payload_sha256=digest,
                     defaults={'source_name': source_name, 'source_fields': row, 'staged_by': actor,
                               'source_rights_attested': True, 'irc_normalized': normalize_search(row['irc'])},
                 )
                 counts['created' if created else 'duplicates'] += 1
+                if on_staged is not None:
+                    on_staged(candidate.pk, row['source_record_id'], digest, created, None)
     return counts
 
 

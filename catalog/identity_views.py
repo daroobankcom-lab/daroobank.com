@@ -8,9 +8,9 @@ from django.views.decorators.http import require_http_methods, require_POST, req
 from daroobank.validation import valid_review_reason
 from .identity import (ADD, VIEW, REVIEW, MAX_ID, INGREDIENT_FIELDS, FORMULATION_FIELDS, PRODUCT_FIELDS, PACKAGE_FIELDS,
     IdentityConflict, IdentityError, create_ingredient, create_formulation, create_product, create_package,
-    digest, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot, require_staff, review_package, safe_snapshot)
+    digest, valid_review_snapshot, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot, require_staff, review_package, safe_snapshot)
 from .identity_forms import ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm
-from .models import IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft
+from .models import IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview
 
 KINDS = {
     'ingredient': (IngredientDraft, IngredientForm, INGREDIENT_FIELDS, ingredient_snapshot, 'ماده مؤثره'),
@@ -94,8 +94,12 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
                                                            'expected_graph_hash': digest(snapshot)})
         for review in reviews:
             try:
-                review.safe = (isinstance(review.graph_snapshot, dict) and digest(review.graph_snapshot) == review.graph_sha256
-                               and valid_review_reason(review.reason))
+                review.safe = (valid_review_snapshot(review.graph_snapshot, obj.pk)
+                               and digest(review.graph_snapshot) == review.graph_sha256
+                               and review.decision in dict(IdentityPackageReview.DECISIONS)
+                               and valid_review_reason(review.reason)
+                               and review.reviewer_id not in _authors(review.graph_snapshot))
+                review.is_current = review.safe and review.graph_sha256 == digest(snapshot)
             except (TypeError, ValueError, UnicodeError):
                 review.safe = False
     return render(request, 'staff/identity_detail.html', {'page_title': 'جزئیات هویت ساختگی | داروبانک',

@@ -1,0 +1,6 @@
+<section class="staff-panel"><h2>فرمولاسیون · شناسه {{ formulation.id }}</h2>
+<p>نام: {{ formulation.name }} · شکل: {{ formulation.dosage_form }} · مسیر مصرف: {{ formulation.route }}</p>
+<p>منبع ادعایی: {{ formulation.source_name }} · <span dir="ltr">{{ formulation.source_url }}</span></p>
+<p>شناسه ثبت‌کننده: {{ formulation.recorded_by_id }}{% if not historical %} · <a href="{% url 'staff_identity_detail' 'formulation' formulation.id %}">جزئیات فرمولاسیون</a>{% endif %}</p>
+<h3>اجزای ادعایی به ترتیب ثبت</h3><ol>{% for component in formulation.components %}<li>ماده {{ component.ingredient_id }}: {{ component.numerator }} {{ component.numerator_unit }} / {{ component.denominator }} {{ component.denominator_unit }}</li>{% endfor %}</ol></section>
+{% for ingredient in formulation.ingredients %}{% include 'staff/identity/ingredient.html' with ingredient=ingredient historical=historical only %}{% endfor %}

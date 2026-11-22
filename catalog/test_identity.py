@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from decimal import Decimal
 from threading import Barrier
 from unittest.mock import patch
@@ -11,7 +12,7 @@ from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from .identity import (IdentityConflict, IdentityError, create_ingredient, create_formulation, create_product,
-                       create_package, review_package, digest, package_snapshot, safe_snapshot)
+                       create_package, review_package, digest, package_snapshot, safe_snapshot, valid_review_snapshot)
 from .models import (IngredientDraft, FormulationDraft, FormulationComponent, IdentityProductDraft,
                      IdentityPackageDraft, IdentityPackageReview, ProductPresentation)
 
@@ -163,6 +164,7 @@ class IdentityTests(TestCase):
         product = create_product(actor=self.author, data=PRODUCT, formulation_id=form.pk)
         package = create_package(actor=self.author, data=PACKAGE, product_id=product.pk)
         graph = package_snapshot(package)
+        self.assertTrue(valid_review_snapshot(graph, package.pk))
         self.assertEqual([i['id'] for i in graph['product']['formulation']['ingredients']], [other.pk, self.ingredient.pk])
         FormulationComponent.objects.filter(formulation=form, ordinal=2).update(ordinal=3)
         self.assertIsNone(safe_snapshot(package, package_snapshot))
@@ -199,6 +201,75 @@ class IdentityTests(TestCase):
         response = self.client.get(reverse('staff_identity_list'))
         self.assertNotContains(response, '<script>alert(1)</script>')
         self.assertContains(response, '&lt;script&gt;alert(1)&lt;/script&gt;', html=False)
+
+    def test_review_graph_validation_and_readable_chain(self):
+        graph = package_snapshot(self.package)
+        self.assertTrue(valid_review_snapshot(graph, self.package.pk))
+        cases = []
+        g = deepcopy(graph); g['product']['formulation']['ingredients'][0]['name_fa'] = 'داده ناسازگار'; cases.append(g)
+        g = deepcopy(graph); g['product']['formulation']['components'][0]['numerator'] = '1e99999999'; cases.append(g)
+        g = deepcopy(graph); g['product']['formulation']['components'][0]['numerator'] = '02.5000'; cases.append(g)
+        g = deepcopy(graph); g['product']['formulation']['components'][0]['numerator'] = '0.0000'; cases.append(g)
+        g = deepcopy(graph); g['product']['formulation']['components'][0]['ingredient_id'] = True; cases.append(g)
+        g = deepcopy(graph); g['product']['formulation']['components'] = []; cases.append(g)
+        g = deepcopy(graph); g['product']['formulation']['ingredients'] = 'wrong'; cases.append(g)
+        g = deepcopy(graph); g['product']['formulation_id'] = True; cases.append(g)
+        g = deepcopy(graph); g['product_id'] = True; cases.append(g)
+        g = deepcopy(graph); g['quantity'] = '1e99999999'; cases.append(g)
+        g = deepcopy(graph); g['product']['name'] = 'داده ناسازگار'; cases.append(g)
+        g = deepcopy(graph); g['payload_sha256'] = 'bad'; cases.append(g)
+        g = deepcopy(graph); g['id'] += 1; cases.append(g)
+        g = deepcopy(graph); g['extra'] = 'private'; cases.append(g)
+        cases.extend([{}, [], None, 'wrong'])
+        for bad in cases:
+            with self.subTest(bad=bad): self.assertFalse(valid_review_snapshot(bad, self.package.pk))
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse('staff_identity_detail', args=['package', self.package.pk]))
+        for value in (INGREDIENT['name_fa'], FORM['name'], PRODUCT['name'], PACKAGE['description'], '2.5000'):
+            self.assertContains(response, value)
+        self.assertContains(response, reverse('staff_identity_detail', args=['ingredient', self.ingredient.pk]))
+        self.assertNotContains(response, 'payload_sha256')
+
+    def test_review_history_current_historical_and_inconsistent(self):
+        graph = package_snapshot(self.package)
+        event = review_package(actor=self.reviewer, package_id=self.package.pk, decision='defer',
+            reason='دلایل ساختگی برای بررسی بیشتر', expected_review=0, expected_graph_hash=digest(graph))
+        self.client.force_login(self.viewer)
+        path = reverse('staff_identity_detail', args=['package', self.package.pk])
+        self.assertContains(self.client.get(path), 'تصویر بازبینی با زنجیره فعلی همخوان است')
+        old_product = create_product(actor=self.author, data={**PRODUCT, 'name': '<script>old</script>'}, formulation_id=self.formulation.pk)
+        old_package = create_package(actor=self.author, data=PACKAGE, product_id=old_product.pk)
+        other = package_snapshot(old_package)
+        other['id'] = self.package.pk
+        self.assertTrue(valid_review_snapshot(other, self.package.pk))
+        IdentityPackageReview.objects.filter(pk=event.pk).update(graph_snapshot=other, graph_sha256=digest(other))
+        response = self.client.get(path)
+        self.assertContains(response, 'تصویر تاریخی با زنجیره فعلی متفاوت است')
+        self.assertContains(response, event.reason)
+        self.assertContains(response, '&lt;script&gt;old&lt;/script&gt;')
+        self.assertNotContains(response, '<script>old</script>')
+        self.assertNotContains(response, reverse('staff_identity_detail', args=['product', old_product.pk]))
+        other['product']['name'] = 'نام جعلی ناسازگار'
+        IdentityPackageReview.objects.filter(pk=event.pk).update(graph_snapshot=other, graph_sha256=digest(other))
+        response = self.client.get(path)
+        self.assertContains(response, 'بازبینی ناسازگار')
+        self.assertNotContains(response, event.reason)
+        self.assertNotContains(response, 'نام جعلی ناسازگار')
+        IdentityPackageReview.objects.filter(pk=event.pk).update(graph_snapshot=graph, graph_sha256=digest(graph), reviewer=self.author)
+        response = self.client.get(path)
+        self.assertContains(response, 'بازبینی ناسازگار')
+        self.assertNotContains(response, event.reason)
+
+    def test_invalid_current_chain_does_not_claim_no_reviews(self):
+        graph = package_snapshot(self.package)
+        review_package(actor=self.reviewer, package_id=self.package.pk, decision='defer',
+            reason='دلایل ساختگی برای بررسی بیشتر', expected_review=0, expected_graph_hash=digest(graph))
+        IngredientDraft.objects.filter(pk=self.ingredient.pk).update(name_fa='ناسازگار')
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse('staff_identity_detail', args=['package', self.package.pk]))
+        self.assertContains(response, 'رکورد یا وابستگی آن ناسازگار است')
+        self.assertNotContains(response, 'بازبینی‌ای ثبت نشده است')
+        self.assertNotContains(response, 'دلایل ساختگی برای بررسی بیشتر')
 
     def test_component_order_and_modified_values_detected(self):
         self.assertIsNotNone(safe_snapshot(self.package, package_snapshot))

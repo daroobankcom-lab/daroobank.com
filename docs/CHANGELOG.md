@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — identity review history interpretation
+
+**Changes:** Made the private identity graph human-readable with explicit source/actor fields and links; validate stored review graph shape, links, hashes, quantities and reviewer separation before display. Consistent reviews are labeled current or historical, with an expandable historical snapshot; invalid current graphs suppress history rather than claiming none exists. No schema or public changes.
+
+**Limits:** Coherent snapshots can be fabricated by a database writer, and reason, decision and time are not integrity-protected. Historical comparison does not prove a real change. Bulk/SQL bypass guards; reads are not snapshots. No browser/accessibility, medical or production validation. See [ADR 0012](ARCHITECTURE_DECISIONS/0012-synthetic-identity-drafts.md).
+
 ## 2026-11-22 — private synthetic identity drafts
 
 **Changes:** Added a private, permission-scoped draft chain from ingredients through ordered formulation components and products to packages, with asserted sources and preliminary independent package review. Bounded staff pages, conflict checks, PostgreSQL migration and synthetic tests are included. Public catalog records and eligibility are unchanged.

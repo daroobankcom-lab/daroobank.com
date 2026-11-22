@@ -254,3 +254,67 @@ def review_package(*, actor, package_id, decision, reason, expected_review, expe
         if (latest.pk if latest else 0) != expected_review: raise IdentityConflict('بازبینی جدیدی ثبت شده است.')
         return IdentityPackageReview.objects.create(package=package, reviewer=actor, decision=decision, reason=reason.strip(),
                                                     graph_sha256=expected_graph_hash, graph_snapshot=graph)
+
+
+def valid_review_snapshot(graph, package_id):
+    """Check a stored review graph offline; detects inconsistency, not forgery."""
+    def base(node, fields, extras):
+        if not isinstance(node, dict) or set(node) != set(fields) | {'id', 'payload_sha256', 'recorded_by_id'} | set(extras):
+            raise IdentityError('ساختار تصویر بازبینی معتبر نیست.')
+        if not _valid_id(node['id']) or not _valid_id(node['recorded_by_id']) or not _is_hash(node['payload_sha256']):
+            raise IdentityError('شناسه یا هش تصویر معتبر نیست.')
+        data = {key: node[key] for key in fields}
+        for key in ('quantity', 'numerator', 'denominator'):
+            if key in data:
+                value = data[key]
+                if not isinstance(value, str) or not re.fullmatch(r'(?:0|[1-9][0-9]{0,7})\.[0-9]{4}', value):
+                    raise IdentityError('مقدار تصویر معتبر نیست.')
+                try:
+                    data[key] = Decimal(value)
+                    if not data[key].is_finite() or format(data[key], '.4f') != value:
+                        raise IdentityError('مقدار تصویر معتبر نیست.')
+                except (InvalidOperation, ValueError):
+                    raise IdentityError('مقدار تصویر معتبر نیست.')
+        validate_data(data, fields)
+        return {**canonical(data), 'recorded_by_id': node['recorded_by_id']}
+
+    try:
+        package = base(graph, PACKAGE_FIELDS, ('product_id', 'product_sha256', 'product'))
+        if graph['id'] != package_id: return False
+        product_node = graph['product']
+        product = base(product_node, PRODUCT_FIELDS, ('formulation_id', 'formulation_sha256', 'formulation'))
+        form_node = product_node['formulation']
+        form = base(form_node, FORMULATION_FIELDS, ('components', 'ingredients'))
+        parts, ingredients = form_node['components'], form_node['ingredients']
+        if (not isinstance(parts, list) or not isinstance(ingredients, list) or
+                not 1 <= len(parts) <= MAX_COMPONENTS or len(parts) != len(ingredients)):
+            return False
+        seen = set()
+        for part, ingredient in zip(parts, ingredients):
+            ingredient_payload_data = base(ingredient, INGREDIENT_FIELDS, ())
+            if digest(ingredient_payload_data) != ingredient['payload_sha256'] or ingredient['id'] in seen:
+                return False
+            seen.add(ingredient['id'])
+            if not isinstance(part, dict) or set(part) != set(COMPONENT_FIELDS) | {'ingredient_sha256'}:
+                return False
+            component = {key: part[key] for key in COMPONENT_FIELDS}
+            for key in ('numerator', 'denominator'):
+                value = component[key]
+                if not isinstance(value, str) or not re.fullmatch(r'(?:0|[1-9][0-9]{0,7})\.[0-9]{4}', value): return False
+                component[key] = Decimal(value)
+                if not component[key].is_finite() or format(component[key], '.4f') != value: return False
+            validate_data(component, COMPONENT_FIELDS)
+            if part['ingredient_id'] != ingredient['id'] or part['ingredient_sha256'] != ingredient['payload_sha256']:
+                return False
+        form['components'] = parts
+        if digest(form) != form_node['payload_sha256']: return False
+        if not _valid_id(product_node['formulation_id']) or product_node['formulation_id'] != form_node['id'] or product_node['formulation_sha256'] != form_node['payload_sha256']:
+            return False
+        product.update(formulation_id=product_node['formulation_id'], formulation_sha256=product_node['formulation_sha256'])
+        if digest(product) != product_node['payload_sha256']: return False
+        if not _valid_id(graph['product_id']) or graph['product_id'] != product_node['id'] or graph['product_sha256'] != product_node['payload_sha256']:
+            return False
+        package.update(product_id=graph['product_id'], product_sha256=graph['product_sha256'])
+        return digest(package) == graph['payload_sha256']
+    except (IdentityError, TypeError, ValueError, KeyError, AttributeError, InvalidOperation, OverflowError, UnicodeError):
+        return False

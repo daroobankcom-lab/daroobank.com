@@ -103,15 +103,17 @@ def ingredient_snapshot(item):
     return {'id': item.pk, 'payload_sha256': item.payload_sha256, **payload}
 
 
-def formulation_payload(item):
+def _formulation_parts(item):
     data = values(item, FORMULATION_FIELDS)
     validate_data(data, FORMULATION_FIELDS)
     if not _valid_id(item.recorded_by_id): raise IdentityError('ثبت‌کننده معتبر نیست.')
+    # A single joined statement ensures component quantities and ingredient data
+    # in the returned graph originate from the same read, rather than a second
+    # component query that can observe a different set of rows.
     components = list(item.components.select_related('ingredient').order_by('ordinal')[:MAX_COMPONENTS + 1])
     if not 1 <= len(components) <= MAX_COMPONENTS or [c.ordinal for c in components] != list(range(1, len(components) + 1)):
         raise IdentityError('اجزای فرمولاسیون ناسازگارند.')
-    payload_components = []
-    seen = set()
+    payload_components, ingredients, seen = [], [], set()
     for c in components:
         component = values(c, COMPONENT_FIELDS)
         validate_data(component, COMPONENT_FIELDS)
@@ -120,56 +122,59 @@ def formulation_payload(item):
         ingredient = ingredient_snapshot(c.ingredient)
         if c.ingredient_sha256 != ingredient['payload_sha256']: raise IdentityError('ماده تغییر کرده است.')
         payload_components.append({**canonical(component), 'ingredient_sha256': c.ingredient_sha256})
-    return {**data, 'recorded_by_id': item.recorded_by_id, 'components': payload_components}
+        ingredients.append(ingredient)
+    return {**data, 'recorded_by_id': item.recorded_by_id, 'components': payload_components}, ingredients
+
+
+def formulation_payload(item):
+    return _formulation_parts(item)[0]
 
 
 def formulation_snapshot(item):
-    payload = formulation_payload(item)
+    payload, ingredients = _formulation_parts(item)
     if not _is_hash(item.payload_sha256) or digest(payload) != item.payload_sha256: raise IdentityError('فرمولاسیون ناسازگار است.')
-    components = list(item.components.select_related('ingredient').order_by('ordinal')[:MAX_COMPONENTS + 1])
-    # Validate once more, since a concurrent out-of-band write may happen between reads.
-    if len(components) != len(payload['components']): raise IdentityError('اجزا تغییر کردند.')
-    ingredients = [ingredient_snapshot(component.ingredient) for component in components]
-    if any(ingredient['id'] != payload['components'][i]['ingredient_id'] or
-           ingredient['payload_sha256'] != payload['components'][i]['ingredient_sha256']
-           for i, ingredient in enumerate(ingredients)):
-        raise IdentityError('مواد تغییر کردند.')
     return {'id': item.pk, 'payload_sha256': item.payload_sha256, **payload, 'ingredients': ingredients}
 
 
-def product_payload(item):
+def _product_parts(item):
     data = values(item, PRODUCT_FIELDS)
     validate_data(data, PRODUCT_FIELDS)
     if not _valid_id(item.recorded_by_id): raise IdentityError('ثبت‌کننده معتبر نیست.')
     formulation = formulation_snapshot(item.formulation)
     if item.formulation_sha256 != formulation['payload_sha256']: raise IdentityError('فرمولاسیون تغییر کرده است.')
-    return {**data, 'recorded_by_id': item.recorded_by_id, 'formulation_id': item.formulation_id,
-            'formulation_sha256': item.formulation_sha256}
+    payload = {**data, 'recorded_by_id': item.recorded_by_id, 'formulation_id': item.formulation_id,
+               'formulation_sha256': item.formulation_sha256}
+    return payload, formulation
+
+
+def product_payload(item):
+    return _product_parts(item)[0]
 
 
 def product_snapshot(item):
-    payload = product_payload(item)
+    payload, formulation = _product_parts(item)
     if not _is_hash(item.payload_sha256) or digest(payload) != item.payload_sha256: raise IdentityError('فرآورده ناسازگار است.')
-    formulation = formulation_snapshot(item.formulation)
-    if formulation['payload_sha256'] != payload['formulation_sha256']: raise IdentityError('فرمولاسیون تغییر کرده است.')
     return {'id': item.pk, 'payload_sha256': item.payload_sha256, **payload, 'formulation': formulation}
 
 
-def package_payload(item):
+def _package_parts(item):
     data = values(item, PACKAGE_FIELDS)
     validate_data(data, PACKAGE_FIELDS)
     if not _valid_id(item.recorded_by_id): raise IdentityError('ثبت‌کننده معتبر نیست.')
     product = product_snapshot(item.product)
     if item.product_sha256 != product['payload_sha256']: raise IdentityError('فرآورده تغییر کرده است.')
-    return {**canonical(data), 'recorded_by_id': item.recorded_by_id, 'product_id': item.product_id,
-            'product_sha256': item.product_sha256}
+    payload = {**canonical(data), 'recorded_by_id': item.recorded_by_id, 'product_id': item.product_id,
+               'product_sha256': item.product_sha256}
+    return payload, product
+
+
+def package_payload(item):
+    return _package_parts(item)[0]
 
 
 def package_snapshot(item):
-    payload = package_payload(item)
+    payload, product = _package_parts(item)
     if not _is_hash(item.payload_sha256) or digest(payload) != item.payload_sha256: raise IdentityError('بسته‌بندی ناسازگار است.')
-    product = product_snapshot(item.product)
-    if product['payload_sha256'] != payload['product_sha256']: raise IdentityError('فرآورده تغییر کرده است.')
     return {'id': item.pk, 'payload_sha256': item.payload_sha256, **payload, 'product': product}
 
 

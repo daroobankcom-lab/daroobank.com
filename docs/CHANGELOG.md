@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — identity graph read and migration checks
+
+**Changes:** Reconstruct each formulation and its ingredient snapshots from one joined component read, reusing the result throughout the graph rather than repeatedly reading it; staff package/product queries join their direct dependencies. Payload hashes and stored graph format are unchanged. Added synthetic compatibility, query-count, PostgreSQL constraint and populated 0004-to-0005 catalog migration tests.
+
+**Limits:** One component statement is not an isolated graph snapshot, a lock against uncooperative writers, or a production performance benchmark. Migration tests do not replace backups or restore drills. No database schema or publication behavior changed. See [ADR 0012](ARCHITECTURE_DECISIONS/0012-synthetic-identity-drafts.md).
+
 ## 2026-11-22 — identity review history navigation
 
 **Changes:** Replaced the 25-review history cutoff with bounded descending-ID pages scoped to the selected package. The review form appears only on the newest page and uses the latest review actually shown as its optimistic precondition. A stale submission requires a reload and reassessment. Existing permissions, privacy, snapshot checks and public isolation remain in place; no schema change.

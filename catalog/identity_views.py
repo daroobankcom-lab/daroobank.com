@@ -30,7 +30,10 @@ def _kind(kind):
 def _object(kind, pk):
     model = _kind(kind)[0]
     if not 1 <= pk <= MAX_ID: raise Http404('Not found')
-    return get_object_or_404(model, pk=pk)
+    queryset = model.objects.all()
+    if kind == 'package': queryset = queryset.select_related('product__formulation')
+    elif kind == 'product': queryset = queryset.select_related('formulation')
+    return get_object_or_404(queryset, pk=pk)
 
 
 def _authors(graph):
@@ -46,7 +49,10 @@ def listing(request):
     kind = request.GET.get('kind', 'ingredient')
     if kind not in KINDS: return HttpResponseBadRequest('Invalid category.')
     model, _, _, snapshot, label = _kind(kind)
-    page = Paginator(model.objects.order_by('-pk'), 20).get_page(request.GET.get('page', 1))
+    queryset = model.objects.order_by('-pk')
+    if kind == 'package': queryset = queryset.select_related('product__formulation')
+    elif kind == 'product': queryset = queryset.select_related('formulation')
+    page = Paginator(queryset, 20).get_page(request.GET.get('page', 1))
     for item in page.object_list:
         item.snapshot = safe_snapshot(item, snapshot)
         item.title = (item.snapshot.get('name_fa') or item.snapshot.get('name') or item.snapshot.get('description')) if item.snapshot else ''

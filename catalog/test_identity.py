@@ -7,12 +7,13 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import close_old_connections, connection
+from django.db import close_old_connections, connection, IntegrityError, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+from django.test.utils import CaptureQueriesContext
 
 from .identity import (IdentityConflict, IdentityError, create_ingredient, create_formulation, create_product,
-                       create_package, review_package, digest, package_snapshot, safe_snapshot, valid_review_snapshot)
+                       create_package, review_package, digest, package_snapshot, formulation_snapshot, product_snapshot, safe_snapshot, valid_review_snapshot)
 from .models import (IngredientDraft, FormulationDraft, FormulationComponent, IdentityProductDraft,
                      IdentityPackageDraft, IdentityPackageReview, ProductPresentation)
 
@@ -349,6 +350,67 @@ class IdentityTests(TestCase):
         self.assertNotContains(response, 'بازبینی ناسازگار')
         self.assertNotContains(response, events[0].reason)
         self.assertContains(response, 'رکورد یا وابستگی آن ناسازگار است')
+
+    def test_one_joined_component_read_per_graph_and_existing_hash_compatibility(self):
+        package = IdentityPackageDraft.objects.select_related('product__formulation').get(pk=self.package.pk)
+        with self.assertNumQueries(1): graph = package_snapshot(package)
+        self.assertTrue(valid_review_snapshot(graph, package.pk))
+        author = self.author.pk
+        ingredient_payload = {**INGREDIENT, 'recorded_by_id': author}
+        ingredient = {'id': self.ingredient.pk, 'payload_sha256': digest(ingredient_payload), **ingredient_payload}
+        component = {'ingredient_id': self.ingredient.pk, 'numerator': '2.5000', 'numerator_unit': 'mg',
+                     'denominator': '1.0000', 'denominator_unit': 'tablet', 'ingredient_sha256': ingredient['payload_sha256']}
+        form_payload = {**FORM, 'recorded_by_id': author, 'components': [component]}
+        form = {'id': self.formulation.pk, 'payload_sha256': digest(form_payload), **form_payload, 'ingredients': [ingredient]}
+        product_payload = {**PRODUCT, 'recorded_by_id': author, 'formulation_id': form['id'],
+                           'formulation_sha256': form['payload_sha256']}
+        product_expected = {'id': self.product.pk, 'payload_sha256': digest(product_payload), **product_payload, 'formulation': form}
+        package_payload = {**PACKAGE, 'quantity': '10.0000', 'recorded_by_id': author,
+                           'product_id': product_expected['id'], 'product_sha256': product_expected['payload_sha256']}
+        expected = {'id': package.pk, 'payload_sha256': digest(package_payload), **package_payload, 'product': product_expected}
+        self.assertEqual(graph, expected)
+        with self.assertNumQueries(1): formulation = formulation_snapshot(package.product.formulation)
+        self.assertEqual(formulation, graph['product']['formulation'])
+        with self.assertNumQueries(1): product = product_snapshot(package.product)
+        self.assertEqual(product, graph['product'])
+        # A stored graph from before the read optimization remains the same format.
+        review = IdentityPackageReview.objects.create(package=package, reviewer=self.reviewer, decision='defer',
+            reason='دلیل ساختگی جهت آزمون سازگاری', graph_snapshot=graph, graph_sha256=digest(graph))
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse('staff_identity_detail', args=['package', package.pk]))
+        self.assertContains(response, 'تصویر بازبینی با زنجیره فعلی همخوان است')
+        self.assertContains(response, review.reason)
+
+    def test_package_list_queries_are_bounded_for_twenty_rows(self):
+        for i in range(20):
+            create_package(actor=self.author, data={**PACKAGE, 'description': f'بسته ساختگی {i}'}, product_id=self.product.pk)
+        self.client.force_login(self.viewer)
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse('staff_identity_list'), {'kind': 'package'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['page'].object_list), 20)
+        component_queries = [q for q in queries if 'FROM "catalog_formulationcomponent"' in q['sql']]
+        self.assertEqual(len(component_queries), 20)
+        self.assertLessEqual(len(queries), 30)
+
+    def test_database_constraints_reject_invalid_identity_components(self):
+        def insert(**overrides):
+            data = {'formulation': self.formulation, 'ingredient': self.ingredient, 'ordinal': 2,
+                    'numerator': Decimal('1'), 'numerator_unit': 'mg', 'denominator': Decimal('1'),
+                    'denominator_unit': 'tablet', 'ingredient_sha256': self.ingredient.payload_sha256}
+            data.update(overrides)
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                FormulationComponent.objects.create(**data)
+        # Duplicate ingredient and ordinal are disallowed even via ORM writes.
+        insert()
+        other = create_ingredient(actor=self.author, data={**INGREDIENT, 'name_fa': 'ماده دوم'})
+        insert(ingredient=other, ingredient_sha256=other.payload_sha256, ordinal=1)
+        insert(ingredient=other, ingredient_sha256=other.payload_sha256, ordinal=6)
+        insert(ingredient=other, ingredient_sha256=other.payload_sha256, ordinal=2, numerator=Decimal('0'))
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            IdentityPackageDraft.objects.filter(pk=self.package.pk).update(quantity=Decimal('0'))
+        self.assertEqual(FormulationComponent.objects.filter(formulation=self.formulation).count(), 1)
+        self.assertEqual(IdentityPackageDraft.objects.get(pk=self.package.pk).quantity, Decimal('10'))
 
     def test_component_order_and_modified_values_detected(self):
         self.assertIsNotNone(safe_snapshot(self.package, package_snapshot))

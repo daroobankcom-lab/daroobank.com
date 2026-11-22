@@ -1,0 +1,6 @@
+<form class="search-form {{ search_class }}" action="{% url 'search' %}" method="get" role="search">
+  <label class="sr-only" for="drug-search">نام دارو، شرکت یا کد IRC</label>
+  <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4.2 4.2"/></svg>
+  <input id="drug-search" name="q" value="{{ query|default:'' }}" maxlength="120" type="search" dir="auto" placeholder="نام دارو، شرکت سازنده یا کد IRC را جست‌وجو کنید..." autocomplete="off">
+  <button type="submit">جست‌وجو <span aria-hidden="true">←</span></button>
+</form>

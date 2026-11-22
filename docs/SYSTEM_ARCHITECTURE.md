@@ -1,6 +1,6 @@
 # System architecture
 
-**Proposed; no runtime exists yet.** Start as a modular monolith with explicit domains, shared PostgreSQL transaction boundaries and separate operational processes, not premature microservices.
+**Current:** Django SSR and a small catalog/search slice run locally on SQLite. There are no worker, authentication or production services yet. **Target architecture below is proposed:** a modular monolith with PostgreSQL transaction boundaries and separate operational processes, not premature microservices.
 
 ```mermaid
 flowchart LR

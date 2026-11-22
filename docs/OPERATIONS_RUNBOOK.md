@@ -1,6 +1,6 @@
 # Operations runbook
 
-This is a prospective checklist; no services, dashboards, alerts or on-call rotation currently exist. Create concrete commands, owners and escalation contacts before production.
+This is a prospective checklist; only a local development web process exists. No production services, dashboards, alerts or on-call rotation currently exist. Create concrete commands, owners and escalation contacts before production.
 
 ## Source or worker incident
 

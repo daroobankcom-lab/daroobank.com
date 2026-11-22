@@ -1,6 +1,6 @@
 # Security and privacy strategy
 
-Proposed controls, not proof of compliance or existing implementation. Iranian legal, professional, data residency and telehealth obligations require advice from qualified local counsel and review by clinical governance before handling patient data or launching consultations.
+Django escaping, HTTPS source validation, bounded queries and basic security headers are implemented and tested in the development slice. Most controls below remain proposed; these are not proof of compliance or production readiness. Iranian legal, professional, data residency and telehealth obligations require advice from qualified local counsel and review by clinical governance before handling patient data or launching consultations.
 
 ## Threats and access
 
@@ -26,3 +26,7 @@ Audits record actor, role, target, before/after versions or hashes, decision, ti
 ## Privacy and incident response
 
 Data minimization and purpose limitation; record consent, role access, legal basis, retention and deletion/withdrawal policy with legal review. Do not put PHI in metrics, search URLs, errors or analytics. Segregate consultation data, apply per-case access and audit, and do not record audio/video by default; recording requires explicit consent and legal justification. Define incident severity, containment, notification and recovery owners before launch. Retention periods and deletion exceptions are pending legal decision, not invented here. See [runbook](OPERATIONS_RUNBOOK.md).
+
+## Actual development-slice review
+
+`catalog/tests.py` tests XSS escaping, published-only filtering, invalid source URL rejection and GET-only methods. No admin, authentication, upload or patient-record feature exists to audit. Django development server/SQLite, default dev secret and permissive development preview hosts are not production controls. Source validation and a boolean flag can be bypassed by bulk writes or database access; no production write path should be enabled until transactional authorization, provenance, immutable audit, separation of duties and DB constraints are implemented. Search terms can appear in server/access logs; do not enter PHI and configure logging/redaction before production. No Strix/BugHunter scan or third-party penetration test was run.

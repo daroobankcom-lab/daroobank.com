@@ -1,6 +1,6 @@
 # Price data model and publication rules
 
-Proposed; no verified data or pricing system exists.
+Proposed; no verified data or pricing system exists. The development catalog has no price fields and never displays a price.
 
 ## Identity, categories and units
 

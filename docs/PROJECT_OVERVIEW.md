@@ -1,6 +1,6 @@
 # Project overview
 
-**Status:** vision and proposed scope, not delivered functionality. DarooBank (داروبانک) is a Persian-first knowledge and intelligence service for patients, pharmacists, physicians and pharmaceutical researchers in Iran. It is not a medicine seller or a claim of real-time pharmacy stock.
+**Status:** an early local web/search slice exists; the full vision below remains proposed. DarooBank (داروبانک) is a Persian-first knowledge and intelligence service for patients, pharmacists, physicians and pharmaceutical researchers in Iran. It is not a medicine seller or a claim of real-time pharmacy stock.
 
 ## Outcomes
 

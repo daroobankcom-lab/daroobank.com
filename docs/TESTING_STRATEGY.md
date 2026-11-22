@@ -1,6 +1,6 @@
 # Testing strategy and performance budgets
 
-No application exists, so no application tests or benchmarks have been run. Targets below are provisional acceptance budgets, not observed performance or promises; revisit with representative Iranian traffic, hosting and device/network conditions.
+The development slice has Django tests; see [changelog](CHANGELOG.md) for actual runs. No browser-based performance benchmark has been run. Targets below are provisional acceptance budgets, not observed performance or promises; revisit with representative Iranian traffic, hosting and device/network conditions.
 
 ## Quality gates
 

@@ -1,6 +1,6 @@
 # Roadmap and release gates
 
-Phases are proposals, not completed software. Work is iterative; no production deployment without explicit authorization.
+The initial local RTL web and product-search vertical slice has started Phase 1; the remaining phases are proposals, not completed software. Work is iterative; no production deployment without explicit authorization.
 
 | Phase | Deliverables and exit gates | Dependencies / risk |
 |---|---|---|

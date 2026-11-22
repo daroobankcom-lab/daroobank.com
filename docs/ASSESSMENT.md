@@ -1,6 +1,6 @@
 # Initial product and technical assessment
 
-Status: planning, 22 November 2026. Direct observations, reported claims and recommendations are distinguished below. No production implementation is implied.
+Historical initial assessment, 22 November 2026; it describes the base repository before the development slice. See [changelog](CHANGELOG.md) for current status. Direct observations, reported claims and recommendations are distinguished below. No production implementation is implied.
 
 ## 1. Repository audit
 

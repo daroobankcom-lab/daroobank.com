@@ -1,6 +1,6 @@
 # Deployment
 
-No deployable application, environment configuration, containers or production infrastructure currently exist. No deployment has been performed or authorized.
+A development Django application and `.env.example` now exist; there are no production configuration, containers or production infrastructure. The development SQLite setup and server are not suitable for production. No deployment has been performed or authorized.
 
 ## Proposed deployment topology
 

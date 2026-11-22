@@ -1,6 +1,6 @@
 # Product requirements
 
-All requirements below are **proposed**; none are implemented. P0 means a gate for the first data-bearing public release, not permission to publish without data.
+Requirements below are the target; the current development slice implements only basic source-filtered package search, RTL pages and limited SEO. See [changelog](CHANGELOG.md) for tested scope. P0 means a gate for the first data-bearing public release, not permission to publish without data.
 
 ## P0: catalog and public experience
 

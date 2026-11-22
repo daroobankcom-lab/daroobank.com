@@ -1,6 +1,6 @@
 # API design
 
-Proposed contract, not running endpoints. Implement OpenAPI 3.x alongside the first API and version compatible changes. All endpoints over HTTPS, UTF-8 JSON, stable opaque IDs, ISO-8601 UTC timestamps; local source dates and timezone are explicit. Public API exposes only approved, non-sensitive fields. Handle Persian and English input in Unicode, without leaking draft data.
+The local development slice implements only `GET /api/v1/search/?q=...`, returning published source-backed presentation fields with a 30-result cap and no pagination; it returns no prices or clinical claims. The rest of this document is a proposed contract, not running endpoints. Implement OpenAPI 3.x alongside the first API and version compatible changes. All endpoints over HTTPS, UTF-8 JSON, stable opaque IDs, ISO-8601 UTC timestamps; local source dates and timezone are explicit. Public API exposes only approved, non-sensitive fields. Handle Persian and English input in Unicode, without leaking draft data.
 
 ## Read surface (`/api/v1`)
 
@@ -18,3 +18,7 @@ Versioned authenticated endpoints can create drafts, attach evidence, list inges
 ## Security and evolution
 
 Public read rate limiting; admin sessions use secure, HttpOnly, SameSite cookies, CSRF protection and MFA. Institutional/mobile API credentials use scoped short-lived tokens with revocation and rate/usage limits, selected after threat review; no secrets in client apps. No patient data in search queries, logs or public API responses. Compatibility: additive fields only in v1, document deprecations, contract tests and deliberate versioning for breaking changes. Python, mobile and future AI services use this contract rather than shared SQL. Consultation interfaces remain disabled and separately authorized; design them only after legal and privacy approval.
+
+## Development endpoint example
+
+`GET /api/v1/search/?q=...` returns `{"data": [...], "meta": {"limit": 30, "pagination_available": false}}`. Each result is a package-like presentation with name, manufacturer, strength, form, package description, optional IRC and source URL/name/verification timestamp. The same service backs the HTML search. Empty queries return no records; only published, dated records with nonempty source and HTTPS URL are returned. This filter is **not** a real approval system. Search terms can appear in access logs; avoid personal health details and add production log redaction. API returns `no-store`, `no-referrer` and `noindex`; cursor pagination and OpenAPI are not implemented.

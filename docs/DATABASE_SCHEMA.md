@@ -1,6 +1,6 @@
 # Proposed database schema and invariants
 
-No database or migrations exist. IDs are internal opaque UUIDs; external identifiers are strings to preserve leading zeros. UTC timestamps use `timestamptz`, source local dates preserve their original value/calendar, and source records retain provenance. Table names below are logical, not executed SQL.
+Current implementation: `catalog.ProductPresentation` and its SQLite development migration use Django integer IDs; this is a provisional narrow search record, not the complete schema below. No price, approval, monograph or audit model exists. Proposed target IDs are internal opaque UUIDs; external identifiers are strings to preserve leading zeros. UTC timestamps use `timestamptz`, source local dates preserve their original value/calendar, and source records retain provenance. Table names below are logical, not executed SQL.
 
 ## Catalog
 

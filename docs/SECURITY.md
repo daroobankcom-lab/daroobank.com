@@ -115,3 +115,8 @@ The development-only staff identity workspace uses independent view/add/review p
 ## Synthetic package correction links
 
 The development-only correction form requires identity view/add permissions, CSRF and synthetic-data acknowledgment. Authorized viewers may see correction reasons, author IDs and linked synthetic graphs. Graph/link hashes do not authenticate them, and direct ORM bulk/SQL can bypass constraints or recompute hashes. A parent row lock and latest-review/graph preconditions coordinate only current review/revision services; stale reads and uncooperative writers remain possible. Only immediate links are checked, not ancestry, and package review does not cover correction provenance. Direct services do not enforce the web gate or checkbox. No PHI or real proprietary data. See [ADR 0013](ARCHITECTURE_DECISIONS/0013-synthetic-package-revisions.md).
+
+
+## Synthetic ingredient, formulation and product corrections
+
+These typed private corrections require identity view/add permission, the debug-only web gate, CSRF and synthetic-data acknowledgment. Visible link reasons and parent/child graphs must be nonconfidential. Hashes are not signatures, and ordinary model guards, dependency checks and cooperative locks can be bypassed by bulk ORM/SQL or uncooperative writers. Checks cover only immediate links; package reviews do not certify correction provenance or earlier authors. Service calls do not enforce the web gate or acknowledgment. See [ADR 0014](ARCHITECTURE_DECISIONS/0014-synthetic-component-revisions.md).

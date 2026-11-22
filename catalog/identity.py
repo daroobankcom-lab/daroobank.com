@@ -11,7 +11,8 @@ from django.db import transaction
 from catalog.normalization import normalize_search
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import (IngredientDraft, FormulationDraft, FormulationComponent,
-                     IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview, IdentityPackageRevision)
+                     IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview, IdentityPackageRevision,
+                     IngredientRevision, FormulationRevision, ProductRevision)
 
 VIEW = 'catalog.view_identityworkspace'
 ADD = 'catalog.add_identityworkspace'
@@ -304,6 +305,101 @@ def valid_package_revision(link, child_id):
                     and digest(child) == link.child_graph_sha256 and child['recorded_by_id'] == link.recorded_by_id
                     and parent['product'] == child['product'])
     except (AttributeError, TypeError, ValueError, OverflowError, IdentityPackageDraft.DoesNotExist):
+        return False
+
+
+_COMPONENT_REVISIONS = {
+    'ingredient': (IngredientDraft, IngredientRevision, INGREDIENT_FIELDS, ingredient_snapshot),
+    'formulation': (FormulationDraft, FormulationRevision, FORMULATION_FIELDS, formulation_snapshot),
+    'product': (IdentityProductDraft, ProductRevision, PRODUCT_FIELDS, product_snapshot),
+}
+
+
+def _component_values(graph):
+    return [{field: part[field] for field in COMPONENT_FIELDS} for part in graph['components']]
+
+
+def revise_identity(*, actor, kind, parent_id, data, change_reason, expected_graph_hash, components=None):
+    """Create a new synthetic assertion and immediate correction link, never rewire dependants."""
+    require_staff(actor, VIEW, ADD)
+    if not isinstance(kind, str) or kind not in _COMPONENT_REVISIONS:
+        raise IdentityError('نوع نسخه اصلاحی معتبر نیست.')
+    model, link_model, fields, snapshot_fn = _COMPONENT_REVISIONS[kind]
+    validate_data(data, fields)
+    if (not _valid_id(parent_id) or not valid_review_reason(change_reason) or not _is_hash(expected_graph_hash)):
+        raise IdentityConflict('اطلاعات نسخه جدید معتبر نیست.')
+    if kind == 'formulation':
+        if not isinstance(components, list) or not 1 <= len(components) <= MAX_COMPONENTS:
+            raise IdentityError('یک تا پنج ماده لازم است.')
+        for part in components: validate_data(part, COMPONENT_FIELDS)
+    elif components is not None:
+        raise IdentityError('اجزا برای این نوع رکورد مجاز نیست.')
+    change_reason = change_reason.strip()
+    with transaction.atomic():
+        parents = model.objects.select_for_update(of=('self',))
+        if kind == 'product': parents = parents.select_related('formulation')
+        parent = parents.filter(pk=parent_id).first()
+        if parent is None: raise IdentityConflict('رکورد پیشین در دسترس نیست.')
+        old = safe_snapshot(parent, snapshot_fn)
+        if not old or digest(old) != expected_graph_hash:
+            raise IdentityConflict('رکورد پیشین یا وابستگی آن تغییر کرده یا ناسازگار است.')
+        equal_fields = canonical(data) == {key: old[key] for key in fields}
+        if kind == 'formulation':
+            parts = [canonical(part) for part in components]
+            old_parts = _component_values(old)
+            if [part['ingredient_id'] for part in parts] != [part['ingredient_id'] for part in old_parts]:
+                raise IdentityError('مواد و ترتیب آن‌ها باید ثابت بماند؛ برای ترکیب دیگر رکورد مستقلی ثبت کنید.')
+            if equal_fields and parts == old_parts:
+                raise IdentityError('حداقل یکی از داده‌ها باید تغییر کند.')
+            child = create_formulation(actor=actor, data=data, components=components)
+        elif kind == 'product':
+            if equal_fields: raise IdentityError('حداقل یکی از داده‌ها باید تغییر کند.')
+            child = create_product(actor=actor, data=data, formulation_id=parent.formulation_id)
+        else:
+            if equal_fields: raise IdentityError('حداقل یکی از داده‌ها باید تغییر کند.')
+            child = create_ingredient(actor=actor, data=data)
+        new = safe_snapshot(child, snapshot_fn)
+        if not new or child.pk <= parent.pk:
+            raise IdentityConflict('نسخه جدید ناسازگار است.')
+        if kind == 'formulation' and new['ingredients'] != old['ingredients']:
+            raise IdentityConflict('مواد زنجیره تغییر کرده یا ناسازگارند.')
+        if kind == 'product' and new['formulation'] != old['formulation']:
+            raise IdentityConflict('فرمولاسیون زنجیره تغییر کرده یا ناسازگار است.')
+        child_hash = digest(new)
+        payload = _revision_payload(parent.pk, child.pk, actor.pk, change_reason, expected_graph_hash, child_hash)
+        link_model.objects.create(parent=parent, child=child, recorded_by=actor, change_reason=change_reason,
+            parent_graph_sha256=expected_graph_hash, child_graph_sha256=child_hash, payload_sha256=digest(payload))
+        return child
+
+
+def valid_identity_revision(kind, link, child_id):
+    """Validate one asserted link and the two current graphs, not ancestry or authenticity."""
+    try:
+        if kind not in _COMPONENT_REVISIONS: return False
+        _, link_model, fields, snapshot_fn = _COMPONENT_REVISIONS[kind]
+        if (not isinstance(link, link_model) or not _valid_id(link.parent_id) or not _valid_id(link.child_id)
+                or link.child_id != child_id or link.parent_id >= link.child_id or not _valid_id(link.recorded_by_id)
+                or not valid_review_reason(link.change_reason) or link.change_reason != link.change_reason.strip()
+                or not _is_hash(link.parent_graph_sha256) or not _is_hash(link.child_graph_sha256)
+                or not _is_hash(link.payload_sha256)):
+            return False
+        payload = _revision_payload(link.parent_id, link.child_id, link.recorded_by_id, link.change_reason,
+                                    link.parent_graph_sha256, link.child_graph_sha256)
+        if digest(payload) != link.payload_sha256: return False
+        parent, child = safe_snapshot(link.parent, snapshot_fn), safe_snapshot(link.child, snapshot_fn)
+        if not parent or not child or digest(parent) != link.parent_graph_sha256 or digest(child) != link.child_graph_sha256:
+            return False
+        if child['recorded_by_id'] != link.recorded_by_id: return False
+        same_fields = all(parent[key] == child[key] for key in fields)
+        if kind == 'formulation':
+            if parent['ingredients'] != child['ingredients']: return False
+            if [part['ingredient_id'] for part in parent['components']] != [part['ingredient_id'] for part in child['components']]:
+                return False
+            return not (same_fields and _component_values(parent) == _component_values(child))
+        if kind == 'product' and parent['formulation'] != child['formulation']: return False
+        return not same_fields
+    except (AttributeError, TypeError, ValueError, KeyError, OverflowError, IngredientDraft.DoesNotExist,
+            FormulationDraft.DoesNotExist, IdentityProductDraft.DoesNotExist):
         return False
 
 

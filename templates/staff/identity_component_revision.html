@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+<p><a href="{% url 'staff_identity_detail' kind parent.pk %}">بازگشت به رکورد پیشین ←</a></p><h1>نسخه اصلاحی {{ label }} ساختگی · {{ parent.pk }}</h1>
+<div class="staff-alert">فقط داده ساختگی و غیرمحرمانه. این پیوند ادعای اصلاح است، نه اثبات هویت، معادل بودن یا تأیید. رکورد پیشین و وابستگانش تغییر نمی‌کنند؛ شاخه‌های موازی ممکن‌اند و هیچ شاخه‌ای خودکار انتخاب نمی‌شود.
+{% if kind == 'formulation' %}مواد و ترتیب آن‌ها ثابت می‌ماند؛ برای ترکیب دیگر یک فرمولاسیون مستقل ثبت کنید.{% elif kind == 'product' %}فرمولاسیون ثابت می‌ماند؛ برای فرمولاسیون دیگر یک فرآورده مستقل ثبت کنید.{% endif %}</div>
+{% if graph %}<p>رکورد پیشین: {% if kind == 'ingredient' %}{{ graph.name_fa }}{% else %}{{ graph.name }}{% endif %} · <a href="{% url 'staff_identity_detail' kind parent.pk %}">مشاهده جزئیات پیشین</a></p>
+{% if conflict %}<div class="staff-alert">اصلاح ثبت نشد. <a href="{% url 'staff_identity_revise_component' kind parent.pk %}">صفحه را دوباره بارگذاری کنید</a> و وضعیت فعلی را بررسی کنید؛ متن فرم ذخیره نشده است.</div>
+{% else %}<div class="staff-panel"><form method="post" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}{% if field.is_hidden %}{{ field }}{{ field.errors }}{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endif %}{% endfor %}
+{% if has_parts %}<h2>اجزای فرمولاسیون</h2>{{ parts.management_form }}{{ parts.non_form_errors }}{% if not parts.forms %}<p><a href="{% url 'staff_identity_revise_component' kind parent.pk %}">صفحه را دوباره باز کنید</a>؛ اطلاعات ذخیره نشده است.</p>{% endif %}{% for part in parts %}<fieldset><legend>ماده {{ forloop.counter }}</legend>{{ part.non_field_errors }}{% for field in part %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endfor %}</fieldset>{% endfor %}{% endif %}
+<button class="staff-button" type="submit">ثبت نسخه اصلاحی خصوصی</button></form></div>{% endif %}
+{% else %}<div class="staff-empty">رکورد یا وابستگی آن ناسازگار است؛ اصلاح غیرفعال است.</div>{% endif %}</div></section>{% endblock %}

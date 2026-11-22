@@ -257,3 +257,8 @@ In the development-only staff portal, assign `catalog.view_identityworkspace` to
 ## Synthetic package corrections
 
 From an internally consistent private package detail, staff with identity view/add permissions can create a synthetic correction. Inspect the current graph and latest preliminary review, provide changed package/source values and a reason; the product remains the same. A new package and immediate-parent link are recorded atomically; the earlier package and its reviews stay unchanged. Independent branches are allowed and no branch is automatically current. On stale graph or review, reload and reassess. Links are browsable in bounded pages and inconsistent links are hidden. Review applies to the new graph, not to the parent or correction link. Do not infer identity, equivalence, authorization or clinical approval. See [ADR 0013](ARCHITECTURE_DECISIONS/0013-synthetic-package-revisions.md).
+
+
+## Synthetic ingredient, formulation and product corrections
+
+From a private ingredient, formulation or product detail, staff with identity view/add permissions may create an asserted correction and supply a reason. A new child and immediate-parent link are created; dependent records are not updated and no branch is automatically selected. Formulation corrections retain the same ingredients and order; product corrections retain the same formulation. Create independent records for changes outside those bounds. Branches and links are not proof of equivalence or clinical approval, and package reviews do not validate them. Use synthetic data only; see [ADR 0014](ARCHITECTURE_DECISIONS/0014-synthetic-component-revisions.md).

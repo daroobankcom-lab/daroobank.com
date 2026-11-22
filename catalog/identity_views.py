@@ -5,14 +5,26 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
-from .identity import (ADD, VIEW, REVIEW, MAX_ID, INGREDIENT_FIELDS, FORMULATION_FIELDS, PRODUCT_FIELDS, PACKAGE_FIELDS,
+from .identity import (
+    ADD, VIEW, REVIEW, MAX_ID, INGREDIENT_FIELDS, FORMULATION_FIELDS, PRODUCT_FIELDS, PACKAGE_FIELDS, COMPONENT_FIELDS,
     IdentityConflict, IdentityError, create_ingredient, create_formulation, create_product, create_package,
-    digest, valid_package_revision, revise_package, review_is_consistent, graph_authors, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot, require_staff, review_package, safe_snapshot)
-from .identity_forms import ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm, PackageRevisionForm
-from .models import IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview, IdentityPackageRevision
+    digest, valid_package_revision, revise_package, valid_identity_revision, revise_identity, review_is_consistent,
+    graph_authors, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot, require_staff,
+    review_package, safe_snapshot,
+)
+from .identity_forms import (
+    ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm,
+    PackageRevisionForm, IngredientRevisionForm, FormulationRevisionForm, ProductRevisionForm, RevisionComponentFormSet,
+)
+from .models import (
+    IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview,
+    IdentityPackageRevision, IngredientRevision, FormulationRevision, ProductRevision,
+)
 
 REVIEW_PAGE_SIZE = 25
 REVISION_PAGE_SIZE = 10
+COMPONENT_LINKS = {'ingredient': IngredientRevision, 'formulation': FormulationRevision, 'product': ProductRevision}
+COMPONENT_REVISION_FORMS = {'ingredient': IngredientRevisionForm, 'formulation': FormulationRevisionForm, 'product': ProductRevisionForm}
 
 KINDS = {
     'ingredient': (IngredientDraft, IngredientForm, INGREDIENT_FIELDS, ingredient_snapshot, 'ماده مؤثره'),
@@ -108,17 +120,21 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
     reviews, can_review, next_before = [], False, None
     parent_link, child_links, next_revision_before = None, [], None
     before, revisions_before = None, None
-    if kind == 'package':
-        try:
-            before = _cursor(request, 'before')
-            revisions_before = _cursor(request, 'revisions_before')
-        except ValueError:
-            return HttpResponseBadRequest('Invalid cursor.')
-    if kind == 'package' and snapshot:
-        links = IdentityPackageRevision.objects.select_related('parent__product__formulation', 'child__product__formulation')
+    try:
+        if kind == 'package': before = _cursor(request, 'before')
+        revisions_before = _cursor(request, 'revisions_before')
+    except ValueError:
+        return HttpResponseBadRequest('Invalid cursor.')
+    if snapshot:
+        if kind == 'package':
+            links = IdentityPackageRevision.objects.select_related('parent__product__formulation', 'child__product__formulation')
+        else:
+            links = COMPONENT_LINKS[kind].objects.select_related('parent', 'child')
+            if kind == 'product': links = links.select_related('parent__formulation', 'child__formulation')
         parent_link = links.filter(child_id=obj.pk).first()
         if parent_link:
-            parent_link.safe = valid_package_revision(parent_link, obj.pk)
+            parent_link.safe = (valid_package_revision(parent_link, obj.pk) if kind == 'package'
+                                else valid_identity_revision(kind, parent_link, obj.pk))
         children = links.filter(parent_id=obj.pk).order_by('-pk')
         if revisions_before is not None:
             children = children.filter(pk__lt=revisions_before)
@@ -127,7 +143,9 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
         if len(child_rows) > REVISION_PAGE_SIZE:
             next_revision_before = child_links[-1].pk
         for link in child_links:
-            link.safe = valid_package_revision(link, link.child_id)
+            link.safe = (valid_package_revision(link, link.child_id) if kind == 'package'
+                         else valid_identity_revision(kind, link, link.child_id))
+    if kind == 'package' and snapshot:
         queryset = obj.reviews.order_by('-pk')
         if before is not None:
             queryset = queryset.filter(pk__lt=before)
@@ -157,6 +175,43 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
 def detail(request, kind, pk):
     require_staff(request.user, VIEW)
     return _detail(request, kind, _object(kind, pk))
+
+
+@login_required(login_url='staff_login')
+@require_http_methods(['GET', 'POST'])
+def revise_component(request, kind, pk):
+    require_staff(request.user, VIEW, ADD)
+    if kind not in COMPONENT_REVISION_FORMS: raise Http404('Not found')
+    parent = _object(kind, pk)
+    _, _, fields, snapshot_fn, label = _kind(kind)
+    graph = safe_snapshot(parent, snapshot_fn)
+    initial = {field: getattr(parent, field) for field in fields} if graph else {}
+    initial['expected_graph_hash'] = digest(graph) if graph else None
+    form = COMPONENT_REVISION_FORMS[kind](request.POST if request.method == 'POST' else None, initial=initial)
+    parts = None
+    if kind == 'formulation' and graph:
+        part_initial = [{key: row[key] for key in COMPONENT_FIELDS} for row in graph['components']]
+        parts = RevisionComponentFormSet(request.POST if request.method == 'POST' else None,
+            prefix='parts', initial=part_initial, expected_initial=len(part_initial))
+    status = 200
+    if request.method == 'POST' and graph:
+        form_valid = form.is_valid()
+        parts_valid = parts.is_valid() if parts is not None else True
+        if form_valid and parts_valid:
+            try:
+                child = revise_identity(actor=request.user, kind=kind, parent_id=parent.pk,
+                    data={field: form.cleaned_data[field] for field in fields},
+                    components=[part.cleaned_data for part in parts if part.cleaned_data] if parts is not None else None,
+                    change_reason=form.cleaned_data['change_reason'], expected_graph_hash=form.cleaned_data['expected_graph_hash'])
+                return redirect('staff_identity_detail', kind=kind, pk=child.pk)
+            except IdentityError as exc:
+                form.add_error(None, str(exc))
+            except IdentityConflict as exc:
+                form.add_error(None, str(exc)); status = 409
+    return render(request, 'staff/identity_component_revision.html', {'page_title': 'اصلاح هویت ساختگی | داروبانک',
+        'description': 'نسخه اصلاحی خصوصی.', 'private_staff': True, 'noindex': True,
+        'parent': parent, 'graph': graph, 'kind': kind, 'label': label, 'form': form,
+        'parts': parts, 'has_parts': parts is not None, 'conflict': status == 409}, status=status)
 
 
 def _latest_review_for_revision(package, graph_hash):

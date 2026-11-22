@@ -80,3 +80,46 @@ class PackageRevisionForm(PackageForm):
                                     widget=forms.Textarea(attrs={'rows': 3}))
     expected_graph_hash = forms.RegexField(regex=r'^[0-9a-f]{64}$', max_length=64, widget=forms.HiddenInput)
     expected_review = forms.IntegerField(min_value=0, max_value=9223372036854775807, widget=forms.HiddenInput)
+
+
+class IngredientRevisionForm(IngredientForm):
+    change_reason = forms.CharField(label='دلیل اصلاح ادعایی', min_length=12, max_length=1000,
+                                    widget=forms.Textarea(attrs={'rows': 3}))
+    expected_graph_hash = forms.RegexField(regex=r'^[0-9a-f]{64}$', max_length=64, widget=forms.HiddenInput)
+
+
+class FormulationRevisionForm(FormulationForm):
+    change_reason = forms.CharField(label='دلیل اصلاح ادعایی', min_length=12, max_length=1000,
+                                    widget=forms.Textarea(attrs={'rows': 3}))
+    expected_graph_hash = forms.RegexField(regex=r'^[0-9a-f]{64}$', max_length=64, widget=forms.HiddenInput)
+
+
+class ProductRevisionForm(ProductForm):
+    formulation_id = None
+    change_reason = forms.CharField(label='دلیل اصلاح ادعایی', min_length=12, max_length=1000,
+                                    widget=forms.Textarea(attrs={'rows': 3}))
+    expected_graph_hash = forms.RegexField(regex=r'^[0-9a-f]{64}$', max_length=64, widget=forms.HiddenInput)
+
+
+class BaseRevisionComponentFormSet(BaseFormSet):
+    def __init__(self, *args, expected_initial, **kwargs):
+        self.expected_initial = expected_initial
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if not self.management_form.is_valid():
+            return
+        management = self.management_form.cleaned_data
+        if management['TOTAL_FORMS'] != MAX_COMPONENTS or management['INITIAL_FORMS'] != self.expected_initial:
+            raise forms.ValidationError('ساختار فرم اجزا معتبر نیست؛ صفحه اصلاح را دوباره باز کنید.')
+        if any(self.errors):
+            return
+        ids = [form.cleaned_data['ingredient_id'] for form in self.forms if form.cleaned_data]
+        if len(ids) != len(set(ids)):
+            raise forms.ValidationError('هر ماده فقط یک بار مجاز است.')
+
+
+RevisionComponentFormSet = formset_factory(ComponentForm, formset=BaseRevisionComponentFormSet,
+    extra=MAX_COMPONENTS, min_num=1, validate_min=True, max_num=MAX_COMPONENTS,
+    validate_max=True, absolute_max=MAX_COMPONENTS)

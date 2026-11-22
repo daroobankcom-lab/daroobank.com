@@ -237,3 +237,57 @@ class IdentityPackageRevision(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError('Identity revision links cannot be deleted through this model.')
+
+
+class PrivateIdentityRevision(models.Model):
+    """Immediate asserted correction link; ordinary instance mutation is guarded."""
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
+    change_reason = models.TextField(max_length=1000)
+    parent_graph_sha256 = models.CharField(max_length=64)
+    child_graph_sha256 = models.CharField(max_length=64)
+    payload_sha256 = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('Identity revision links cannot be edited.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Identity revision links cannot be deleted through this model.')
+
+
+class IngredientRevision(PrivateIdentityRevision):
+    parent = models.ForeignKey(IngredientDraft, on_delete=models.PROTECT, related_name='revision_children')
+    child = models.OneToOneField(IngredientDraft, on_delete=models.PROTECT, related_name='revision_parent')
+
+    class Meta:
+        default_permissions = ()
+        ordering = ['-pk']
+        constraints = [models.CheckConstraint(condition=models.Q(parent_id__lt=models.F('child_id')),
+                                               name='ingredient_revision_parent_before_child')]
+
+
+class FormulationRevision(PrivateIdentityRevision):
+    parent = models.ForeignKey(FormulationDraft, on_delete=models.PROTECT, related_name='revision_children')
+    child = models.OneToOneField(FormulationDraft, on_delete=models.PROTECT, related_name='revision_parent')
+
+    class Meta:
+        default_permissions = ()
+        ordering = ['-pk']
+        constraints = [models.CheckConstraint(condition=models.Q(parent_id__lt=models.F('child_id')),
+                                               name='form_revision_parent_before_child')]
+
+
+class ProductRevision(PrivateIdentityRevision):
+    parent = models.ForeignKey(IdentityProductDraft, on_delete=models.PROTECT, related_name='revision_children')
+    child = models.OneToOneField(IdentityProductDraft, on_delete=models.PROTECT, related_name='revision_parent')
+
+    class Meta:
+        default_permissions = ()
+        ordering = ['-pk']
+        constraints = [models.CheckConstraint(condition=models.Q(parent_id__lt=models.F('child_id')),
+                                               name='product_revision_parent_before_child')]

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — synthetic ingredient, formulation and product corrections
+
+**Changes:** Added typed private immediate-parent correction links and forms for synthetic ingredients, formulations and products, with branch support, graph preconditions, transactional creation, scoped link navigation and validation. Existing dependants and package reviews are not rewired or transferred. Added populated migration, rollback, permission/CSRF, corruption, pagination and concurrent PostgreSQL tests.
+
+**Limits:** Links are unverified assertions, not equivalence, whole-ancestry validation, clinical approval or audit. Formulation corrections preserve ordered ingredients; product corrections preserve formulation. Bulk/SQL and non-cooperative writers bypass guards and locks; hashes are not signatures. No real data, public changes, browser/accessibility, clinical or production assessment. See [ADR 0014](ARCHITECTURE_DECISIONS/0014-synthetic-component-revisions.md).
+
 ## 2026-11-22 — synthetic package correction branches
 
 **Changes:** Added an additive PostgreSQL migration for private immediate-parent package correction links, fixed-product child creation, separate reason and graph hashes, latest-review and graph stale checks, atomic creation, and independent branch support. Staff can create corrections and browse validated links in bounded pages; old records and reviews remain unchanged. Synthetic migration, rollback, malformed data, permissions, CSRF, conflict and two-connection race tests included.

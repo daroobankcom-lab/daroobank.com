@@ -4,6 +4,7 @@ from pricing import staff_views
 from sources import staff_views as source_staff_views
 from ingestion import staff_views as ingestion_staff_views
 from clinical import staff_views as clinical_staff_views
+from . import staff_views as workspace_views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -14,6 +15,7 @@ urlpatterns = [
     path('api/v1/products/<int:pk>/', views.presentation_api, name='presentation_api'),
     path('prices/', views.prices, name='prices'),
     path('about/', views.about, name='about'),
+    path('staff/', workspace_views.workspace, name='staff_workspace'),
     path('staff/login/', staff_views.StaffLoginView.as_view(), name='staff_login'),
     path('staff/logout/', staff_views.StaffLogoutView.as_view(), name='staff_logout'),
     path('staff/operations/window/', ingestion_staff_views.window, name='staff_ingestion_window'),

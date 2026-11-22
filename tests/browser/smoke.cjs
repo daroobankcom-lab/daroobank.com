@@ -212,6 +212,15 @@ async function run() {
       assert.match(response.headers()['cache-control'], /no-store/);
       if (width === 390) await auditAccessibility(page, 'login');
       await login(page, author);
+      await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
+      assert.equal(new URL(page.url()).pathname, '/staff/');
+      assert.match(await page.locator('h1').innerText(), /فضای کاری همکاران/);
+      assert.equal(await page.locator('a[href="/staff/catalog/identity/"]').count(), 1);
+      assert.equal(await page.locator('a[href="/staff/prices/"]').count(), 0);
+      await checkLayout(page, `staff workspace ${width}`);
+      if (width === 390) await auditAccessibility(page, 'staff workspace');
+      await page.getByRole('link', {name: 'ورود به هویت ساختگی کاتالوگ'}).click();
+      assert.equal(new URL(page.url()).pathname, '/staff/catalog/identity/');
       response = await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
       assert.equal(response.status(), 200);
       await checkLayout(page, `identity form ${width}`);

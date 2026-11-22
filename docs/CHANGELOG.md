@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — permission-scoped staff workspace navigation
+
+**Changes:** Added a private, read-only `/staff/` navigation page and return link from private staff pages. Active staff see only links corresponding to existing view permissions; the page does not show counts, records or operational status. Login landing behavior and destination authorization are unchanged. Synthetic role, permission revocation, privacy, CSRF logout and Chromium/axe checks cover the new page.
+
+**Limits:** This is navigation, not a production dashboard or an authorization boundary; each destination independently enforces its permissions. No metrics, scheduler, approval, publication, audit, MFA or production security capability is added. The portal remains development-only and synthetic-data-only.
+
 ## 2026-11-22 — read-only lock metadata comparison
 
 **Changes:** Added an optional standard-library tool to compare both checked-in Python hash locks with current PyPI release metadata, plus offline tests for mismatches, invalid input and registry failures. It does not change lock files, application logic or data. See the [maintenance procedure](DEVELOPMENT_GUIDE.md#maintaining-python-dependency-locks).

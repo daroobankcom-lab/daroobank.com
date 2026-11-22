@@ -47,6 +47,8 @@ The Django test runner creates and destroys a separate `test_` database; the con
 - `templates/`, `static/`: server-rendered Persian pages, shared tokens and locally hosted OFL-licensed Vazirmatn font.
 - `docs/`: product, decisions, source research and operational plans.
 
+In debug mode, an active staff account can open `/staff/` for a read-only directory of sections allowed by its existing view permissions. The login's existing default destination is unchanged; private staff pages include a link back to this directory. Each destination still performs its own access check, and an account with no section permissions sees an empty directory. It shows no metrics or operational status and is not a production dashboard. Use synthetic accounts and data only.
+
 The current schema and publication flag are not a complete provenance, review, audit or price workflow. There is no public editing interface. Database writes must not be used to bypass clinical and source-rights gates. Never add real credentials, private data or unlicensed source payloads to Git. More domains, independent workers and administrative approvals remain planned; see [architecture](SYSTEM_ARCHITECTURE.md).
 
 ## Local price-candidate staging

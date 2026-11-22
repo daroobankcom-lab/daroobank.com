@@ -1,6 +1,6 @@
 # Deployment
 
-A development Django application and `.env.example` now exist; there are no production configuration, containers or production infrastructure. The development SQLite setup and server are not suitable for production. No deployment has been performed or authorized.
+A development Django application, PostgreSQL-only configuration, `.env.example` and a development Compose stack exist; there is no production deployment configuration or infrastructure. The Compose stack and development server are not suitable for production. No deployment has been performed or authorized.
 
 ## Proposed deployment topology
 
@@ -15,6 +15,6 @@ TLS-terminating reverse proxy → independent Django web processes → PostgreSQ
 
 ## Development CI and proposed CI/CD
 
-A basic `.github/workflows/checks.yml` runs on pushes and pull requests with read-only repository contents permission: pinned Python dependencies are installed, then pip check, Django check, migration drift check and synthetic tests run. It does not deploy, upload backups or establish production readiness. Actions are referenced by major tags, not immutable SHAs; this is not supply-chain hardening. Hosted results depend on GitHub Actions being enabled.
+A basic `.github/workflows/checks.yml` runs on pushes and pull requests with read-only repository contents permission and a temporary PostgreSQL service: pinned Python dependencies are installed, then connection wait, migrations, pip check, Django check, migration drift check and synthetic tests run against PostgreSQL. It does not deploy, upload backups or establish production readiness. Actions are referenced by major tags, not immutable SHAs; this is not supply-chain hardening. Hosted results depend on GitHub Actions being enabled.
 
 Additional proposed gates on PR: lint/type checks, unit/integration/security and dependency scanning, migration checks, RTL/accessibility checks and contract tests. On a separately authorized release: build immutable artifact, run staged smoke tests, require approval, deploy and observe. Those additional gates and release steps are plans, not implemented.

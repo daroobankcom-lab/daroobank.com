@@ -235,7 +235,7 @@ class PriceComparisonTests(TestCase):
         self.client.force_login(self.viewer)
         for field in ['irc', 'manufacturer', 'strength', 'dosage_form', 'package_description']:
             with self.subTest(field=field):
-                fields = {**candidate.source_fields, field: '\ud800'}
+                fields = {**candidate.source_fields, field: '\u0001'}
                 PriceCandidate.objects.filter(pk=candidate.pk).update(source_fields=fields)
                 damaged = PriceCandidate.objects.get(pk=candidate.pk)
                 self.assertFalse(price_revision_context(damaged)['available'])

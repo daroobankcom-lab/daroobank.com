@@ -9,8 +9,10 @@
 
 - [0006: bounded clinical reference assertions](0006-clinical-evidence-assertions.md) — development-only implementation, 22 November 2026.
 
-- [0007: local SQLite snapshots and isolated restore drill](0007-local-sqlite-snapshots.md) — development-only implementation, 22 November 2026.
+- [0007: development database backups](0007-backup-policy.md) — superseded by 0009, 22 November 2026.
 
 - [0008: bounded catalog quality inspection](0008-catalog-quality-inspection.md) — development-only implementation, 22 November 2026.
+
+- [0009: PostgreSQL-only database](0009-postgresql-only.md) — development implementation, 22 November 2026.
 
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

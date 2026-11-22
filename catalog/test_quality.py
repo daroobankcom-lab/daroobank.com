@@ -63,7 +63,7 @@ class CatalogQualityTests(TestCase):
         self.assertNotIn('token', json.dumps(row))
 
     def test_corrupt_text_is_not_rendered_and_eligibility_unknown(self):
-        ProductPresentation.objects.filter(pk=self.public.pk).update(name_fa='secret\x00<bad>')
+        ProductPresentation.objects.filter(pk=self.public.pk).update(name_fa='secret\x01<bad>')
         row = inspect_batch()['rows'][0]
         self.assertEqual(row['public_filter'], 'unknown')
         self.assertEqual(row['issues'], ['invalid_text'])

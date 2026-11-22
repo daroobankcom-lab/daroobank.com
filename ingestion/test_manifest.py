@@ -199,7 +199,7 @@ class ManifestTests(TestCase):
 
     def test_malformed_unicode_in_price_candidate_is_not_rendered(self):
         receipt = self.price(); item = receipt.items.first(); candidate = item.price_candidate
-        fields = dict(candidate.source_fields); fields['manufacturer'] = '\ud800'
+        fields = dict(candidate.source_fields); fields['manufacturer'] = '\u0001'
         PriceCandidate.objects.filter(pk=candidate.pk).update(source_fields=fields)
         self.client.force_login(self.price_author)
         response = self.detail(receipt)

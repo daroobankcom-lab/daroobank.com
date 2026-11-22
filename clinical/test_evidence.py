@@ -183,7 +183,7 @@ class ClinicalEvidenceTests(TestCase):
             {**event.review_snapshot, 'evidence_fingerprint': '0' * 64},
             {**event.review_snapshot, 'evidence_version': True},
             {**event.review_snapshot, 'evidence_snapshot': [{**event.review_snapshot['evidence_snapshot'][0],
-                'reference': {**event.review_snapshot['evidence_snapshot'][0]['reference'], 'reference_title': '\ud800'}}]},
+                'reference': {**event.review_snapshot['evidence_snapshot'][0]['reference'], 'reference_title': '\u0001'}}]},
         ]:
             with self.subTest(snapshot=ascii(mutated)):
                 ClinicalDraftReview.objects.filter(pk=event.pk).update(review_snapshot=mutated)

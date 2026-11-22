@@ -2,19 +2,28 @@
 
 ## Current local implementation
 
-Requires Python 3.11+ and dependencies pinned in `requirements.txt`. No credentials or patient data are needed. From the repository root:
+Requires Python 3.11+ and PostgreSQL. Copy `.env.example` to `.env` and replace the placeholders with unique local values. Do not commit `.env`. Compose loads it automatically:
+
+```sh
+docker compose up --build
+```
+
+The development stack starts PostgreSQL 16 with a health check and persistent named volume. Django waits for a connection, applies migrations and starts the development server. PostgreSQL is bound only to localhost on `POSTGRES_PORT`; Django inside Compose uses `db:5432`. Do not run multiple migration-starting web replicas or use this development stack as a production deployment. `docker compose down` preserves data; **`docker compose down -v` deletes the database volume**. Changing credentials in `.env` does not update an already-initialized PostgreSQL volume; manage roles/password rotation explicitly.
+
+For Django outside Docker, provision a PostgreSQL database/role or start only the Compose `db` service. Export `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_HOST` (normally `127.0.0.1` for the mapped Compose port); `POSTGRES_PORT` defaults to 5432. Django does not load `.env` itself. To load a trusted shell-compatible `.env`, use `set -a; . ./.env; set +a`; never source untrusted files. `POSTGRES_PASSWORD` can be empty when an explicitly configured peer/certificate authentication method is used. `POSTGRES_SSLMODE` is passed to libpq when set; production must use an appropriate certificate-verified TLS configuration. `POSTGRES_CONN_MAX_AGE` defaults to zero and Django health-checks persistent connections when configured.
 
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 export DAROOBANK_DEBUG=1
+.venv/bin/python -m tools.wait_for_database
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py runserver 127.0.0.1:8000
-.venv/bin/python manage.py test
+.venv/bin/python manage.py test --noinput
 .venv/bin/python manage.py makemigrations --check --dry-run
 ```
 
-`.env.example` is a placeholder reference; this application does not automatically load `.env`. SQLite and the development secret are for local use only. `DAROOBANK_SECRET_KEY` is required when debug is off; host names are supplied by `DAROOBANK_ALLOWED_HOSTS`. Development preview accepts `.e2b.app`; production deployment is not configured or authorized.
+The Django test runner creates and destroys a separate `test_` database; the configured role needs CREATEDB permission and must not share a test name with valuable data or concurrent runs. Do not point the runner at a production server. Tests and local data must be synthetic. `DAROOBANK_SECRET_KEY` is required when debug is off; host names are supplied by `DAROOBANK_ALLOWED_HOSTS`. Development preview accepts `.e2b.app`; production deployment is not configured or authorized.
 
 ## Actual layout
 
@@ -27,7 +36,7 @@ export DAROOBANK_DEBUG=1
 - `templates/`, `static/`: server-rendered Persian pages, shared tokens and locally hosted OFL-licensed Vazirmatn font.
 - `docs/`: product, decisions, source research and operational plans.
 
-The SQLite schema and publication flag are not a complete provenance, review, audit or price workflow. There is no public editing interface. Database writes must not be used to bypass clinical and source-rights gates. Never add real credentials, private data or unlicensed source payloads to Git. More domains, PostgreSQL, independent workers and administrative approvals remain planned; see [architecture](SYSTEM_ARCHITECTURE.md).
+The current schema and publication flag are not a complete provenance, review, audit or price workflow. There is no public editing interface. Database writes must not be used to bypass clinical and source-rights gates. Never add real credentials, private data or unlicensed source payloads to Git. More domains, independent workers and administrative approvals remain planned; see [architecture](SYSTEM_ARCHITECTURE.md).
 
 ## Local price-candidate staging
 
@@ -78,7 +87,7 @@ An active staff user needs both `pricing.view_pricecandidate` and `pricing.add_p
 
 A different active staff user with both `pricing.view_pricecandidate` and `pricing.review_pricecandidate` can record a reasoned preliminary suggestion acceptance, rejection or deferral on the candidate page. A submitter cannot review their own candidate, including if they have all permissions. Acceptance requires a unique current exact suggestion and a matching product fingerprint; stale review versions and inconsistent stored payload/derived values are rejected. Rejection and deferral do not assert a product match. Events store the reviewer, reason, timestamp, candidate snapshot and product identity snapshot/hash. The detail page shows at most 25 recent events. A review is neither price approval nor proof of source rights, and it cannot publish.
 
-Identical replays do not alter the original submitter or attestation, including legacy or CLI-created records; these must be investigated through a future controlled provenance workflow, not edited directly to bypass separation. The model's ordinary `save()`/`delete()` guard is **not** database immutability: bulk ORM operations and direct SQL can alter or delete history. The hash is a consistency fingerprint, not a signature or proof of untampered source provenance; the source URL is not part of the payload hash. `select_for_update` has no row-locking effect on SQLite, and product matching cannot prevent concurrent insertions or edits from creating ambiguity. Optimistic checks are useful for sequential stale forms, not a proven concurrent authorization or matching guarantee. Do not rely on this local workflow for real data or release decisions; production needs a designed isolation/locking strategy, transaction and concurrency tests against its actual DB, durable audit protections and independent security review.
+Identical replays do not alter the original submitter or attestation, including legacy or CLI-created records; these must be investigated through a future controlled provenance workflow, not edited directly to bypass separation. The model's ordinary `save()`/`delete()` guard is **not** database immutability: bulk ORM operations and direct SQL can alter or delete history. The hash is a consistency fingerprint, not a signature or proof of untampered source provenance; the source URL is not part of the payload hash. PostgreSQL row locks protect rows actually locked, but product matching cannot prevent concurrent insertions or edits from creating ambiguity. Optimistic checks are useful for sequential stale forms, not a proven concurrent authorization or matching guarantee. Do not rely on this local workflow for real data or release decisions; production needs a designed isolation/locking strategy, transaction and concurrency tests against its actual DB, durable audit protections and independent security review.
 
 ## Development presentation pages and API
 
@@ -98,7 +107,7 @@ Upload the **synthetic** [`examples/product_candidates.synthetic.csv`](../exampl
 
 A different active staff user with `catalog.view_productcandidate` and `catalog.review_productcandidate` can record a reasoned preliminary decision: refer for further review, reject, or defer. A submitter cannot review their own record. The queue can filter by the latest review decision or absence of a review; these are triage labels, not approvals. Reviews capture the actor, time, structured candidate snapshot and fingerprint; the detail page shows the 25 latest. Stale review versions, changed payload/source and invalid candidate structures fail closed in sequential use. No action here creates, updates or publishes a `ProductPresentation`, nor authorizes a price or clinical content.
 
-SQLite `select_for_update` does not provide row locks: concurrent reviews/edits have not been proven safe. Model `save()`/`delete()` guards do not block bulk ORM or direct SQL changes; hashes are not signatures or proof of rights, identity or an immutable audit trail. The fingerprint covers source name, URL and structured fields, but not actor or attestation; the snapshot records them and privileged DB edits can alter both. Do not use this local flow for real data or release decisions. Production requires reviewed rights governance, authorization, concurrent transaction design/tests on its actual database, durable audit, retention, request limits and independent security review.
+PostgreSQL locks selected rows, but the full review and editing workflow under concurrency has not been proven safe. Model `save()`/`delete()` guards do not block bulk ORM or direct SQL changes; hashes are not signatures or proof of rights, identity or an immutable audit trail. The fingerprint covers source name, URL and structured fields, but not actor or attestation; the snapshot records them and privileged DB edits can alter both. Do not use this local flow for real data or release decisions. Production requires reviewed rights governance, authorization, concurrent transaction design/tests on its actual database, durable audit, retention, request limits and independent security review.
 
 ## Product comparison clues
 
@@ -121,7 +130,7 @@ A claim records an asserted owner, source and evidence HTTPS URLs, optional non-
 
 A separate reviewer records further-review referral, rejection or deferral with reason and a snapshot; there is no approval decision. The queue is paginated by 20 and may be filtered by the latest review. Detail shows at most 25 recent reviews. Product and price candidate details show at most five newest claims for an **exact source URL** only to users with the separate source view permission; an invalid URL or no result is not evidence of no permission. These hints are not captured in candidate review snapshots and do not gate staging or review. Recording, reviewing or finding a claim never authorizes source use, collection, storage or publication and causes no network request or public write.
 
-The SQLite workflow is not a tamper-proof audit: model `save()`/`delete()` guards do not stop bulk ORM or direct SQL, and SQLite does not enforce `select_for_update` row locks. Sequential stale-form and fingerprint checks are not a concurrency guarantee. Production needs independently verified evidence and legal decisions, revocation enforcement, access control, durable audit, retention and tested database concurrency before any real source use. The existing CSV attestation is independent of this ledger and remains an operator assertion, not proof of rights.
+The workflow is not a tamper-proof audit: model `save()`/`delete()` guards do not stop bulk ORM or direct SQL. PostgreSQL locks only rows actually selected. Sequential stale-form and fingerprint checks are not a concurrency guarantee. Production needs independently verified evidence and legal decisions, revocation enforcement, access control, durable audit, retention and tested database concurrency before any real source use. The existing CSV attestation is independent of this ledger and remains an operator assertion, not proof of rights.
 
 
 ## Offline ingestion-window inspection
@@ -146,7 +155,7 @@ After `migrate`, a successful **web** product or price staging request creates a
 
 Each receipt has asserted source name and URL, actor and server timestamp, row count, created count and duplicate count. Price receipts also capture current match suggestion/ambiguity/unmatched counts for **all input rows including duplicates**, not just new records. These are request-time calculations, not product identity verification and not necessarily the original or current candidate status. Replaying a file creates another receipt, even if no new candidates are created. No raw file, filename or file-level hash is retained. For new receipts, a separate row-outcome manifest stores logical data-row ordinal, asserted source record ID, candidate payload hash and candidate reference, whether it was new or a duplicate, and the request-time suggestion status for prices. Thus it records candidate membership but cannot reconstruct or prove the original file. Ordinals are data-row positions, not necessarily physical CSV line numbers. The candidate records retain their own structured source data under their existing rules. Upload handling may temporarily buffer the file.
 
-Web staging creates receipts only for successful requests after this feature was introduced: previews, validation failures, rolled-back writes, previous imports, CLI staging and direct calls to the original importer services are absent. Local code can also invoke the receipt wrappers directly with an authorized user; those service calls are not protected by the web debug gate. Absence is not evidence of no import. A receipt is an internal summary, not proof of source rights, verified data, completeness, publication, immutable audit or actor identity. No file or candidate content is published by this feature. Model guards do not prevent bulk ORM or direct SQL modifications, and SQLite concurrency and crash recovery are not proven. There is no request idempotency key, failure log, retention policy or signed audit; production requires additional design and testing as described in [ADR 0003](ARCHITECTURE_DECISIONS/0003-web-intake-receipts.md).
+Web staging creates receipts only for successful requests after this feature was introduced: previews, validation failures, rolled-back writes, previous imports, CLI staging and direct calls to the original importer services are absent. Local code can also invoke the receipt wrappers directly with an authorized user; those service calls are not protected by the web debug gate. Absence is not evidence of no import. A receipt is an internal summary, not proof of source rights, verified data, completeness, publication, immutable audit or actor identity. No file or candidate content is published by this feature. Model guards do not prevent bulk ORM or direct SQL modifications, and production concurrency and crash recovery are not proven. There is no request idempotency key, failure log, retention policy or signed audit; production requires additional design and testing as described in [ADR 0003](ARCHITECTURE_DECISIONS/0003-web-intake-receipts.md).
 
 
 ### Row outcomes and candidate links
@@ -166,7 +175,7 @@ Create only synthetic, non-sensitive content: free-text subject, audience, title
 
 To amend, create a new version from an existing one with a reason; subject and audience must match exactly. Branching and identical drafts are allowed, and review does not carry over. The version records an immediate parent ID and its fingerprint. Only the new version and direct parent's payload are checked; earlier ancestry and concurrent branching are not certified. Another permitted staff member, who authored neither the draft nor any current supplementary reference, can refer for further review, reject or defer with a reason. There is no clinical approval or publish action. Queue filters use audience and latest preliminary decision, paginated 20; detail shows at most 10 direct child versions and 25 review events. Limits do not bound DB scan/sort cost.
 
-The hash covers draft fields and parent link, not author/time, and is not a signature or proof of source or consent. Ordinary model guards do not stop bulk ORM/SQL mutation. Optimistic checks detect sequential stale submissions; SQLite row locks do not guarantee concurrent separation or review serialization. There is no qualified-review verification, verified multi-reference evidence, original-file storage, controlled retention/correction/withdrawal, durable audit or production security. Never use this portal for real clinical or patient content; see [ADR 0005](ARCHITECTURE_DECISIONS/0005-clinical-draft-triage.md).
+The hash covers draft fields and parent link, not author/time, and is not a signature or proof of source or consent. Ordinary model guards do not stop bulk ORM/SQL mutation. Optimistic checks detect sequential stale submissions; PostgreSQL locks the selected draft row; this does not prove every concurrency or authorization scenario. There is no qualified-review verification, verified multi-reference evidence, original-file storage, controlled retention/correction/withdrawal, durable audit or production security. Never use this portal for real clinical or patient content; see [ADR 0005](ARCHITECTURE_DECISIONS/0005-clinical-draft-triage.md).
 
 
 ### Supplementary reference assertions and review snapshots
@@ -175,24 +184,29 @@ From a draft detail, staff with clinical view and add permissions can submit up 
 
 Add and review forms carry a fingerprint of the current supplementary set; changed data, invalid stored assertions or an over-limit set stop the action rather than silently omitting references. A different staff member from both the draft author and *all current supplementary assertion recorders* may record preliminary triage. New reviews snapshot the reference fields, IDs, recorder IDs and fingerprints, and detail pages show the bounded historical snapshot and its identifier comparison with the current set. A matching identifier does not verify evidence or the reviewer, and a changed identifier does not erase the old review. Reviews predating the feature have no supplementary snapshot; no history is fabricated. The queue filter still reflects the latest recorded review regardless of later reference changes; check details. Older direct `review_draft` service calls without a set fingerprint remain accepted only when the supplementary set is empty; web forms always require it.
 
-The set hash covers ordered assertion IDs, payload hashes and recorder IDs, not timestamps; neither hash nor snapshot is a signature. The service-level ten-item cap, row locking and sequential stale checks are not a concurrency guarantee on SQLite. Bulk ORM/SQL can bypass validation or alter history; `PROTECT` foreign keys and ordinary model guards are not a tamper-proof audit or retention policy. No source is fetched, no clinical review/rights are established and no content is published. See [ADR 0006](ARCHITECTURE_DECISIONS/0006-clinical-evidence-assertions.md).
+The set hash covers ordered assertion IDs, payload hashes and recorder IDs, not timestamps; neither hash nor snapshot is a signature. The service-level ten-item cap, row locking and sequential stale checks do not by themselves prove all concurrency cases. Bulk ORM/SQL can bypass validation or alter history; `PROTECT` foreign keys and ordinary model guards are not a tamper-proof audit or retention policy. No source is fetched, no clinical review/rights are established and no content is published. See [ADR 0006](ARCHITECTURE_DECISIONS/0006-clinical-evidence-assertions.md).
 
 
-## Local SQLite snapshots and isolated restore drill
+## PostgreSQL backup and isolated restore
 
-`tools/sqlite_snapshot.py` is a standalone development utility for **synthetic data only**. It copies a SQLite database, including committed WAL state, to a new `.sqlite3` file and checks SQLite integrity and foreign keys. It does not replace the source, overwrite any destination or upload anything. Choose an existing **trusted local private directory** with adequate disk space; neither the directory nor a database file may be writable by untrusted users. The requested file mode is `0600` (subject to the filesystem/platform). All user/session data and password hashes are included; output is **not encrypted**. Do not commit or share it. `.sqlite3` files are ignored by Git, not encrypted or access-controlled by Git.
+PostgreSQL's `pg_dump` and `pg_restore` are external client utilities, not an application backup service. Use a client version at least as new as the server; access must be restricted and authorized. Dumps contain all user data, password hashes, sessions and other private information, are unencrypted by default and are not committed. Choose a trusted private location, encrypt and retain according to policy, and test restoration separately. A volume alone is not a backup.
+
+For a **synthetic development** database, after exporting the PostgreSQL variables above and installing matching PostgreSQL client tools:
 
 ```sh
-# Create a new, non-existing filename in a private directory.
-.venv/bin/python tools/sqlite_snapshot.py copy db.sqlite3 /private/backup/snapshot.sqlite3
-.venv/bin/python tools/sqlite_snapshot.py verify /private/backup/snapshot.sqlite3
-# Restore to another new path, never into a running database.
-.venv/bin/python tools/sqlite_snapshot.py copy /private/backup/snapshot.sqlite3 /private/drill/db.sqlite3
+export PGHOST="$POSTGRES_HOST" PGPORT="${POSTGRES_PORT:-5432}" PGUSER="$POSTGRES_USER" PGPASSWORD="$POSTGRES_PASSWORD"
+umask 077
+# shell noclobber fails if the destination already exists.
+(set -C; pg_dump --format=custom --no-owner --no-acl --dbname="$POSTGRES_DB" > /private/backup/dev.dump)
+pg_restore --list /private/backup/dev.dump > /dev/null
+# Only use a new, isolated drill database. Fail if it already exists.
+createdb daroobank_restore_drill
+pg_restore --exit-on-error --single-transaction --no-owner --no-acl --dbname=daroobank_restore_drill /private/backup/dev.dump
+POSTGRES_DB=daroobank_restore_drill .venv/bin/python manage.py migrate --check
+POSTGRES_DB=daroobank_restore_drill .venv/bin/python manage.py check
 ```
 
-The directories and paths above are examples; create protected directories first. For an application drill, use a disposable, isolated checkout of **the same application version**, with its own environment and no real data or production access. Restore to its absent `db.sqlite3`, then from that checkout run `DAROOBANK_DEBUG=1 .venv/bin/python manage.py migrate --check` and `DAROOBANK_DEBUG=1 .venv/bin/python manage.py check`; inspect the expected synthetic data without exposing accounts. `migrate --check` checks for unapplied migrations, not whether the data is correct or reversible. Dispose of drill copies securely according to the local policy. Do not replace the original or a running database using this tool.
-
-SQLite may need the source's WAL and shared-memory sidecars; copying just a live `db.sqlite3` with ordinary file tools can miss committed data. A failed operation tries to remove its new file, but after a crash, power failure or cleanup error treat any leftover as incomplete; the utility does not manage sidecars. Verification only covers SQLite structural and foreign-key checks; it does not prove application correctness, source rights, migration compatibility, confidentiality, authenticity or completeness of external files. The 30-second best-effort backup deadline does not cover blocking filesystem I/O or integrity checks. See [ADR 0007](ARCHITECTURE_DECISIONS/0007-local-sqlite-snapshots.md) and [operations](OPERATIONS_RUNBOOK.md#local-synthetic-restore-drill). Production requires an independently designed and tested encrypted off-host backup and recovery policy.
+The example directories must already exist and be private. PostgreSQL/OS environment variables can be visible to privileged local processes; use an appropriate secret manager or restricted `.pgpass` for production. Set `PGSSLMODE` and certificate variables as required. `createdb` needs privileges and must target an isolated test server; remove drill databases only under an explicit local retention policy. `pg_restore --list` checks the archive structure, not the restored data; check expected records, relationships and application behavior on the isolated copy. Database-only dumps do not include roles, external assets or all cluster configuration. `migrate --check` only checks pending migrations. Restore commands never target the active database. No automatic encryption, off-host retention, cadence or monitoring is provided; see [ADR 0007](ARCHITECTURE_DECISIONS/0007-backup-policy.md).
 
 
 ## Development-only catalog quality inspection

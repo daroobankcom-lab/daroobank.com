@@ -2,6 +2,10 @@
 .cache/
 __pycache__/
 *.py[cod]
-*.sqlite3
+/backups/
 .env
 staticfiles/
+
+# Do not commit database backups.
+*.dump
+*.backup

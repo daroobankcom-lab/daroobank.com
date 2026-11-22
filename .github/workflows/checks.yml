@@ -8,8 +8,27 @@ jobs:
   django:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: daroobank_ci
+          POSTGRES_USER: runner_${{ github.run_id }}
+          POSTGRES_PASSWORD: ci_${{ github.run_id }}_${{ github.run_attempt }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       DAROOBANK_DEBUG: '1'
+      POSTGRES_DB: daroobank_ci
+      POSTGRES_USER: runner_${{ github.run_id }}
+      POSTGRES_PASSWORD: ci_${{ github.run_id }}_${{ github.run_attempt }}
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,7 +40,42 @@ jobs:
       - name: Check dependencies and configuration
         run: |
           python -m pip check
+          python -m tools.wait_for_database
+          python manage.py migrate --noinput
           python manage.py check
           python manage.py makemigrations --check --dry-run
-      - name: Run synthetic tests
-        run: python manage.py test -v 1
+      - name: Run synthetic tests on PostgreSQL
+        run: python manage.py test -v 1 --noinput
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DAROOBANK_DEBUG: '1'
+      DAROOBANK_SECRET_KEY: ci_key_${{ github.run_id }}_${{ github.run_attempt }}
+      DAROOBANK_ALLOWED_HOSTS: localhost,127.0.0.1
+      POSTGRES_DB: daroobank_ci
+      POSTGRES_USER: runner_${{ github.run_id }}
+      POSTGRES_PASSWORD: ci_${{ github.run_id }}_${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and start development stack
+        run: |
+          docker compose config --quiet
+          docker compose up --build -d --wait --wait-timeout 120
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/ > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/ > /dev/null
+          docker compose exec -T web python manage.py migrate --check
+          docker compose exec -T web python manage.py shell -c "from django.db import connection; assert connection.vendor == 'postgresql'"
+          docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE TABLE ci_volume_probe (value integer NOT NULL); INSERT INTO ci_volume_probe VALUES (42);"
+      - name: Check volume survives normal shutdown
+        run: |
+          docker compose down
+          docker compose up -d --wait --wait-timeout 120
+          test "$(docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc 'SELECT value FROM ci_volume_probe')" = "42"
+          docker compose exec -T web python manage.py migrate --check
+      - name: Remove ephemeral CI resources
+        if: always()
+        run: docker compose down -v

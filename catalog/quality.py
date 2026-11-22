@@ -31,8 +31,8 @@ def inspect_batch(*, after=0):
     """Inspect up to 50 rows, advancing by ID; no completeness or snapshot promise."""
     if type(after) is not int or not 0 <= after <= MAX_PK:
         raise QualityError('شناسه شروع نامعتبر است.')
-    # Use the exact SQL prefilter used by public detail/search, even if SQLite's
-    # startswith collation differs from Python. The later predicate is shared too.
+    # Use the exact SQL prefilter used by public detail/search; the later
+    # predicate is shared too.
     prefilter = public_candidates().filter(pk=OuterRef('pk'))
     rows = list(ProductPresentation.objects.filter(pk__gt=after).annotate(
         _passes_public_prefilter=Exists(prefilter),

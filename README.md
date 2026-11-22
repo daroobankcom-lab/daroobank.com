@@ -8,18 +8,9 @@ The repository now has an early **development-only Django vertical slice**: Pers
 
 ## Run locally
 
-Python 3.11+ is required. From the repository root:
+Python 3.11+ and PostgreSQL are required. For a local development stack, copy `.env.example` to `.env`, replace every placeholder with local values, then run `docker compose up --build`. PostgreSQL data is kept in a named volume. The Compose stack uses the Django development server and is not production-ready.
 
-```sh
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-export DAROOBANK_DEBUG=1
-.venv/bin/python manage.py migrate
-.venv/bin/python manage.py runserver 127.0.0.1:8000
-.venv/bin/python manage.py test
-```
-
-The local SQLite database and `.env` are ignored by Git. `.env.example` is documentation only; export its variables in the shell (Django does not load it automatically). Development settings are not production-ready. See [development guide](docs/DEVELOPMENT_GUIDE.md) and [implementation changelog](docs/CHANGELOG.md).
+For running Django outside containers, first start PostgreSQL and export the variables described in [the development guide](docs/DEVELOPMENT_GUIDE.md#current-local-implementation); Django does not load `.env` automatically. Then install dependencies, run `python manage.py migrate` and `python manage.py runserver`. Tests require a PostgreSQL role with permission to create and drop a separate test database. Do not put credentials or database dumps in Git.
 
 The debug-only staff portal also contains a source-rights assertion ledger with separate review permissions. These claims are unverified, do not authorize source use, and do not enable crawling or publication; use synthetic data only. See the [development guide](docs/DEVELOPMENT_GUIDE.md#development-only-source-rights-assertions).
 
@@ -31,7 +22,7 @@ The debug-only [clinical drafting workspace](docs/DEVELOPMENT_GUIDE.md#developme
 
 A private, read-only [catalog quality inspector](docs/DEVELOPMENT_GUIDE.md#development-only-catalog-quality-inspection) checks small batches for technical drift without verifying or changing data.
 
-A standalone [local SQLite snapshot and isolated restore drill](docs/DEVELOPMENT_GUIDE.md#local-sqlite-snapshots-and-isolated-restore-drill) and basic GitHub Actions development checks are available; snapshots are unencrypted and not a production backup solution.
+Use [PostgreSQL-native backups and isolated restore drills](docs/DEVELOPMENT_GUIDE.md#postgresql-backup-and-isolated-restore); basic GitHub Actions development checks use PostgreSQL. Dumps are unencrypted unless separately protected and are not a production backup solution.
 
 ## Documentation
 

@@ -37,7 +37,38 @@ TEMPLATES = [{
     'OPTIONS': {'context_processors': ['django.template.context_processors.request', 'daroobank.context.staff_portal_context']},
 }]
 WSGI_APPLICATION = 'daroobank.wsgi.application'
-DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}}
+# PostgreSQL is the only supported backend, including development and tests.
+# Empty password is allowed for peer/certificate authentication; deployments using
+# password authentication must provide it through their environment/secret manager.
+def required_database_setting(name):
+    value = os.environ.get(name, '')
+    if not value:
+        raise ImproperlyConfigured(f'{name} is required for PostgreSQL')
+    return value
+
+
+try:
+    db_conn_max_age = int(os.environ.get('POSTGRES_CONN_MAX_AGE', '0'))
+    db_port = int(os.environ.get('POSTGRES_PORT', '5432'))
+    if db_conn_max_age < 0 or not 1 <= db_port <= 65535:
+        raise ValueError
+except ValueError as exc:
+    raise ImproperlyConfigured('Invalid PostgreSQL port or connection lifetime') from exc
+
+db_options = {'connect_timeout': 5}
+if os.environ.get('POSTGRES_SSLMODE'):
+    db_options['sslmode'] = os.environ['POSTGRES_SSLMODE']
+DATABASES = {'default': {
+    'ENGINE': 'django.db.backends.postgresql',
+    'NAME': required_database_setting('POSTGRES_DB'),
+    'USER': required_database_setting('POSTGRES_USER'),
+    'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+    'HOST': required_database_setting('POSTGRES_HOST'),
+    'PORT': db_port,
+    'CONN_MAX_AGE': db_conn_max_age,
+    'CONN_HEALTH_CHECKS': True,
+    'OPTIONS': db_options,
+}}
 LANGUAGE_CODE = 'fa-ir'
 TIME_ZONE = 'Asia/Tehran'
 USE_I18N = True

@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+<p><a href="{% url 'staff_identity_detail' report.kind report.anchor_id %}">بازگشت به {{ label }} ←</a></p>
+<h1>بررسی پیوندهای پیشین · شناسه {{ report.anchor_id }}</h1>
+<div class="staff-alert">این بازرسی فقط سازگاری داخلی پیوندهای ادعایی را در هر بخش بررسی می‌کند؛ اثبات اصالت، هویت، معادل بودن، تأیید بالینی یا کامل بودن تاریخچه نیست. بخش‌ها تصویر ثابت زمانی نیستند و تغییر داده‌ها می‌تواند نتیجه را عوض کند.</div>
+{% for row in report.rows %}<article class="staff-panel"><p>گام {{ row.depth }}: شناسه {{ row.child_id }} ← نسخه پیشین <a href="{% url 'staff_identity_detail' report.kind row.parent_id %}">شناسه {{ row.parent_id }}</a></p></article>{% empty %}<p>در این بخش پیوند سازگاری نمایش داده نشد.</p>{% endfor %}
+{% if report.status == 'inconsistent' %}<div class="staff-empty">رکورد یا پیوند ناسازگار است؛ بررسی متوقف و جزئیات آن پنهان شد.</div>
+{% elif report.status == 'no_parent' %}<p>در انتهای بخش پیوند پیشینی ثبت نشده است؛ این به معنی اثبات منشأ یا کامل بودن تاریخچه نیست.</p>{% endif %}
+{% if report.next_cursor %}<nav class="staff-pagination" aria-label="بخش‌های زنجیره اصلاح"><a href="?cursor={{ report.next_cursor|urlencode }}">بررسی بخش بعدی ←</a></nav>{% endif %}
+</div></section>{% endblock %}

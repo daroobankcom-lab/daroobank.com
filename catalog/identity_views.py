@@ -12,6 +12,7 @@ from .identity import (
     graph_authors, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot, require_staff,
     review_package, safe_snapshot,
 )
+from .identity_lineage import inspect_lineage, InvalidLineageCursor, LineageNotFound
 from .identity_forms import (
     ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm,
     PackageRevisionForm, IngredientRevisionForm, FormulationRevisionForm, ProductRevisionForm, RevisionComponentFormSet,
@@ -175,6 +176,20 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
 def detail(request, kind, pk):
     require_staff(request.user, VIEW)
     return _detail(request, kind, _object(kind, pk))
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def lineage(request, kind, pk):
+    try:
+        report = inspect_lineage(actor=request.user, kind=kind, anchor_id=pk, cursor=request.GET.get('cursor', ''))
+    except LineageNotFound:
+        raise Http404('Not found')
+    except InvalidLineageCursor:
+        return HttpResponseBadRequest('Invalid or stale cursor; restart the inspection.')
+    return render(request, 'staff/identity_lineage.html', {'page_title': 'بررسی زنجیره اصلاح | داروبانک',
+        'description': 'بازرسی خصوصی پیوندهای اصلاح.', 'private_staff': True, 'noindex': True,
+        'label': _kind(kind)[4], 'report': report})
 
 
 @login_required(login_url='staff_login')

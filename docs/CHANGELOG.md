@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — synthetic correction ancestry inspection
+
+**Changes:** Added permission-scoped, read-only, bounded parent-path inspection for the four private identity draft types, with signed, graph-bound continuation cursors. Invalid graphs/links stop inspection without rendering their details. Added synthetic pagination, corruption, stale/expired cursor, role, privacy, bounded-query and data-isolation tests. No schema, review or public behavior changed.
+
+**Limits:** The path is not a snapshot, completeness or authenticity proof; earlier pages are not rechecked and parallel branches are not traversed. Hashes can be recomputed and direct writers can race. No browser/accessibility, clinical, legal or production security validation. See [ADR 0015](ARCHITECTURE_DECISIONS/0015-synthetic-lineage-inspection.md).
+
 ## 2026-11-22 — synthetic ingredient, formulation and product corrections
 
 **Changes:** Added typed private immediate-parent correction links and forms for synthetic ingredients, formulations and products, with branch support, graph preconditions, transactional creation, scoped link navigation and validation. Existing dependants and package reviews are not rewired or transferred. Added populated migration, rollback, permission/CSRF, corruption, pagination and concurrent PostgreSQL tests.

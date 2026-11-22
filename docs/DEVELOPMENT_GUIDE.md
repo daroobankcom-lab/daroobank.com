@@ -262,3 +262,8 @@ From an internally consistent private package detail, staff with identity view/a
 ## Synthetic ingredient, formulation and product corrections
 
 From a private ingredient, formulation or product detail, staff with identity view/add permissions may create an asserted correction and supply a reason. A new child and immediate-parent link are created; dependent records are not updated and no branch is automatically selected. Formulation corrections retain the same ingredients and order; product corrections retain the same formulation. Create independent records for changes outside those bounds. Branches and links are not proof of equivalence or clinical approval, and package reviews do not validate them. Use synthetic data only; see [ADR 0014](ARCHITECTURE_DECISIONS/0014-synthetic-component-revisions.md).
+
+
+## Inspect a synthetic correction path
+
+From an identity record detail, authorized staff can open the read-only parent-path inspector. It examines up to 20 immediate links per section and stops if a graph or link is inconsistent; use the next link for an older section. No recorded parent does not prove origin or completeness. A stale/expired cursor requires starting again. Data may change between pages and earlier links are not rechecked; this is not a review or proof of correctness. See [ADR 0015](ARCHITECTURE_DECISIONS/0015-synthetic-lineage-inspection.md).

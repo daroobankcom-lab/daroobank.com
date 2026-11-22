@@ -85,3 +85,8 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 ## Synthetic ingredient, formulation and product correction tests
 
 `catalog/test_identity_component_revision.py` covers each typed correction, unchanged dependants, fixed dependencies, hashes, malformed links, rolled-back transactions, role/CSRF/gate, formset tampering, keyset pages and PostgreSQL concurrent branches including reverse ingredient lock order. `catalog/test_identity_component_revision_migration.py` upgrades populated 0006 synthetic identity records and package correction links to 0007 without backfilling. Tests do not establish ancestry authenticity, clinical equivalence, browser accessibility or production readiness. See [ADR 0014](ARCHITECTURE_DECISIONS/0014-synthetic-component-revisions.md).
+
+
+## Synthetic identity ancestry inspection
+
+`catalog/test_identity_lineage.py` exercises all four types, bounded path traversal, independent permission/group checks and staff gate, private headers, no writes or public data, invalid links and missing dependencies, tampered/wrong/expired/stale cursors, and the documented non-snapshot behavior. Tests use synthetic data on PostgreSQL and are not a browser, clinical, source-rights, authenticity or production security assessment. See [ADR 0015](ARCHITECTURE_DECISIONS/0015-synthetic-lineage-inspection.md).

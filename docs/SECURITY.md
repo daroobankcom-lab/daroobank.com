@@ -120,3 +120,8 @@ The development-only correction form requires identity view/add permissions, CSR
 ## Synthetic ingredient, formulation and product corrections
 
 These typed private corrections require identity view/add permission, the debug-only web gate, CSRF and synthetic-data acknowledgment. Visible link reasons and parent/child graphs must be nonconfidential. Hashes are not signatures, and ordinary model guards, dependency checks and cooperative locks can be bypassed by bulk ORM/SQL or uncooperative writers. Checks cover only immediate links; package reviews do not certify correction provenance or earlier authors. Service calls do not enforce the web gate or acknowledgment. See [ADR 0014](ARCHITECTURE_DECISIONS/0014-synthetic-component-revisions.md).
+
+
+## Synthetic identity ancestry inspection
+
+The development-only read-only parent-path page requires identity view permission and staff privacy headers. It intentionally shows IDs and link status, not names, source fields or change reasons. Signed, time-limited cursors contain IDs and keyed digests, are not encrypted or access grants, and may be logged; direct service calls are outside the web gate. Earlier sections are not revalidated during continuation, and coherent graphs or links can be fabricated by a privileged writer. Do not enter real patient or proprietary data or treat the inspection as identity, clinical or audit approval. See [ADR 0015](ARCHITECTURE_DECISIONS/0015-synthetic-lineage-inspection.md).

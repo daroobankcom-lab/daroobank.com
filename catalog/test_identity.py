@@ -271,6 +271,85 @@ class IdentityTests(TestCase):
         self.assertNotContains(response, 'بازبینی‌ای ثبت نشده است')
         self.assertNotContains(response, 'دلایل ساختگی برای بررسی بیشتر')
 
+    def test_review_history_keyset_pages_and_latest_review_token(self):
+        graph = package_snapshot(self.package)
+        events = IdentityPackageReview.objects.bulk_create([
+            IdentityPackageReview(package=self.package, reviewer=self.reviewer, decision='defer',
+                                  reason=f'دلیل ساختگی شمارۀ {i:02d} برای بررسی', graph_snapshot=graph,
+                                  graph_sha256=digest(graph)) for i in range(52)
+        ])
+        other_package = build(self.author)[-1]
+        other_graph = package_snapshot(other_package)
+        IdentityPackageReview.objects.create(package=other_package, reviewer=self.reviewer, decision='defer',
+            reason='متن خصوصی بسته دیگر است', graph_snapshot=other_graph, graph_sha256=digest(other_graph))
+        self.client.force_login(self.reviewer)
+        path = reverse('staff_identity_detail', args=['package', self.package.pk])
+        first = self.client.get(path)
+        self.assertEqual([r.pk for r in first.context['reviews']], [e.pk for e in events[::-1][:25]])
+        self.assertEqual(first.context['review_form'].initial['expected_review'], events[-1].pk)
+        self.assertContains(first, '?before=' + str(events[-25].pk))
+        self.assertNotContains(first, 'متن خصوصی بسته دیگر است')
+        # Insert after page one; keyset navigation must not skip/repeat older rows.
+        new = review_package(actor=self.reviewer, package_id=self.package.pk, decision='defer',
+            reason='بازبینی تازه ساختگی برای بررسی', expected_review=events[-1].pk, expected_graph_hash=digest(graph))
+        second = self.client.get(path, {'before': events[-25].pk})
+        self.assertEqual([r.pk for r in second.context['reviews']], [e.pk for e in events[::-1][25:50]])
+        self.assertIsNone(second.context['review_form'])
+        self.assertEqual(second['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(second['X-Robots-Tag'], 'noindex, nofollow')
+        self.assertContains(second, 'ابتدا به تازه‌ترین بازبینی‌ها بازگردید')
+        self.assertNotContains(second, 'name="expected_review"')
+        third = self.client.get(path, {'before': events[-50].pk})
+        self.assertEqual([r.pk for r in third.context['reviews']], [e.pk for e in events[::-1][50:]])
+        self.assertIsNone(third.context['next_before'])
+        self.assertContains(third, 'تازه‌ترین بازبینی‌ها')
+        refreshed = self.client.get(path)
+        self.assertEqual(refreshed.context['review_form'].initial['expected_review'], new.pk)
+        payload = {'decision': 'defer', 'reason': 'دلایل ساختگی برای بررسی بیشتر',
+                   'expected_review': events[-1].pk, 'expected_graph_hash': digest(graph)}
+        response = self.client.post(reverse('staff_identity_review', args=[self.package.pk]), payload)
+        self.assertEqual(response.status_code, 409)
+        self.assertContains(response, 'صفحه را دوباره بارگذاری کنید', status_code=409)
+        self.assertNotContains(response, 'name="expected_review"', status_code=409)
+
+    def test_review_cursor_validation_auth_and_empty_page(self):
+        path = reverse('staff_identity_detail', args=['package', self.package.pk])
+        self.assertEqual(self.client.get(path, {'before': '1'}).status_code, 302)
+        self.client.force_login(self.regular)
+        self.assertEqual(self.client.get(path, {'before': '1'}).status_code, 403)
+        self.client.force_login(self.viewer)
+        for value in ['-1', '0', '1.0', '١', '9'*20, str(9223372036854775808), 'secret']:
+            response = self.client.get(path, {'before': value})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('no-store', response['Cache-Control'])
+            self.assertNotContains(response, value, status_code=400)
+        response = self.client.get(path, {'before': '1'})
+        self.assertContains(response, 'بازبینی قدیمی‌تری در این بخش یافت نشد')
+        self.assertNotContains(response, 'بازبینی‌ای ثبت نشده است')
+        csrf_client = Client(enforce_csrf_checks=True); csrf_client.force_login(self.reviewer)
+        self.assertEqual(csrf_client.post(reverse('staff_identity_review', args=[self.package.pk]), {}).status_code, 403)
+        with override_settings(STAFF_PORTAL_ENABLED=False):
+            self.assertEqual(self.client.get(path, {'before': '1'}).status_code, 404)
+
+    def test_invalid_review_on_older_page_is_hidden(self):
+        graph = package_snapshot(self.package)
+        events = IdentityPackageReview.objects.bulk_create([
+            IdentityPackageReview(package=self.package, reviewer=self.reviewer, decision='defer',
+                                  reason=f'راز ساختگی {i:02d} برای بررسی', graph_snapshot=graph,
+                                  graph_sha256=digest(graph)) for i in range(26)
+        ])
+        IdentityPackageReview.objects.filter(pk=events[0].pk).update(graph_sha256='f'*64)
+        self.client.force_login(self.viewer)
+        path = reverse('staff_identity_detail', args=['package', self.package.pk])
+        response = self.client.get(path, {'before': events[1].pk})
+        self.assertContains(response, 'بازبینی ناسازگار')
+        self.assertNotContains(response, events[0].reason)
+        IngredientDraft.objects.filter(pk=self.ingredient.pk).update(name_fa='اطلاعات ناسازگار محرمانه')
+        response = self.client.get(path, {'before': events[1].pk})
+        self.assertNotContains(response, 'بازبینی ناسازگار')
+        self.assertNotContains(response, events[0].reason)
+        self.assertContains(response, 'رکورد یا وابستگی آن ناسازگار است')
+
     def test_component_order_and_modified_values_detected(self):
         self.assertIsNotNone(safe_snapshot(self.package, package_snapshot))
         FormulationComponent.objects.filter(formulation=self.formulation).update(numerator=Decimal('3'))

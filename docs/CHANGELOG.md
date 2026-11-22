@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — identity review history navigation
+
+**Changes:** Replaced the 25-review history cutoff with bounded descending-ID pages scoped to the selected package. The review form appears only on the newest page and uses the latest review actually shown as its optimistic precondition. A stale submission requires a reload and reassessment. Existing permissions, privacy, snapshot checks and public isolation remain in place; no schema change.
+
+**Limits:** Pages are not a database snapshot or tamper-proof audit. Uncooperative writes and out-of-order IDs can change results; query plans and large datasets were not benchmarked. Historical content remains synthetic and unverified. No browser/accessibility or production validation. See [ADR 0012](ARCHITECTURE_DECISIONS/0012-synthetic-identity-drafts.md).
+
 ## 2026-11-22 — identity review history interpretation
 
 **Changes:** Made the private identity graph human-readable with explicit source/actor fields and links; validate stored review graph shape, links, hashes, quantities and reviewer separation before display. Consistent reviews are labeled current or historical, with an expandable historical snapshot; invalid current graphs suppress history rather than claiming none exists. No schema or public changes.

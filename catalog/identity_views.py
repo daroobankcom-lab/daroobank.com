@@ -12,6 +12,8 @@ from .identity import (ADD, VIEW, REVIEW, MAX_ID, INGREDIENT_FIELDS, FORMULATION
 from .identity_forms import ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm
 from .models import IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview
 
+REVIEW_PAGE_SIZE = 25
+
 KINDS = {
     'ingredient': (IngredientDraft, IngredientForm, INGREDIENT_FIELDS, ingredient_snapshot, 'ماده مؤثره'),
     'formulation': (FormulationDraft, FormulationForm, FORMULATION_FIELDS, formulation_snapshot, 'فرمولاسیون ژنریک'),
@@ -82,16 +84,42 @@ def create(request, kind):
         'parts': parts, 'kind': kind, 'label': label}, status=status)
 
 
+def _review_cursor(request):
+    # Cursor is an ordering position, not an authorization token or a snapshot.
+    value = request.GET.get('before', '') if request.method in ('GET', 'HEAD') else ''
+    if not value:
+        return None
+    if len(value) > 19 or not value.isascii() or not value.isdigit():
+        raise ValueError('Invalid review cursor')
+    number = int(value)
+    if not 1 <= number <= MAX_ID:
+        raise ValueError('Invalid review cursor')
+    return number
+
+
 def _detail(request, kind, obj, *, review_form=None, status=200):
     snapshot = safe_snapshot(obj, _kind(kind)[3])
-    reviews, can_review = [], False
+    reviews, can_review, next_before = [], False, None
+    before = None
+    if kind == 'package':
+        try:
+            before = _review_cursor(request)
+        except ValueError:
+            return HttpResponseBadRequest('Invalid review cursor.')
     if kind == 'package' and snapshot:
-        reviews = list(obj.reviews.select_related('reviewer').order_by('-pk')[:25])
-        if snapshot:
-            can_review = request.user.has_perm(REVIEW) and request.user.pk not in _authors(snapshot)
-            if can_review and review_form is None:
-                review_form = IdentityReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0,
-                                                           'expected_graph_hash': digest(snapshot)})
+        queryset = obj.reviews.order_by('-pk')
+        if before is not None:
+            queryset = queryset.filter(pk__lt=before)
+        rows = list(queryset[:REVIEW_PAGE_SIZE + 1])
+        reviews = rows[:REVIEW_PAGE_SIZE]
+        if len(rows) > REVIEW_PAGE_SIZE:
+            next_before = reviews[-1].pk
+        graph_hash = digest(snapshot)
+        can_review = request.user.has_perm(REVIEW) and request.user.pk not in _authors(snapshot)
+        if can_review and before is None and review_form is None and status != 409:
+            # Use the newest review actually rendered, never a later unseen insert.
+            latest_shown = reviews[0].pk if reviews else 0
+            review_form = IdentityReviewForm(initial={'expected_review': latest_shown, 'expected_graph_hash': graph_hash})
         for review in reviews:
             try:
                 review.safe = (valid_review_snapshot(review.graph_snapshot, obj.pk)
@@ -99,12 +127,13 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
                                and review.decision in dict(IdentityPackageReview.DECISIONS)
                                and valid_review_reason(review.reason)
                                and review.reviewer_id not in _authors(review.graph_snapshot))
-                review.is_current = review.safe and review.graph_sha256 == digest(snapshot)
+                review.is_current = review.safe and review.graph_sha256 == graph_hash
             except (TypeError, ValueError, UnicodeError):
                 review.safe = False
     return render(request, 'staff/identity_detail.html', {'page_title': 'جزئیات هویت ساختگی | داروبانک',
         'description': 'زنجیره ادعایی کاتالوگ.', 'private_staff': True, 'noindex': True, 'kind': kind,
         'label': _kind(kind)[4], 'obj': obj, 'snapshot': snapshot, 'reviews': reviews,
+        'review_before': before, 'next_before': next_before, 'review_conflict': status == 409,
         'can_review': can_review, 'review_form': review_form, 'can_add': request.user.has_perm(ADD)}, status=status)
 
 
@@ -126,7 +155,10 @@ def review(request, pk):
         review_package(actor=request.user, package_id=pk, **form.cleaned_data)
     except IdentityConflict as exc:
         form.add_error(None, str(exc))
-        package.refresh_from_db()
+        try:
+            package.refresh_from_db()
+        except IdentityPackageDraft.DoesNotExist:
+            raise Http404('Not found')
         return _detail(request, 'package', package, review_form=form, status=409)
     except IdentityPackageDraft.DoesNotExist:
         return HttpResponseBadRequest('Package no longer exists.')

@@ -22,3 +22,7 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 ## Local CSV staging tests
 
 `pricing/tests.py` covers synthetic dry run and permission-assertion gating, exact identity suggestions, ambiguous/unmatched packages, stale IRC projections and changed catalog records, whole-file rejection, source URL secrets, exact Rial/Toman conversion and unrepresentable values, idempotent replay, revised assertions, no public price exposure, bounded local listing and IRC migration backfill. Tests do not establish source rights, clinical validity, production performance or database immutability.
+
+## Development-only staff tests
+
+`pricing/test_staff.py` exercises anonymous redirects; active staff plus permission enforcement, including group permissions; rejection of inactive and unauthorized users; CSRF login/logout; unsafe redirect rejection; read-only methods; private/no-store/noindex headers; filtering and pagination; escaped stored data; current-versus-stale suggestion handling; and the disabled-portal gate. These tests are not a penetration test or evidence of MFA, throttling, production readiness, accessibility or clinical validity.

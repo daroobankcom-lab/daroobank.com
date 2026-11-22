@@ -36,7 +36,7 @@ DAROOBANK_DEBUG=1 .venv/bin/python manage.py stage_price_csv \
   --source-name 'Synthetic example only' --source-url https://example.org
 ```
 
-To store an authorized file for later review, supply `--commit --attest-authorized` only when the operator has confirmed that collection and internal storage are permitted. This flag is an operator assertion, not proof of a licence and not an audit trail. Never put actual source files, patient information, credentials or private URLs into Git. `--source-url` must be HTTPS and cannot contain credentials, query parameters or a fragment. Local database and commands are not protected by an admin login; restrict access at the operating-system level. No authenticated admin interface exists.
+To store an authorized file for later review, supply `--commit --attest-authorized` only when the operator has confirmed that collection and internal storage are permitted. This flag is an operator assertion, not proof of a licence and not an audit trail. Never put actual source files, patient information, credentials or private URLs into Git. `--source-url` must be HTTPS and cannot contain credentials, query parameters or a fragment. Local database and CLI commands are not protected by the web login; restrict access at the operating-system level. The development-only staff interface is read-only.
 
 CSV must contain exactly these column names, once each (order is flexible):
 
@@ -54,3 +54,17 @@ DAROOBANK_DEBUG=1 .venv/bin/python manage.py list_price_candidates --limit 30
 ```
 
 The JSON output includes the original match status and a fresh current suggestion. The initial match is only a snapshot and can become stale; even a current exact match is **not verification**, does not establish IRC scope and must be independently reviewed. This command does not approve candidates. Existing candidate revisions are not changed on replay, and identical source/record/payload combinations are deduplicated. There is no review decision, audit log, official-source integration, automatic scheduler or public price publication.
+
+## Development-only staff queue
+
+After migrations, create an account **only in an isolated local development environment with synthetic data**:
+
+```sh
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py createsuperuser
+```
+
+Django prompts interactively for the password; do not place passwords in shell commands, Git or chat. A superuser is broadly privileged and is for local testing only. No accounts or passwords are created automatically. For a less-privileged local viewer, give an existing active account `is_staff=True` and the Django permission `pricing.view_pricecandidate`, either directly or through a group; it does not need edit permissions. Grant/revoke permissions through controlled Django management tooling. Account provisioning and permission changes currently lack an audit workflow.
+
+Start the server in debug mode and visit `/staff/login/`, then `/staff/prices/`. The queue and detail pages are read-only, bounded/paginated, and accessible only to active staff with that view permission. The pages show the source assertion, original currency, converted Rial amount, and both initial and recalculated current match suggestions; neither suggestion is a review or approval. Filters and counts use the **initial** match status. Logout is POST-only with CSRF protection. The app never shows candidate prices in public pages or API.
+
+The staff portal is deliberately disabled when `DAROOBANK_DEBUG` is not `1`. This is not a production-ready staff system: MFA, login throttling, hardened credentials, audit, review decisions, retention policy, production deployment and security validation remain missing. Debug mode can expose diagnostic data and the developer preview can be publicly reachable: never use it with real credentials, sensitive data or real patient information. No source licence has been granted by this implementation.

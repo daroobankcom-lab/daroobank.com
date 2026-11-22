@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}
+<section class="staff-section"><div class="container"><div class="staff-login-card">
+  <div class="kicker"><span></span> فضای داخلی داروبانک</div>
+  <h1>ورود همکاران</h1><p>این بخش فقط برای کاربران مجاز بررسی داده‌ها در نظر گرفته شده است.</p>
+  {% if form.errors %}<div class="staff-alert staff-alert-error" role="alert">نام کاربری یا گذرواژه صحیح نیست، یا حساب شما فعال نیست.</div>{% endif %}
+  <form method="post" class="staff-login-form">{% csrf_token %}
+    <label for="id_username">نام کاربری</label>{{ form.username }}
+    <label for="id_password">گذرواژه</label>{{ form.password }}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="staff-button" type="submit">ورود به بخش داخلی <span aria-hidden="true">←</span></button>
+  </form>
+  <p class="staff-small">نسخه توسعه‌ای است؛ از حساب‌های واقعی یا اطلاعات بیمار استفاده نکنید.</p>
+</div></div></section>
+{% endblock %}

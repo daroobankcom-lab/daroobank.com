@@ -1,6 +1,6 @@
 # System architecture
 
-**Current:** Django SSR and a small catalog/search slice run locally on SQLite. There are no worker, authentication or production services yet. **Target architecture below is proposed:** a modular monolith with PostgreSQL transaction boundaries and separate operational processes, not premature microservices.
+**Current:** Django SSR and a small catalog/search slice run locally on SQLite. The development-only staff queue uses Django authentication, sessions and scoped view permissions; it is disabled outside debug mode. There are no workers or production services yet. **Target architecture below is proposed:** a modular monolith with PostgreSQL transaction boundaries and separate operational processes, not premature microservices.
 
 ```mermaid
 flowchart LR

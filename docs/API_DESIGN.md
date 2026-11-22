@@ -17,7 +17,7 @@ Versioned authenticated endpoints can create drafts, attach evidence, list inges
 
 ## Security and evolution
 
-Public read rate limiting; admin sessions use secure, HttpOnly, SameSite cookies, CSRF protection and MFA. Institutional/mobile API credentials use scoped short-lived tokens with revocation and rate/usage limits, selected after threat review; no secrets in client apps. No patient data in search queries, logs or public API responses. Compatibility: additive fields only in v1, document deprecations, contract tests and deliberate versioning for breaking changes. Python, mobile and future AI services use this contract rather than shared SQL. Consultation interfaces remain disabled and separately authorized; design them only after legal and privacy approval.
+Target: public read rate limiting and admin sessions with secure, HttpOnly, SameSite cookies, CSRF protection and MFA. The current development-only staff session uses Django authentication and CSRF, but has no MFA or rate limiting and is disabled outside debug mode. Institutional/mobile API credentials use scoped short-lived tokens with revocation and rate/usage limits, selected after threat review; no secrets in client apps. No patient data in search queries, logs or public API responses. Compatibility: additive fields only in v1, document deprecations, contract tests and deliberate versioning for breaking changes. Python, mobile and future AI services use this contract rather than shared SQL. Consultation interfaces remain disabled and separately authorized; design them only after legal and privacy approval.
 
 ## Development endpoint example
 

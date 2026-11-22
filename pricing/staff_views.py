@@ -42,6 +42,8 @@ class StaffLoginView(LoginView):
                 return reverse('staff_products')
             if user.has_perm('sources.view_sourceclaim'):
                 return reverse('staff_sources')
+            if user.has_perm('clinical.view_clinicaldraft'):
+                return reverse('staff_clinical_drafts')
         return super().get_default_redirect_url()
 
 
@@ -120,6 +122,7 @@ def price_candidates(request):
         'total': sum(stats.values()), 'can_import': request.user.has_perm('pricing.add_pricecandidate'),
         'can_products': request.user.has_perm('catalog.view_productcandidate'),
         'can_sources': request.user.has_perm('sources.view_sourceclaim'),
+        'can_clinical': request.user.has_perm('clinical.view_clinicaldraft'),
     })
 
 

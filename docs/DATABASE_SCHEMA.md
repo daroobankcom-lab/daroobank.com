@@ -41,3 +41,8 @@ The current Django models `SourceClaim` and `SourceClaimReview` are a limited lo
 ## Implemented development-only web intake summaries
 
 `ImportReceipt` records a successful web CSV staging operation's domain, asserted source, actor/time and counts; price summaries include match categories for all input rows. Basic count and domain consistency have database constraints, and a single transaction wraps candidate and receipt writes. New `ImportReceiptItem` records logical row ordinal, source ID, candidate hash/reference, created/duplicate flag and optional price suggestion; old receipts are not backfilled. There is no raw file, filename, file-level hash, failure record or CLI/history backfill. Protected FKs prevent ordinary deletion of referenced candidates/receipts; retention and repair policy remain unresolved. Ordinary model guards are not database immutability. This is not the planned `crawl_run`, `checkpoint` or durable audit schema.
+
+
+## Implemented development-only clinical drafts
+
+`ClinicalDraft` holds a free-text synthetic subject, audience, title, statement, one asserted citation with optional dates, author/time, payload hash and optional immediate parent/hash/change reason. `ClinicalDraftReview` records a separate reviewer, preliminary non-approval decision, reason and snapshot. These are not the planned approved content versions, statement/reference graph or publication/withdrawal records described above. Model-level mutation guards and fingerprints are not database immutability or signatures; actor/time are not hashed and full ancestry is not verified.

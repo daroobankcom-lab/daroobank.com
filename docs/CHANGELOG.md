@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — private synthetic clinical statement drafts
+
+**Changes:** Added a development-only clinical draft domain with separate view/add/review permissions, a Persian RTL queue, asserted citation metadata, branched parent-linked versions and independent preliminary triage snapshots. Integrated separately permissioned exact-URL source-claim hints and clinical-only login navigation. Added synthetic role, CSRF, input, version, stale and corruption tests; there is no approval or publication action.
+
+**Limits:** Drafts, references, dates and reviewer qualifications are unverified; the text field cannot enforce one statement and is not linked to a real drug. Immediate-parent checks do not certify full ancestry. No seed clinical content, licensed evidence, clinical approval or public presentation was added. Hashes omit actor/time and are not signatures; bulk ORM/SQL bypass guards, SQLite concurrent behavior and production security remain unproven. No browser, medical, legal or production validation was performed.
+
 ## 2026-11-22 — intake row outcomes and receipt navigation
 
 **Changes:** New receipt-backed product and price imports atomically record bounded per-data-row outcomes linking to candidates, including duplicates, content fingerprints and request-time price suggestions. Receipt details validate structure and candidate consistency, paginate rows and hide inconsistent links. Candidate pages show capped, domain-scoped recent receipt clues. Existing receipts are explicitly marked as lacking row details; no backfill is invented. Added synthetic rollback, permissions, corruption, replay, constraints and migration tests.

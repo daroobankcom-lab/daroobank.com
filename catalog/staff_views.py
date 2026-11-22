@@ -38,6 +38,7 @@ def candidates(request):
         'noindex': True, 'private_staff': True, 'page': page, 'status': status,
         'can_import': request.user.has_perm(ADD), 'can_prices': request.user.has_perm('pricing.view_pricecandidate'),
         'can_sources': request.user.has_perm('sources.view_sourceclaim'),
+        'can_clinical': request.user.has_perm('clinical.view_clinicaldraft'),
     })
 
 

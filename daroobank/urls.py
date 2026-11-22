@@ -3,6 +3,7 @@ from catalog import views, staff_views as product_staff_views
 from pricing import staff_views
 from sources import staff_views as source_staff_views
 from ingestion import staff_views as ingestion_staff_views
+from clinical import staff_views as clinical_staff_views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -18,6 +19,11 @@ urlpatterns = [
     path('staff/operations/window/', ingestion_staff_views.window, name='staff_ingestion_window'),
     path('staff/operations/imports/', ingestion_staff_views.receipts, name='staff_import_receipts'),
     path('staff/operations/imports/<int:pk>/', ingestion_staff_views.receipt_detail, name='staff_import_receipt_detail'),
+    path('staff/clinical/', clinical_staff_views.drafts, name='staff_clinical_drafts'),
+    path('staff/clinical/new/', clinical_staff_views.create, name='staff_clinical_create'),
+    path('staff/clinical/<int:pk>/revise/', clinical_staff_views.revise, name='staff_clinical_revise'),
+    path('staff/clinical/<int:pk>/review/', clinical_staff_views.review, name='staff_clinical_review'),
+    path('staff/clinical/<int:pk>/', clinical_staff_views.detail, name='staff_clinical_detail'),
     path('staff/sources/', source_staff_views.claims, name='staff_sources'),
     path('staff/sources/new/', source_staff_views.create, name='staff_source_create'),
     path('staff/sources/<int:pk>/review/', source_staff_views.review, name='staff_source_review'),

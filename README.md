@@ -27,6 +27,8 @@ An [offline ingestion-window inspector](docs/DEVELOPMENT_GUIDE.md#offline-ingest
 
 Successful development web CSV staging also records a limited, permission-scoped [intake receipt](docs/DEVELOPMENT_GUIDE.md#development-only-csv-intake-receipts); new receipts include bounded row-to-candidate outcomes, but they are not original-file proof, source authorization or tamper-proof audit.
 
+The debug-only [clinical drafting workspace](docs/DEVELOPMENT_GUIDE.md#development-only-clinical-draft-triage) supports synthetic statement and reference assertions with independent preliminary triage. It contains no reviewed clinical content and cannot approve or publish.
+
 ## Documentation
 
 - [Implementation changelog](docs/CHANGELOG.md) · [Gap analysis](docs/GAP_ANALYSIS.md) · [Resource review](docs/RESOURCE_REVIEW.md) · [Design system](docs/DESIGN_SYSTEM.md)

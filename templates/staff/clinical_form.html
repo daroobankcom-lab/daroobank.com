@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+  <div class="staff-topline"><div><a class="staff-back" href="{% url 'staff_clinical_drafts' %}">→ بازگشت به صف</a><div class="kicker"><span></span> ورودی ساختگی · منتشر نمی‌شود</div><h1>{% if parent %}نسخه جدید پیش‌نویس {{ parent.pk }}{% else %}پیش‌نویس علمی ساختگی{% endif %}</h1><p>هر نسخه یک گزاره و یک ارجاع اعلام‌شده دارد.</p></div></div>
+  <div class="staff-alert">فقط داده ساختگی و غیرمحرمانه وارد کنید. ارجاع یا ادعای مجوز بررسی نمی‌شود و هیچ تأیید بالینی یا انتشاری رخ نمی‌دهد. نشانی نباید حاوی رمز، پارامتر یا قطعه باشد.</div>
+  {% if parent %}<div class="staff-panel-note">موضوع و مخاطب باید دقیقاً با نسخه پیشین یکسان بمانند؛ تغییر آن‌ها به پیش‌نویس مستقل نیاز دارد. شاخه‌های موازی ممکن‌اند و بازبینی‌ها به نسخه جدید منتقل نمی‌شوند.</div>{% endif %}
+  <div class="staff-panel"><form method="post" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}
+    {% for field in form %}{% if field.is_hidden %}{{ field }}{{ field.errors }}{% elif field.name == 'synthetic_ack' %}<label class="staff-checkbox">{{ field }} <span>{{ field.label }}</span></label>{{ field.errors }}{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endif %}{% endfor %}
+    <button class="staff-button" type="submit">ثبت نسخه داخلی</button></form></div>
+</div></section>{% endblock %}

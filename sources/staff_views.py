@@ -38,6 +38,7 @@ def claims(request):
         'noindex': True, 'private_staff': True, 'page': page, 'status': status,
         'can_add': request.user.has_perm(ADD), 'can_prices': request.user.has_perm('pricing.view_pricecandidate'),
         'can_products': request.user.has_perm('catalog.view_productcandidate'),
+        'can_clinical': request.user.has_perm('clinical.view_clinicaldraft'),
     })
 
 

@@ -82,3 +82,8 @@ Successful web product/price staging and its receipt use one database transactio
 
 
 Row manifests are domain-scoped through the receipt lookup; structural and per-row checks suppress inconsistent links, but do not establish authenticity or integrity against a database writer. Candidate pages show at most five recent distinct same-domain receipt clues; their presence/absence proves nothing about source rights or complete history. Foreign keys use `PROTECT`; `QuerySet.update/delete` and SQL still bypass model guards, and retention/deletion/repair remain undefined. Price hashes omit source URL. No real personal or proprietary data should be entered into this debug workflow.
+
+
+## Development-only clinical drafts
+
+The clinical queue and its create/revise/review routes are under the normal debug-only staff gate and use separate `clinical.view_clinicaldraft`, `clinical.add_clinicaldraft` and `clinical.review_clinicaldraft` permissions. Review also requires view and a different author. CSRF and private/no-store/noindex/no-referrer headers apply; source-claim hints require independent source view permission. The form's synthetic-data checkbox is an assertion; the app cannot prevent a user from entering patient or copyrighted information, and direct services bypass the web debug gate. Use only isolated synthetic data. URLs are validated but never fetched. Draft hashes omit author/time and are not signatures; bulk ORM/SQL can alter history and SQLite concurrency checks are not proven. Review is not approval; no public clinical route or publication exists. Qualified review, retention, privacy, durable audit and production security remain unresolved.

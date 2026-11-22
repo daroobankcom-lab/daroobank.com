@@ -1,6 +1,6 @@
 # Clinical content and evidence standards
 
-Planning only: there are no reviewed monographs or licensed interaction data. Original Persian patient content and professional clinical content require independent qualified review; AI-generated text is not evidence. Do not copy proprietary databases or imply that foreign labels establish Iranian product approval.
+There is now a development-only private statement-draft and preliminary triage workflow; the clinical standards below remain release goals. There are no reviewed monographs or licensed interaction data. Original Persian patient content and professional clinical content require independent qualified review; AI-generated text is not evidence. Do not copy proprietary databases or imply that foreign labels establish Iranian product approval.
 
 ## Content model and evidence
 
@@ -13,3 +13,10 @@ Draft → evidence attachment → qualified pharmacist/medical review → editor
 ## Safety and future tools
 
 No statement of a verified negative interaction unless supported by validated data and explicit coverage. Unknown, not assessed, and incomplete evidence must be distinct from verified negative. A checker needs licensed/legitimate structured pairs, severity, mechanism, recommendations, review and audit before release; free label prose alone is not a complete interaction dataset. High-risk calculators, pregnancy advice, dose support and pill identification need independent validation, defined intended use, usability and regulatory review. Patient pages provide clear direction to appropriate qualified help for concerning symptoms without making diagnoses. AI can draft or retrieve only for review; no autonomous publishing, prescribing, fabricated citations or silent uncertainty.
+
+
+## Implemented development-only editorial slice
+
+`clinical/` allows active staff with separate view/add/review permissions to create a synthetic text draft, enter one asserted citation and record independent preliminary triage. The free-text subject is not linked to any ingredient, generic, product or package; no content is exposed publicly. Citation title, location and HTTPS URL are mandatory; author, version and Gregorian publication/access dates are optional, user-entered and unverified. The field is intended for one statement, but the software cannot enforce that it contains only one. It does not fetch or check references, establish permissions, assess evidence or verify reviewer qualifications. An exact-URL source claim hint is optional and independently permission-gated, not authorization.
+
+A new version explicitly links an immediate parent, original parent fingerprint and reason; subject/audience stay exactly the same, branching is allowed and previous reviews do not carry over. Only the current draft and immediate parent payload are checked, not the full ancestry. Another staff user can record a reasoned referral for more review, rejection or deferral; none is clinical approval, and there is no publish operation. This is not a monograph, clinical decision support or a safe source of patient advice. Use only fictional, non-sensitive values until governance, rights, review and production safeguards are established. See [ADR 0005](ARCHITECTURE_DECISIONS/0005-clinical-draft-triage.md).

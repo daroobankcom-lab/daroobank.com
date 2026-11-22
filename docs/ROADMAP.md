@@ -1,6 +1,6 @@
 # Roadmap and release gates
 
-The local RTL web and product-search slice has started Phase 1. A preliminary local CSV candidate-staging tool supports later pricing work, but Phase 3 and the remaining phases are not complete. Work is iterative; no production deployment without explicit authorization.
+The local RTL web and product-search slice has started Phase 1. Local CSV candidate staging and a synthetic private clinical drafting slice support later pricing and knowledge work, but Phase 2, Phase 3 and the remaining phases are not complete. Work is iterative; no production deployment without explicit authorization.
 
 | Phase | Deliverables and exit gates | Dependencies / risk |
 |---|---|---|

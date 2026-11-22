@@ -20,8 +20,8 @@ assert(parsedBase.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(pa
        'Only a loopback test server is allowed');
 const origin = parsedBase.origin;
 
-async function contextFor(browser, width, errors) {
-  const context = await browser.newContext({viewport: {width, height: 900}, locale: 'fa-IR'});
+async function contextFor(browser, width, errors, options = {}) {
+  const context = await browser.newContext({viewport: {width, height: 900}, locale: 'fa-IR', ...options});
   context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   // The fixture's example.org links are never fetched; abort any non-test origin.
   await context.route('**/*', route => {
@@ -41,6 +41,38 @@ async function checkLayout(page, label) {
   assert(state.scrollWidth <= state.width, `${label}: horizontal overflow ${state.scrollWidth} > ${state.width}`);
 }
 
+function rgb(value) {
+  const match = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/.exec(value);
+  assert(match, `Expected opaque RGB, got ${value}`);
+  return match.slice(1).map(Number);
+}
+function luminance(value) {
+  const channels = rgb(value).map(n => { const x = n / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+function ratio(a, b) { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+function blendOn(color, background) {
+  // Forced colors can expose a partially transparent system outline color.
+  const match = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?)\s*\)$/.exec(color);
+  if (!match) return color;
+  const back = rgb(background), alpha = Number(match[4]);
+  const result = match.slice(1, 4).map((n, i) => Math.round(Number(n) * alpha + back[i] * (1 - alpha)));
+  return `rgb(${result.join(', ')})`;
+}
+
+async function checkKeyboardFocus(page, selector, label, container) {
+  const state = await page.locator(selector).evaluate((element, container) => {
+    const style = getComputedStyle(element);
+    return {active: element === document.activeElement, visible: element.matches(':focus-visible'),
+      outline: style.outlineStyle, width: parseFloat(style.outlineWidth), color: style.outlineColor,
+      background: getComputedStyle(element.closest(container)).backgroundColor};
+  }, container);
+  assert(state.active && state.visible, `${label}: not keyboard-focused`);
+  assert(state.outline !== 'none' && state.width >= 2, `${label}: missing focus outline`);
+  assert(ratio(blendOn(state.color, state.background), state.background) >= 3,
+         `${label}: outline contrast below 3:1 against container`);
+}
+
 // Axe cannot reliably infer contrast through a gradient. Check these known
 // text colors against both opaque gradient endpoints; changes to the gradient
 // structure or transparency deliberately require a fresh review.
@@ -55,16 +87,6 @@ async function checkHeroContrast(page) {
       inputBackground: style('.search-form').backgroundColor,
     };
   });
-  function rgb(value) {
-    const match = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/.exec(value);
-    assert(match, `Expected opaque RGB, got ${value}`);
-    return match.slice(1).map(Number);
-  }
-  function luminance(value) {
-    const channels = rgb(value).map(n => { const x = n / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
-    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-  }
-  function ratio(a, b) { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
   assert.equal(ratio('rgb(0, 0, 0)', 'rgb(255, 255, 255)'), 21);
   const gradient = /^linear-gradient\([^,]+,\s*(rgb\(\d+,\s*\d+,\s*\d+\))\s+[\d.]+%,\s*(rgb\(\d+,\s*\d+,\s*\d+\))\s+[\d.]+%\)$/.exec(values.background);
   assert(gradient, 'Hero needs exactly one two-stop opaque linear gradient; review any change');
@@ -98,9 +120,12 @@ async function login(page, username) {
   assert.equal(await page.evaluate(() => document.activeElement.id), 'id_username');
   await page.keyboard.press('Tab');
   assert.equal(await page.evaluate(() => document.activeElement.id), 'id_password');
+  await checkKeyboardFocus(page, '#id_password', 'login password', '.staff-login-card');
   await page.locator('#id_username').fill(username);
   await page.locator('#id_password').fill(password);
-  const [result] = await Promise.all([page.waitForResponse(r => r.url().includes('/staff/login/') && r.request().method() === 'POST'), page.locator('button[type=submit]').click()]);
+  await page.keyboard.press('Tab');
+  await checkKeyboardFocus(page, '.staff-login-form button[type=submit]', 'login submit', '.staff-login-card');
+  const [result] = await Promise.all([page.waitForResponse(r => r.url().includes('/staff/login/') && r.request().method() === 'POST'), page.keyboard.press('Enter')]);
   assert.equal(result.status(), 302, `login response ${result.status()}`);
   assert.equal(result.request().headers().origin, origin, 'login must retain a same-origin CSRF Origin');
   await page.waitForURL('**/staff/catalog/identity/');
@@ -159,8 +184,9 @@ async function run() {
       await page.keyboard.press('Enter');
       await page.keyboard.press('Tab');
       assert.equal(await page.evaluate(() => document.activeElement.id), 'drug-search', 'skip link must bypass navigation');
+      await checkKeyboardFocus(page, '#drug-search', `search ${width}`, '.search-form');
       await page.locator('#drug-search').fill('Browser Synthetic Product');
-      await Promise.all([page.waitForURL('**/search/?q=Browser*'), page.locator('form[role=search] button').click()]);
+      await Promise.all([page.waitForURL('**/search/?q=Browser*'), page.keyboard.press('Enter')]);
       assert.equal(page.url().includes('/search/'), true);
       assert.equal(await page.locator('.result-card').count(), 1);
       assert.match(await page.locator('.result-card').innerText(), /داروی عمومی ساختگی مرورگر/);
@@ -268,6 +294,34 @@ async function run() {
     assert.equal(afterLogout.status(), 200);
     assert(page.url().includes('/staff/login/'), 'logout must remove access to private pages');
     await firstContext.close(); await secondContext.close(); await authorContext.close();
+    // Emulation checks the selected controls, not actual OS/device support.
+    const accessibleContext = await contextFor(browser, 390, errors,
+      {forcedColors: 'active', reducedMotion: 'reduce'});
+    const accessiblePage = await accessibleContext.newPage();
+    await accessiblePage.goto(base + '/');
+    assert(await accessiblePage.evaluate(() => matchMedia('(forced-colors: active)').matches &&
+      matchMedia('(prefers-reduced-motion: reduce)').matches));
+    assert.equal(await accessiblePage.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior), 'auto');
+    await accessiblePage.keyboard.press('Tab');
+    await accessiblePage.keyboard.press('Enter');
+    await accessiblePage.keyboard.press('Tab');
+    await checkKeyboardFocus(accessiblePage, '#drug-search', 'forced-colors search', '.search-form');
+    await accessiblePage.locator('#drug-search').fill('Browser Synthetic Product');
+    await Promise.all([accessiblePage.waitForURL('**/search/?q=Browser*'), accessiblePage.keyboard.press('Enter')]);
+    assert.equal(await accessiblePage.locator('.result-card').count(), 1);
+    await checkLayout(accessiblePage, 'forced-colors search results');
+    await login(accessiblePage, author);
+    await accessiblePage.goto(base + '/staff/catalog/identity/new/ingredient/');
+    await accessiblePage.locator('#id_source_name').focus();
+    await accessiblePage.keyboard.press('Tab');
+    await checkKeyboardFocus(accessiblePage, '#id_source_url', 'forced-colors source URL', '.staff-panel');
+    await accessiblePage.keyboard.press('Tab');
+    await checkKeyboardFocus(accessiblePage, '#id_synthetic_ack', 'forced-colors acknowledgment', '.staff-panel');
+    await accessiblePage.keyboard.press('Space');
+    assert(await accessiblePage.locator('#id_synthetic_ack').isChecked());
+    await accessiblePage.keyboard.press('Space');
+    assert(!(await accessiblePage.locator('#id_synthetic_ack').isChecked()));
+    await accessibleContext.close();
     assert.deepEqual(errors, [], 'browser JavaScript errors');
     console.log(`browser checks passed (Chromium ${browser.version()}, widths 320/390/768/1440)`);
   } finally {

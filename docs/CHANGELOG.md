@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — keyboard focus regression review
+
+**Changes:** Removed a CSS reset that suppressed the search input's keyboard-focus outline. Extended isolated Chromium tests to check selected focus outlines and their computed contrast, submit search and staff login with Enter, and exercise search, login and a private synthetic form under emulated forced colors and reduced motion. Missing and low-contrast outline regressions were observed to fail. No business logic, data or layout changes.
+
+**Limits:** These checks cover selected controls and computed container colors only; emulation is not an OS/device, screen-reader or complete accessibility assessment. See [Testing strategy](TESTING_STRATEGY.md#opt-in-synthetic-chromium-smoke-test).
+
 ## 2026-11-22 — browser startup investigation and contrast review
 
 **Changes:** Investigated intermittent local headless Chromium startup failures. The isolated SSR smoke test now uses software rendering without the bundled GPU/SwiftShader flags, retaining normal web security. A local about:blank launch experiment recorded 4/30 failures with previous flags and 0/130 with GPU disabled; no automatic retry was added. Added computed-color contrast checks for selected home-page text and placeholder against the gradient endpoints and input background; a deliberately low-contrast mutation failed as expected. No product data or public layout were changed.

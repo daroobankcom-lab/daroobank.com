@@ -37,8 +37,22 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+      - name: Check direct runtime pins
+        run: python -m tools.verify_runtime_lock
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install --require-hashes -r requirements.txt
+      - name: Reject an incorrect artifact hash
+        run: |
+          printf 'Django==5.2.19 --hash=sha256:%064d\n' 0 > "$RUNNER_TEMP/bad-hash.txt"
+          if python -m pip download --no-cache-dir --no-deps --require-hashes -r "$RUNNER_TEMP/bad-hash.txt" -d "$RUNNER_TEMP/bad-hash-download" > "$RUNNER_TEMP/bad-hash.log" 2>&1; then
+            echo '::error::An incorrect artifact hash was accepted.'
+            exit 1
+          fi
+          if ! grep -q 'THESE PACKAGES DO NOT MATCH THE HASHES' "$RUNNER_TEMP/bad-hash.log"; then
+            cat "$RUNNER_TEMP/bad-hash.log"
+            echo '::error::The negative hash test failed for an unexpected reason.'
+            exit 1
+          fi
       - name: Check dependencies and configuration
         run: |
           python -m pip check

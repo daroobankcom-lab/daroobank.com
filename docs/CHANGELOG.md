@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — Python artifact hash locks
+
+**Changes:** Added a runtime artifact lock with transitive pins and SHA-256 hashes, a direct-pin consistency check, and a separate hash lock for the development image's pip/setuptools upgrade. CI and Docker require hash verification; direct runtime versions and application/database behavior remain unchanged. See the [maintenance procedure](DEVELOPMENT_GUIDE.md#maintaining-python-dependency-locks).
+
+**Limits:** Hashes verify selected bytes against checked-in values, not publisher authenticity or package safety; image tags, initial image tooling and audit-tool dependencies remain outside these locks. This is not a fully reproducible or production-hardened build.
+
 ## 2026-11-22 — dependency advisory checks
 
 **Changes:** Added isolated `pip-audit` checks for resolved Python requirements and Python packages in the development image, plus an npm audit for browser dependencies. The local requirements and npm audits found no known advisories at the time of review. Older pip/setuptools in the ignored local development venv were updated after retaining the old wheels and package list under ignored `.cache/`. The development image now installs pinned newer pip/setuptools before the unchanged application requirements; no database or business logic changed.

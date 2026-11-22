@@ -16,7 +16,8 @@ For Django outside Docker, provision a PostgreSQL database/role or start only th
 
 ```sh
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m tools.verify_runtime_lock
+.venv/bin/pip install --require-hashes -r requirements.txt
 export DAROOBANK_DEBUG=1
 .venv/bin/python -m tools.wait_for_database
 .venv/bin/python manage.py migrate
@@ -24,6 +25,12 @@ export DAROOBANK_DEBUG=1
 .venv/bin/python manage.py test --noinput
 .venv/bin/python manage.py makemigrations --check --dry-run
 ```
+
+### Maintaining Python dependency locks
+
+`requirements.in` records the direct exact runtime pins; `requirements.txt` additionally pins transitive dependencies and SHA-256 hashes of published PyPI release artifacts. Do not install `requirements.in` alongside the lock: pip requires hashes on every requirement in hash-checking mode. The image separately uses `requirements-build.txt` for its pip/setuptools upgrade. CI checks direct pins against the runtime lock, but that small checker is not a dependency resolver and does not verify artifact hashes; pip does that during installation.
+
+To update, review the direct and transitive versions and their dependency metadata, update `requirements.in` and the lock together, obtain and independently review hashes of the intended distribution artifacts from a trusted source, and run the lock check, a clean `pip install --require-hashes -r requirements.txt`, `pip check`, advisory scans and the full tests/CI. Review platform markers and compatible wheels for each target environment. The lock includes source distributions and multiple platforms' artifacts; builds from source have additional build-dependency risks. Docker's base Python/initial pip and the audit tool's dependencies are not covered by these locks. Hashes only verify bytes against the checked-in values; they do not establish publisher identity, provenance or safety. This is not a fully reproducible build.
 
 The Django test runner creates and destroys a separate `test_` database; the configured role needs CREATEDB permission and must not share a test name with valuable data or concurrent runs. Do not point the runner at a production server. Tests and local data must be synthetic. `DAROOBANK_SECRET_KEY` is required when debug is off; host names are supplied by `DAROOBANK_ALLOWED_HOSTS`. Development preview accepts `.e2b.app`; production deployment is not configured or authorized.
 

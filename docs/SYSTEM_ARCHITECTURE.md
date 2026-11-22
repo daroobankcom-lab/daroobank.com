@@ -1,6 +1,6 @@
 # System architecture
 
-**Current:** Django SSR and a small catalog/search and presentation-detail slice run locally on SQLite. Search and detail share public eligibility checks, but no clinical or source-rights approval exists. The development-only staff portal uses Django authentication and sessions, scoped view/add/review permissions, bounded candidate staging and preliminary review events; it is disabled outside debug mode. This is not an approval or tamper-proof audit system and SQLite concurrency limitations apply. There are no workers or production services yet. **Target architecture below is proposed:** a modular monolith with PostgreSQL transaction boundaries and separate operational processes, not premature microservices.
+**Current:** Django SSR and a small catalog/search and presentation-detail slice run locally on SQLite. Search and detail share public eligibility checks, but no clinical or source-rights approval exists. The development-only staff portal uses Django authentication and sessions, scoped view/add/review permissions, separate product and price candidate staging and preliminary review events; it is disabled outside debug mode. This is not an approval or tamper-proof audit system and SQLite concurrency limitations apply. There are no workers or production services yet. **Target architecture below is proposed:** a modular monolith with PostgreSQL transaction boundaries and separate operational processes, not premature microservices.
 
 ```mermaid
 flowchart LR

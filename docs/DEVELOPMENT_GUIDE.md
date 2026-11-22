@@ -19,7 +19,7 @@ export DAROOBANK_DEBUG=1
 ## Actual layout
 
 - `daroobank/`: Django settings, URL configuration and WSGI entrypoint.
-- `catalog/`: narrow presentation model, search normalization/service, read-only search and presentation detail views/API, and tests.
+- `catalog/`: narrow presentation model, public search and detail, and development-only private product candidate intake/review.
 - `pricing/`: local CSV candidate staging, inspection and preliminary independent review; no public prices or network crawler.
 - `templates/`, `static/`: server-rendered Persian pages, shared tokens and locally hosted OFL-licensed Vazirmatn font.
 - `docs/`: product, decisions, source research and operational plans.
@@ -28,7 +28,7 @@ The SQLite schema and publication flag are not a complete provenance, review, au
 
 ## Local price-candidate staging
 
-This local operator-only tool reads an explicitly authorized UTF-8 CSV; it does not download data, publish prices, approve products or alter catalog records. The only included CSV is **synthetic** and must never be treated as Iranian market data. After migrations, try a dry run:
+This local operator-only tool reads an explicitly authorized UTF-8 CSV; it does not download data, publish prices, approve products or alter catalog records. The included price CSV is **synthetic** and must never be treated as Iranian market data. After migrations, try a dry run:
 
 ```sh
 DAROOBANK_DEBUG=1 .venv/bin/python manage.py stage_price_csv \
@@ -86,3 +86,13 @@ Search uses forward cursor pagination: each request validates at most 150 SQL-ma
 ## Development API contract
 
 The implemented public read endpoints are specified in [OpenAPI 3.0.3](openapi.json), available locally at `/api/v1/openapi.json`. It describes current behavior only, not planned clinical, price, write or authentication APIs. Search cursors are query-bound and expire after one hour; changing or deleting the anchor can invalidate a cursor, so restart the search. Cursors are signed, not encrypted, and expose an anchor ID. They do not authorize access. Search terms and cursor URLs can be logged by web servers; never search with patient data. The schema and tests do not establish source rights, security, accessibility or production readiness.
+
+## Development-only product candidate intake
+
+With `DAROOBANK_DEBUG=1`, `/staff/products/` is an internal queue of source assertions, separate from `ProductPresentation`. Active staff need `catalog.view_productcandidate` to see the queue and details, plus `catalog.add_productcandidate` to preview or stage at `/staff/products/import/`. Staff with only catalog view permission are redirected to that queue after ordinary login; explicit safe `next` still takes precedence. Use separate development-only accounts: there is no seeded account or audited provisioning.
+
+Upload the **synthetic** [`examples/product_candidates.synthetic.csv`](../examples/product_candidates.synthetic.csv) for a preview. UTF-8 CSV must contain exactly the columns `source_record_id,name_fa,name_en,manufacturer,strength,dosage_form,package_description,irc` in any order. `name_en` and `irc` may be empty. Input is limited to 1 MiB and 1,000 records; all rows must validate before any write. No original file is retained by application logic, but Django may buffer an upload temporarily. Source URL must be HTTPS without userinfo, query or fragment. Only structured fields are stored. Operators must exclude sensitive/patient data, credentials, private URLs and data lacking permission; the application does not detect all such material. Staging requires an explicit assertion of rights for collection and internal storage, not proof of those rights. Preview does not write. Duplicate `(source URL, record ID, payload fingerprint)` replays preserve the first authenticated submitter; changed source content creates a separate revision. No network retrieval or matching is performed.
+
+A different active staff user with `catalog.view_productcandidate` and `catalog.review_productcandidate` can record a reasoned preliminary decision: refer for further review, reject, or defer. A submitter cannot review their own record. The queue can filter by the latest review decision or absence of a review; these are triage labels, not approvals. Reviews capture the actor, time, structured candidate snapshot and fingerprint; the detail page shows the 25 latest. Stale review versions, changed payload/source and invalid candidate structures fail closed in sequential use. No action here creates, updates or publishes a `ProductPresentation`, nor authorizes a price or clinical content.
+
+SQLite `select_for_update` does not provide row locks: concurrent reviews/edits have not been proven safe. Model `save()`/`delete()` guards do not block bulk ORM or direct SQL changes; hashes are not signatures or proof of rights, identity or an immutable audit trail. The fingerprint covers source name, URL and structured fields, but not actor or attestation; the snapshot records them and privileged DB edits can alter both. Do not use this local flow for real data or release decisions. Production requires reviewed rights governance, authorization, concurrent transaction design/tests on its actual database, durable audit, retention, request limits and independent security review.

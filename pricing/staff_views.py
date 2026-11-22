@@ -6,6 +6,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from .forms import PriceReviewForm, PriceUploadForm
@@ -28,6 +29,12 @@ DECISION_LABELS = {'accept_suggestion': 'پذیرش اولیه پیشنهاد ت
 class StaffLoginView(LoginView):
     template_name = 'staff/login.html'
     extra_context = {'page_title': 'ورود همکاران | داروبانک', 'description': 'ورود به بخش داخلی داروبانک.', 'noindex': True, 'private_staff': True}
+
+    def get_default_redirect_url(self):
+        user = self.request.user
+        if user.is_staff and user.has_perm('catalog.view_productcandidate') and not user.has_perm('pricing.view_pricecandidate'):
+            return reverse('staff_products')
+        return super().get_default_redirect_url()
 
 
 class StaffLogoutView(LogoutView):
@@ -85,6 +92,7 @@ def price_candidates(request):
         'page_title': 'نامزدهای قیمت | داروبانک', 'description': 'بخش داخلی بررسی داده‌های قیمت.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'stats': stats,
         'total': sum(stats.values()), 'can_import': request.user.has_perm('pricing.add_pricecandidate'),
+        'can_products': request.user.has_perm('catalog.view_productcandidate'),
     })
 
 

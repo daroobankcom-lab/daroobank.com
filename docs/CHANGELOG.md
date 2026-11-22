@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — read-only lock metadata comparison
+
+**Changes:** Added an optional standard-library tool to compare both checked-in Python hash locks with current PyPI release metadata, plus offline tests for mismatches, invalid input and registry failures. It does not change lock files, application logic or data. See the [maintenance procedure](DEVELOPMENT_GUIDE.md#maintaining-python-dependency-locks).
+
+**Limits:** This compares metadata hash sets rather than downloading artifacts or independently authenticating them. Registry changes and intentional artifact subsets can cause mismatches; a match is not a safety or reproducibility guarantee.
+
 ## 2026-11-22 — Python artifact hash locks
 
 **Changes:** Added a runtime artifact lock with transitive pins and SHA-256 hashes, a direct-pin consistency check, and a separate hash lock for the development image's pip/setuptools upgrade. CI and Docker require hash verification; direct runtime versions and application/database behavior remain unchanged. See the [maintenance procedure](DEVELOPMENT_GUIDE.md#maintaining-python-dependency-locks).

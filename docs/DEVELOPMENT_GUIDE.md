@@ -193,3 +193,19 @@ The set hash covers ordered assertion IDs, payload hashes and recorder IDs, not 
 The directories and paths above are examples; create protected directories first. For an application drill, use a disposable, isolated checkout of **the same application version**, with its own environment and no real data or production access. Restore to its absent `db.sqlite3`, then from that checkout run `DAROOBANK_DEBUG=1 .venv/bin/python manage.py migrate --check` and `DAROOBANK_DEBUG=1 .venv/bin/python manage.py check`; inspect the expected synthetic data without exposing accounts. `migrate --check` checks for unapplied migrations, not whether the data is correct or reversible. Dispose of drill copies securely according to the local policy. Do not replace the original or a running database using this tool.
 
 SQLite may need the source's WAL and shared-memory sidecars; copying just a live `db.sqlite3` with ordinary file tools can miss committed data. A failed operation tries to remove its new file, but after a crash, power failure or cleanup error treat any leftover as incomplete; the utility does not manage sidecars. Verification only covers SQLite structural and foreign-key checks; it does not prove application correctness, source rights, migration compatibility, confidentiality, authenticity or completeness of external files. The 30-second best-effort backup deadline does not cover blocking filesystem I/O or integrity checks. See [ADR 0007](ARCHITECTURE_DECISIONS/0007-local-sqlite-snapshots.md) and [operations](OPERATIONS_RUNBOOK.md#local-synthetic-restore-drill). Production requires an independently designed and tested encrypted off-host backup and recovery policy.
+
+
+## Development-only catalog quality inspection
+
+The private, read-only `/staff/catalog/quality/` page requires an active staff user with `catalog.view_productpresentation`; that permission is separate from candidate, price, source and clinical permissions. The DEBUG-only portal, privacy headers and normal login apply. A user with only this presentation permission is routed here on login. The page shows IDs, technical status and fixed warnings, not the underlying names or URLs. Granting the permission nevertheless allows staff to enumerate internal IDs and technical flags, including drafts. Use only synthetic, non-sensitive data.
+
+For a trusted local operator, the management command uses the same inspector and prints JSON; it does not apply web authentication or the DEBUG gate:
+
+```sh
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py inspect_catalog_quality
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py inspect_catalog_quality --after 50
+```
+
+Each call inspects up to 50 ascending IDs greater than `after`, plus one lookahead; use the returned `next_after` value for the next call, not a presumed count. It compares stored search/IRC projections with the current fields; warns about control/invalid text and URLs that fail the stricter private-source URL policy; checks the current public technical eligibility prefilter and predicate; and flags normalized IRC duplicates only among valid-index rows in **that batch**, including unpublished rows. URLs with queries may pass the existing public filter but fail this separate advisory policy. A corrupt text field reports public-filter status as unknown rather than asserting passage or rejection. No names or URLs are returned, and nothing is fetched or changed.
+
+No warnings does not mean the content, source, permission, identity or clinical data is correct. The public flag and filter are not approval. No checks establish uniqueness across the full catalog; changed/deleted/new rows can make successive pages inconsistent, and empty results are not proof of complete catalog quality. Limit is by rows, not bytes, query cost or duration. The command and page cannot fix issues and are not a production monitoring, release or audit system. See [ADR 0008](ARCHITECTURE_DECISIONS/0008-catalog-quality-inspection.md).

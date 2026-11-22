@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — read-only catalog quality inspection
+
+**Changes:** Added a permission-scoped debug staff page and local JSON command for bounded ID-ordered product-presentation inspection. Reports flag projection drift, stricter source URL warnings, published rows rejected by technical filters, invalid text and page-local IRC duplicates; no field values, automatic repairs or publication changes. Added synthetic permission, drift, pagination, corruption and read-only tests.
+
+**Limits:** Duplicate checks only cover one batch, and scans are not snapshots. Passing checks is not clinical, identity, rights or publication approval; stricter URL hygiene is advisory and does not change existing public eligibility. CLI and service are outside the web gate; no production monitoring, browser, security, source or clinical validation was performed.
+
 ## 2026-11-22 — local SQLite snapshots and development CI
 
 **Changes:** Added a non-overwriting, private-mode SQLite online snapshot and structural/foreign-key check utility; the same utility creates isolated restore copies. Added synthetic WAL, failure and migrated-application restore-drill tests, usage and limits, and a GitHub Actions workflow for dependency, configuration, migration and test checks.

@@ -59,3 +59,6 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 
 
 `ingestion/test_sqlite_snapshot.py` uses temporary synthetic SQLite databases to exercise non-overwrite behavior, permissions, WAL committed versus uncommitted data, integrity/foreign-key failure, deadline cleanup, CLI and an isolated migrated-Django backup/restore drill with `migrate --check` and `check`. It does not prove encrypted storage, crash/disk-full recovery, blocked I/O deadlines, malicious-directory resistance, external asset recovery or production backup adequacy. The GitHub Actions workflow runs the Django suite and checks; its hosted execution must be inspected separately.
+
+
+`catalog/test_quality.py` exercises bounded ascending scans, page-local duplicate IRCs, drift and stricter URL warnings, current public-filter outcomes, unknown corrupt-text outcomes, no output of product/source text, read-only behavior, command validation, independent staff/group permissions, private headers, login, HTTP method/debug gate and no writes using synthetic records. A mocked socket path is not a network sandbox. These tests do not establish full-catalog uniqueness, concurrent snapshot consistency, source rights, clinical validity, browser accessibility, production security or performance.

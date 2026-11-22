@@ -90,3 +90,8 @@ The clinical queue and its create/revise/review routes are under the normal debu
 
 
 Supplementary clinical assertions use the same separate clinical view/add permissions and the normal staff CSRF/debug/private gates. No source is fetched. New review snapshots contain the bounded supplementary reference metadata and recorder IDs; access and retention need consideration even though the development portal must only contain synthetic data. Sequential evidence-set mismatches, malformed snapshots and over-limit assertion sets fail closed in the application, but assertion payload hashes do not cover recorder/time, while set hashes include recorder IDs but not timestamps; neither is a signature. SQLite locking and bulk ORM/SQL bypasses prevent claims of concurrent separation or tamper-resistant audit. Direct service calls are outside the web debug gate.
+
+
+## Development catalog quality inspector
+
+The DEBUG-only `/staff/catalog/quality/` requires an active staff user with `catalog.view_productpresentation`, separate from candidate permissions, and applies staff privacy headers. It reveals IDs, technical flags and diagnostic codes for both published and unpublished presentations, not their raw names or URLs. The read-only management command and Python service operate outside the web gate and do not enforce user permissions. Use only synthetic local data and avoid logging/sharing reports. The inspector is a bounded diagnostic, not an authorization, audit, sanitization, identity, rights or clinical check; it neither repairs records nor changes public eligibility. Scans are not consistent snapshots or production load guarantees. See [ADR 0008](ARCHITECTURE_DECISIONS/0008-catalog-quality-inspection.md).

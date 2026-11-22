@@ -1,4 +1,6 @@
 """Development-only registry of unverified source claims."""
+import re
+
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
@@ -7,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from .date_inspection import DATE_CATEGORIES, MAX_PK, inspect_dates
 from .forms import SourceClaimForm, SourceReviewForm
 from .models import SourceClaim, SourceClaimReview
 from .services import ADD, FIELDS, REVIEW, VIEW, ClaimError, ReviewConflict, date_label, record_claim, require_staff, review_claim
@@ -46,6 +49,22 @@ def claims(request):
         'can_add': request.user.has_perm(ADD), 'can_prices': request.user.has_perm('pricing.view_pricecandidate'),
         'can_products': request.user.has_perm('catalog.view_productcandidate'),
         'can_clinical': request.user.has_perm('clinical.view_clinicaldraft'),
+    })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def date_inspection(request):
+    require_staff(request.user, VIEW)
+    raw_after = request.GET.get('after', '0')
+    category = request.GET.get('category', '')
+    if (not re.fullmatch(r'[0-9]{1,19}', raw_after) or int(raw_after) > MAX_PK
+            or category not in ('', *DATE_CATEGORIES)):
+        return HttpResponseBadRequest('Invalid inspection parameters.')
+    report = inspect_dates(after=int(raw_after), category=category)
+    return render(request, 'staff/source_date_inspection.html', {
+        'page_title': 'پیمایش تاریخ ادعاها | داروبانک', 'description': 'بازرسی محدود تاریخ‌های اعلام‌شده.',
+        'noindex': True, 'private_staff': True, 'report': report,
     })
 
 

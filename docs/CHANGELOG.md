@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — bounded source claim date inspection
+
+**Changes:** Added a private read-only date inspection for source viewers: a 50-claim ascending-ID scan with an optional batch-local category filter and continuation even through empty batches. It shows IDs and date categories, not source names or URLs, and does not modify data. Synthetic tests cover bounded traversal, permissions, invalid inputs, live changes and browser navigation.
+
+**Limits:** This is neither a fixed snapshot nor proof of source rights, coverage or authorization; dates and assertions are unverified. It is not an alert, a scheduler, or a production-scale monitoring system. See the [development guide](DEVELOPMENT_GUIDE.md#development-only-source-rights-assertions).
+
 ## 2026-11-22 — page-local source claim date summary
 
 **Changes:** Added a read-only date-category summary for the currently displayed, review-filtered page of source claims, using one local date for all rows. Tests cover boundaries, invalid claims, permissions, pagination, no writes and synthetic Chromium layout/accessibility checks.

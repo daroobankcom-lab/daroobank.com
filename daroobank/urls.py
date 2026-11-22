@@ -28,6 +28,7 @@ urlpatterns = [
     path('staff/clinical/<int:pk>/review/', clinical_staff_views.review, name='staff_clinical_review'),
     path('staff/clinical/<int:pk>/', clinical_staff_views.detail, name='staff_clinical_detail'),
     path('staff/sources/', source_staff_views.claims, name='staff_sources'),
+    path('staff/sources/dates/', source_staff_views.date_inspection, name='staff_source_date_inspection'),
     path('staff/sources/new/', source_staff_views.create, name='staff_source_create'),
     path('staff/sources/<int:pk>/review/', source_staff_views.review, name='staff_source_review'),
     path('staff/sources/<int:pk>/', source_staff_views.detail, name='staff_source_detail'),

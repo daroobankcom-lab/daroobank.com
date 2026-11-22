@@ -64,3 +64,6 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 
 
 `daroobank/test_postgresql.py` tests PostgreSQL/psycopg selection, UTF-8 Persian/English and JSONB round-trips, representative unique/index/foreign-key behavior, invalid encoding rejection, required configuration and startup wait, plus a two-connection clinical stale-review race. These synthetic tests are not proof of complete concurrency safety, disaster recovery or production performance.
+
+
+`ingestion/test_concurrency.py` uses separate PostgreSQL connections and synthetic reversed CSVs, observes an advisory-lock wait via `pg_locks`, checks product/price receipt and manifest order, recorder preservation, rollback recovery, direct stages, previews and lock scopes/savepoints. `clinical/test_concurrency.py` tests competing evidence additions, the ten-reference boundary and review/add races; the older clinical stale-review race is in `daroobank/test_postgresql.py`. These tests do not establish correctness under arbitrary direct SQL, older writers, other isolation levels, all deadlocks, crashes, long-running transactions or production load.

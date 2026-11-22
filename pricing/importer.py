@@ -12,6 +12,7 @@ from pathlib import Path
 from django.db import transaction
 
 from daroobank.validation import valid_private_source_url
+from ingestion.locks import lock_source_stage
 from catalog.models import ProductPresentation
 from catalog.normalization import normalize_search
 from .models import PriceCandidate
@@ -186,6 +187,8 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
     rows = parse_csv(path)
     counts = {'rows': len(rows), 'suggested': 0, 'ambiguous': 0, 'unmatched': 0, 'created': 0, 'duplicates': 0}
     with transaction.atomic():
+        if commit:
+            lock_source_stage('price', source_url)
         for row, currency, amount, effective, published in rows:
             match_status, product = suggest_product(row)
             counts[match_status] += 1

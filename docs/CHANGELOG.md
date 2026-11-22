@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — PostgreSQL staging concurrency
+
+**Changes:** Product and price committed CSV stages now take a transaction-level advisory lock for the exact source URL and domain, including direct services, CLI and web receipts. Added PostgreSQL two-connection tests for reversed import order, lock waiting, rollback, preview, receipt integrity and concurrent clinical evidence/triage. No schema or publication behavior changed.
+
+**Limits:** The lock is cooperative, may wait without an application timeout and can be bypassed by other writers. Different URL spellings are distinct; collisions can serialize unrelated imports. It does not protect catalog matching from concurrent insertion or establish exactly-once receipts, source rights, complete concurrency safety or production readiness.
+
 ## 2026-11-22 — PostgreSQL-only database
 
 **Changes:** Configured Django and psycopg for PostgreSQL exclusively, introduced environment-based connection settings, PostgreSQL-backed CI and a development Compose stack with persistent volume and readiness checks. Existing Django migrations and models remain in place. Replaced former database-specific backup tooling with PostgreSQL-native dump/restore guidance. Added PostgreSQL integration and concurrent stale-review tests.

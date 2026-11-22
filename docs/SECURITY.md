@@ -95,3 +95,8 @@ Supplementary clinical assertions use the same separate clinical view/add permis
 ## Development catalog quality inspector
 
 The DEBUG-only `/staff/catalog/quality/` requires an active staff user with `catalog.view_productpresentation`, separate from candidate permissions, and applies staff privacy headers. It reveals IDs, technical flags and diagnostic codes for both published and unpublished presentations, not their raw names or URLs. The read-only management command and Python service operate outside the web gate and do not enforce user permissions. Use only synthetic local data and avoid logging/sharing reports. The inspector is a bounded diagnostic, not an authorization, audit, sanitization, identity, rights or clinical check; it neither repairs records nor changes public eligibility. Scans are not consistent snapshots or production load guarantees. See [ADR 0008](ARCHITECTURE_DECISIONS/0008-catalog-quality-inspection.md).
+
+
+## Cooperative staging locks
+
+Product and price committed CSV staging uses PostgreSQL transaction advisory locks keyed by domain and exact source URL; previews do not lock. Receipt/manifest writes are inside the outer transaction. Only writers using the current services participate; older processes, ORM bulk operations and SQL can bypass the protocol. A long transaction or callback can make other same-source requests wait, and the service does not set a lock timeout or retry policy. This protects neither source authorization nor matching against concurrent catalog changes, and does not create immutable or exactly-once audit records. See [ADR 0010](ARCHITECTURE_DECISIONS/0010-staging-concurrency.md).

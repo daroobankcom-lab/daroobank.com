@@ -10,6 +10,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
 from daroobank.validation import valid_private_source_url, valid_review_reason
+from ingestion.locks import lock_source_stage
 
 from .models import ProductCandidate, ProductCandidateReview
 from .normalization import normalize_search
@@ -106,6 +107,7 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
     counts = {'rows': len(rows), 'created': 0, 'duplicates': 0}
     with transaction.atomic():
         if commit:
+            lock_source_stage('product', source_url)
             for row in rows:
                 digest = fingerprint(source_name, source_url, row)
                 candidate, created = ProductCandidate.objects.get_or_create(

@@ -230,3 +230,20 @@ DAROOBANK_DEBUG=1 .venv/bin/python manage.py inspect_catalog_quality --after 50
 Each call inspects up to 50 ascending IDs greater than `after`, plus one lookahead; use the returned `next_after` value for the next call, not a presumed count. It compares stored search/IRC projections with the current fields; warns about control/invalid text and URLs that fail the stricter private-source URL policy; checks the current public technical eligibility prefilter and predicate; and flags normalized IRC duplicates only among valid-index rows in **that batch**, including unpublished rows. URLs with queries may pass the existing public filter but fail this separate advisory policy. A corrupt text field reports public-filter status as unknown rather than asserting passage or rejection. No names or URLs are returned, and nothing is fetched or changed.
 
 No warnings does not mean the content, source, permission, identity or clinical data is correct. The public flag and filter are not approval. No checks establish uniqueness across the full catalog; changed/deleted/new rows can make successive pages inconsistent, and empty results are not proof of complete catalog quality. Limit is by rows, not bytes, query cost or duration. The command and page cannot fix issues and are not a production monitoring, release or audit system. See [ADR 0008](ARCHITECTURE_DECISIONS/0008-catalog-quality-inspection.md).
+
+
+### Indexed IRC clues across catalog batches
+
+From the quality page, choose **بررسی سرنخ‌های IRC** for a presentation ID. The separate read-only page inspects other rows with the same stored normalized IRC across the whole catalog, including unpublished rows. Its anchor must have a nonempty IRC and a consistent normalized projection. Each returned row is checked again against its original IRC; an inconsistent stored index is flagged, not presented as a consistent clue. No names, actual IRCs or source URLs are deliberately displayed. The page requires the same `catalog.view_productpresentation` permission and DEBUG-only staff gate as the quality scan.
+
+Trusted local operators may use the same lookup independently of web permissions:
+
+```sh
+.venv/bin/python manage.py inspect_catalog_irc --id 1
+# If next_cursor is not null, copy the exact token from the JSON result:
+.venv/bin/python manage.py inspect_catalog_irc --id 1 --cursor 'PASTE_RETURNED_CURSOR'
+```
+
+Use an existing presentation ID; the commands and data are synthetic examples. Each page examines at most 50 indexed candidates and one lookahead, ordered by ID. Cursor tokens expire after one hour, are signed and bind the anchor ID and its normalized code; an invalid, expired or changed anchor requires restarting. Tokens contain IDs and a keyed code digest, not raw IRC text. They are not encrypted or an authorization mechanism: a known debug secret and guessable codes can compromise the digest, and URLs/tokens may appear in logs.
+
+This targeted lookup can find consistent indexed clues beyond the original 50-row scan, but it is **not a complete catalog-wide duplicate audit**. Missing or stale indexes can conceal records; edits between requests can change results, and a finished scan does not prove uniqueness. It does not establish product identity, interchangeability, source rights or clinical validity. Database work and response time are not bounded by the row cap. See [ADR 0011](ARCHITECTURE_DECISIONS/0011-indexed-irc-inspection.md).

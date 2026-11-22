@@ -17,4 +17,6 @@
 
 - [0010: per-source staging concurrency](0010-staging-concurrency.md) — development implementation, 22 November 2026.
 
+- [0011: indexed IRC inspection across batches](0011-indexed-irc-inspection.md) — development implementation, 22 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

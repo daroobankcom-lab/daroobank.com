@@ -100,3 +100,8 @@ The DEBUG-only `/staff/catalog/quality/` requires an active staff user with `cat
 ## Cooperative staging locks
 
 Product and price committed CSV staging uses PostgreSQL transaction advisory locks keyed by domain and exact source URL; previews do not lock. Receipt/manifest writes are inside the outer transaction. Only writers using the current services participate; older processes, ORM bulk operations and SQL can bypass the protocol. A long transaction or callback can make other same-source requests wait, and the service does not set a lock timeout or retry policy. This protects neither source authorization nor matching against concurrent catalog changes, and does not create immutable or exactly-once audit records. See [ADR 0010](ARCHITECTURE_DECISIONS/0010-staging-concurrency.md).
+
+
+## Indexed IRC inspection
+
+The DEBUG-only indexed IRC clue page uses `catalog.view_productpresentation` and can reveal IDs and status for unpublished presentations; group permissions apply. It does not intentionally render source names, URLs or IRC values. Its signed cursor contains IDs and a keyed digest; it is not encrypted, not an access grant and can be guessable when a known debug secret protects low-entropy codes. Cursor URLs may be logged. The local command/service operate outside the web gate. A stale or corrupt index can hide matching records and results are not a snapshot, evidence, authorization or identity verification; use synthetic data only. See [ADR 0011](ARCHITECTURE_DECISIONS/0011-indexed-irc-inspection.md).

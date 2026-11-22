@@ -20,7 +20,7 @@ Successful development web CSV staging also records a limited, permission-scoped
 
 The debug-only [clinical drafting workspace](docs/DEVELOPMENT_GUIDE.md#development-only-clinical-draft-triage) supports synthetic statement drafts, bounded supplementary reference assertions and independent preliminary triage snapshots. It contains no reviewed clinical content and cannot approve or publish.
 
-A private, read-only [catalog quality inspector](docs/DEVELOPMENT_GUIDE.md#development-only-catalog-quality-inspection) checks small batches for technical drift without verifying or changing data.
+A private, read-only [catalog quality inspector](docs/DEVELOPMENT_GUIDE.md#development-only-catalog-quality-inspection) checks small batches for technical drift and offers targeted indexed IRC clues across batches, without verifying or changing data.
 
 Use [PostgreSQL-native backups and isolated restore drills](docs/DEVELOPMENT_GUIDE.md#postgresql-backup-and-isolated-restore); basic GitHub Actions development checks use PostgreSQL. Dumps are unencrypted unless separately protected and are not a production backup solution.
 

@@ -67,3 +67,6 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 
 
 `ingestion/test_concurrency.py` uses separate PostgreSQL connections and synthetic reversed CSVs, observes an advisory-lock wait via `pg_locks`, checks product/price receipt and manifest order, recorder preservation, rollback recovery, direct stages, previews and lock scopes/savepoints. `clinical/test_concurrency.py` tests competing evidence additions, the ten-reference boundary and review/add races; the older clinical stale-review race is in `daroobank/test_postgresql.py`. These tests do not establish correctness under arbitrary direct SQL, older writers, other isolation levels, all deadlocks, crashes, long-running transactions or production load.
+
+
+`catalog/test_quality_irc.py` exercises indexed clues across the original batch boundary, 50-row forward pagination, published/unpublished records, stale/invalid indexes, cursor binding/tampering/expiry/anchor changes, private permissions, methods, headers, local CLI and no writes or raw data rendering. It uses synthetic PostgreSQL data and does not establish full-catalog completeness, identity, concurrent snapshot consistency, medical validity, browser accessibility or production load/security.

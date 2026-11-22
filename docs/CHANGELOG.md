@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — cross-batch indexed IRC clues
+
+**Changes:** Added a private, permission-scoped indexed IRC inspection page and local command anchored on a presentation ID. Forward signed cursors paginate bounded indexed clues across the catalog; inconsistent indexes are flagged, anchor drift or cursor tampering stops inspection, and raw names/URLs/codes are not deliberately output.
+
+**Limits:** This is not a complete catalog-wide duplicate audit: stale indexes can hide rows and concurrent changes make pages non-snapshot. Codes and cursors are not proof of identity, rights or confidentiality; no repair or publication occurs. No browser accessibility, medical or production validation was performed.
+
 ## 2026-11-22 — PostgreSQL staging concurrency
 
 **Changes:** Product and price committed CSV stages now take a transaction-level advisory lock for the exact source URL and domain, including direct services, CLI and web receipts. Added PostgreSQL two-connection tests for reversed import order, lock waiting, rollback, preview, receipt integrity and concurrent clinical evidence/triage. No schema or publication behavior changed.

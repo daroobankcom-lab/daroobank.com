@@ -1,6 +1,6 @@
 # ADR 0008: bounded, read-only catalog quality inspection
 
-Status: development-only implementation, 22 November 2026.
+Status: development-only implementation, 22 November 2026; extended by [ADR 0011](0011-indexed-irc-inspection.md). The original scan remains page-local.
 
 ## Decision
 

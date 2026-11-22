@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — internal inspection keyboard and contrast checks
+
+**Changes:** Styled numeric inspection filters consistently with the existing controls. Expanded synthetic Chromium coverage for keyboard focus and Enter submission on source-date and catalog-quality inspections, including forced-colors emulation for the source-date form. Added computed text contrast checks for selected workspace, source summary and scan elements; deliberate low-contrast, background-image and missing-focus mutations are rejected.
+
+**Limits:** These checks cover selected text and controls on known opaque surfaces, not all pixels, pages, assistive technologies or devices. Axe still reports inconclusive contrast items needing manual review. The changes do not alter application data or authorization.
+
 ## 2026-11-22 — bounded source claim date inspection
 
 **Changes:** Added a private read-only date inspection for source viewers: a 50-claim ascending-ID scan with an optional batch-local category filter and continuation even through empty batches. It shows IDs and date categories, not source names or URLs, and does not modify data. Synthetic tests cover bounded traversal, permissions, invalid inputs, live changes and browser navigation.

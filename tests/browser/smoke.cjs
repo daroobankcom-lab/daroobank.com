@@ -73,6 +73,32 @@ async function checkKeyboardFocus(page, selector, label, container) {
          `${label}: outline contrast below 3:1 against container`);
 }
 
+// Selected plain-text elements on opaque, non-image surfaces only. Refuse
+// layers/opacity that would make this simple foreground/background test unsound.
+async function checkTextContrast(page, selector, containerSelector, label) {
+  const state = await page.locator(selector).first().evaluate((element, containerSelector) => {
+    const container = element.closest(containerSelector);
+    if (!container) throw new Error(`Missing contrast container ${containerSelector}`);
+    let node = element, reached = false;
+    while (node) {
+      const style = getComputedStyle(node);
+      if (style.opacity !== '1' || style.filter !== 'none' || style.mixBlendMode !== 'normal') {
+        throw new Error('Contrast needs review for opacity, filter or blending');
+      }
+      if (!reached) {
+        if (style.backgroundImage !== 'none') throw new Error('Contrast needs review for background images');
+        if (node !== container && style.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+          throw new Error('Contrast needs review for an intermediate background');
+        }
+        if (node === container) reached = true;
+      }
+      node = node.parentElement;
+    }
+    return {color: getComputedStyle(element).color, background: getComputedStyle(container).backgroundColor};
+  }, containerSelector);
+  assert(ratio(state.color, state.background) >= 4.5, `${label}: text contrast below 4.5:1`);
+}
+
 // Axe cannot reliably infer contrast through a gradient. Check these known
 // text colors against both opaque gradient endpoints; changes to the gradient
 // structure or transparency deliberately require a fresh review.
@@ -217,7 +243,11 @@ async function run() {
       assert.equal(await page.locator('a[href="/staff/catalog/identity/"]').count(), 1);
       assert.equal(await page.locator('a[href="/staff/prices/"]').count(), 0);
       await checkLayout(page, `staff workspace ${width}`);
-      if (width === 390) await auditAccessibility(page, 'staff workspace');
+      if (width === 390) {
+        await auditAccessibility(page, 'staff workspace');
+        await checkTextContrast(page, '.staff-alert', '.staff-alert', 'workspace warning');
+        await checkTextContrast(page, '.staff-candidate .staff-detail-link', '.staff-candidate', 'workspace link');
+      }
       await page.getByRole('link', {name: 'بدون بازبینی: نامزدهای فرآورده'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/products/');
       assert.equal(new URL(page.url()).search, '?status=pending');
@@ -231,17 +261,68 @@ async function run() {
       assert.match(await summary.locator('.staff-stat-grid > div').first().locator('span').innerText(), /گذشته/);
       assert.equal((await summary.locator('.staff-stat-grid > div').first().locator('strong').innerText()).trim(), '1');
       await checkLayout(page, `source date summary ${width}`);
-      if (width === 390) await auditAccessibility(page, 'source date summary');
+      if (width === 390) {
+        await auditAccessibility(page, 'source date summary');
+        await checkTextContrast(page, '#date-summary-heading', '.staff-section', 'summary heading');
+        await checkTextContrast(page, '.staff-stat-grid > div:first-child span', '.staff-stat-grid > div', 'summary label');
+        await checkTextContrast(page, '.staff-stat-grid > div:first-child strong', '.staff-stat-grid > div', 'summary count');
+      }
       await page.getByRole('link', {name: 'پیمایش محدود تاریخ ادعاها ←'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/sources/dates/');
+      assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
+      assert.equal(await page.getByLabel('وضعیت تاریخ در این بخش').count(), 1);
+      await page.getByRole('link', {name: 'فهرست ادعاهای منبع ←'}).focus();
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#after', `scan start ${width}`, '.staff-section');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#category', `scan category ${width}`, '.staff-section');
+      if (width === 390) {
+        const mutation = await page.addStyleTag({content: '#category:focus-visible { outline: none !important; }'});
+        await assert.rejects(checkKeyboardFocus(page, '#category', 'mutated scan category', '.staff-section'), /missing focus outline/);
+        await mutation.evaluate(node => node.remove());
+      }
       await page.locator('#category').selectOption('expired');
-      await page.getByRole('button', {name: 'بررسی بخش'}).click();
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '.staff-filter button', `scan submit ${width}`, '.staff-section');
+      await Promise.all([page.waitForURL('**/staff/sources/dates/?after=0&category=expired'), page.keyboard.press('Enter')]);
       assert.equal(new URL(page.url()).searchParams.get('category'), 'expired');
       assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
       assert.match(await page.locator('main').innerText(), /مطابق فیلتر در همین بخش: 1/);
       assert.equal(await page.getByRole('link', {name: 'جزئیات ادعا'}).count(), 1);
       await checkLayout(page, `source date scan ${width}`);
-      if (width === 390) await auditAccessibility(page, 'source date scan');
+      if (width === 390) {
+        await auditAccessibility(page, 'source date scan');
+        await checkTextContrast(page, '.staff-alert', '.staff-alert', 'scan warning');
+        await checkTextContrast(page, 'label[for="after"]', '.staff-section', 'scan start label');
+        await checkTextContrast(page, '#after', '#after', 'scan start value');
+        await checkTextContrast(page, 'label[for="category"]', '.staff-section', 'scan category label');
+        await checkTextContrast(page, '#category', '#category', 'scan category selection');
+        await checkTextContrast(page, '.staff-filter button', '.staff-filter button', 'scan submit text');
+        await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'scan result status');
+        await checkTextContrast(page, '.staff-candidate .staff-detail-link', '.staff-candidate', 'scan result link');
+        const mutation = await page.addStyleTag({content: '.staff-candidate p { color: #eee !important; }'});
+        await assert.rejects(checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'mutated status'), /below 4.5:1/);
+        await mutation.evaluate(node => node.remove());
+        const backgroundMutation = await page.addStyleTag({content: '.staff-candidate { background-image: linear-gradient(white, black) !important; }'});
+        await assert.rejects(checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'mutated background'), /background images/);
+        await backgroundMutation.evaluate(node => node.remove());
+      }
+      await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
+      await page.getByRole('link', {name: 'ورود به بازرسی کاتالوگ'}).click();
+      assert.equal(new URL(page.url()).pathname, '/staff/catalog/quality/');
+      assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
+      await page.getByRole('link', {name: 'صف نامزدهای فرآورده ←'}).focus();
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#after', `quality start ${width}`, '.staff-section');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '.staff-filter button', `quality submit ${width}`, '.staff-section');
+      await Promise.all([page.waitForURL('**/staff/catalog/quality/?after=0'), page.keyboard.press('Enter')]);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      await checkLayout(page, `catalog quality ${width}`);
+      if (width === 390) {
+        await auditAccessibility(page, 'catalog quality');
+        await checkTextContrast(page, '#after', '#after', 'quality start value');
+      }
       await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       await page.getByRole('link', {name: 'ورود به هویت ساختگی کاتالوگ'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/catalog/identity/');
@@ -346,6 +427,18 @@ async function run() {
     assert.equal(await accessiblePage.locator('.result-card').count(), 1);
     await checkLayout(accessiblePage, 'forced-colors search results');
     await login(accessiblePage, author);
+    await accessiblePage.goto(base + '/staff/sources/dates/');
+    await accessiblePage.getByRole('link', {name: 'فهرست ادعاهای منبع ←'}).focus();
+    await accessiblePage.keyboard.press('Tab');
+    await checkKeyboardFocus(accessiblePage, '#after', 'forced-colors scan start', '.staff-section');
+    await accessiblePage.keyboard.press('Tab');
+    await checkKeyboardFocus(accessiblePage, '#category', 'forced-colors scan category', '.staff-section');
+    await accessiblePage.locator('#category').selectOption('expired');
+    await accessiblePage.keyboard.press('Tab');
+    await checkKeyboardFocus(accessiblePage, '.staff-filter button', 'forced-colors scan submit', '.staff-section');
+    await Promise.all([accessiblePage.waitForURL('**/staff/sources/dates/?after=0&category=expired'), accessiblePage.keyboard.press('Enter')]);
+    assert.equal(await accessiblePage.getByRole('link', {name: 'جزئیات ادعا'}).count(), 1);
+    await checkLayout(accessiblePage, 'forced-colors source date scan');
     await accessiblePage.goto(base + '/staff/catalog/identity/new/ingredient/');
     await accessiblePage.locator('#id_source_name').focus();
     await accessiblePage.keyboard.press('Tab');

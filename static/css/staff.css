@@ -105,6 +105,7 @@
   font-size: 12px;
 }
 .staff-filter select,
+.staff-filter input[type="number"],
 .staff-filter button {
   font: inherit;
   font-size: 12px;
@@ -113,6 +114,10 @@
   border-radius: 8px;
   color: var(--ink);
   padding: 8px 11px;
+}
+.staff-filter input[type="number"] {
+  min-width: 0;
+  width: min(12rem, 100%);
 }
 .staff-filter button {
   font-weight: 700;

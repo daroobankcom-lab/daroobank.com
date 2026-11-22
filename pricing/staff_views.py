@@ -1,54 +1,46 @@
-"""Development-only, permission-gated viewing of unreviewed price candidates."""
+"""Development-only, permission-gated price staging and preliminary review."""
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count
-from django.shortcuts import get_object_or_404, render
-from django.views.decorators.http import require_safe
+from django.http import HttpResponseBadRequest
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
-from .importer import suggest_product
+from .forms import PriceReviewForm, PriceUploadForm
+from .importer import ImportValidationError, stage_csv, suggest_product
 from .models import PriceCandidate
+from .reviews import ReviewConflict, product_fingerprint, record_preliminary_review
 
 STATUS_LABELS = {
-    'suggested': 'پیشنهاد تطبیق',
-    'ambiguous': 'تطبیق مبهم',
-    'unmatched': 'بدون تطبیق',
-    'invalid': 'اطلاعات نامعتبر',
+    'suggested': 'پیشنهاد تطبیق', 'ambiguous': 'تطبیق مبهم',
+    'unmatched': 'بدون تطبیق', 'invalid': 'اطلاعات نامعتبر',
 }
 CATEGORY_LABELS = {
-    'official_consumer': 'مصرف‌کننده اعلام‌شده',
-    'retail': 'خرده‌فروشی',
-    'manufacturer': 'تولیدکننده',
-    'wholesale': 'عمده‌فروشی',
-    'unit': 'واحد',
+    'official_consumer': 'مصرف‌کننده اعلام‌شده', 'retail': 'خرده‌فروشی',
+    'manufacturer': 'تولیدکننده', 'wholesale': 'عمده‌فروشی', 'unit': 'واحد',
 }
-UNIT_LABELS = {
-    'package': 'بسته', 'tablet': 'قرص', 'capsule': 'کپسول',
-    'ampoule': 'آمپول', 'vial': 'ویال', 'ml': 'میلی‌لیتر',
-}
+UNIT_LABELS = {'package': 'بسته', 'tablet': 'قرص', 'capsule': 'کپسول', 'ampoule': 'آمپول', 'vial': 'ویال', 'ml': 'میلی‌لیتر'}
+DECISION_LABELS = {'accept_suggestion': 'پذیرش اولیه پیشنهاد تطبیق', 'reject': 'رد نامزد', 'defer': 'نیاز به بررسی بیشتر'}
 
 
 class StaffLoginView(LoginView):
     template_name = 'staff/login.html'
-    extra_context = {
-        'page_title': 'ورود همکاران | داروبانک',
-        'description': 'ورود به بخش داخلی داروبانک.',
-        'noindex': True, 'private_staff': True,
-    }
+    extra_context = {'page_title': 'ورود همکاران | داروبانک', 'description': 'ورود به بخش داخلی داروبانک.', 'noindex': True, 'private_staff': True}
 
 
 class StaffLogoutView(LogoutView):
     next_page = 'home'
 
 
-def _require_view_permission(user):
-    if not user.is_active or not user.is_staff or not user.has_perm('pricing.view_pricecandidate'):
+def _require_permission(user, extra=None):
+    if (not user.is_active or not user.is_staff or not user.has_perm('pricing.view_pricecandidate')
+            or (extra and not user.has_perm(extra))):
         raise PermissionDenied
 
 
 def _current_suggestion(candidate):
-    """Recalculate against current catalog; malformed stored data fails closed."""
     fields = candidate.source_fields
     required = ('irc', 'manufacturer', 'strength', 'dosage_form', 'package_description')
     if not isinstance(fields, dict) or any(not isinstance(fields.get(key), str) or not fields[key].strip() for key in required):
@@ -56,13 +48,33 @@ def _current_suggestion(candidate):
     return suggest_product(fields)
 
 
+def _detail_response(request, candidate, *, form=None, status=200):
+    current_status, current_product = _current_suggestion(candidate)
+    reviews = list(candidate.reviews.select_related('reviewer', 'reviewed_product').order_by('-pk')[:25])
+    can_review = bool(request.user.has_perm('pricing.review_pricecandidate') and candidate.staged_by_id
+                      and candidate.source_rights_attested and candidate.staged_by_id != request.user.pk)
+    if form is None and can_review:
+        form = PriceReviewForm(initial={
+            'expected_review': reviews[0].pk if reviews else 0,
+            'expected_product': current_product.pk if current_product else 0,
+            'expected_product_hash': product_fingerprint(current_product) if current_product else '',
+        })
+    return render(request, 'staff/price_detail.html', {
+        'page_title': 'جزئیات نامزد قیمت | داروبانک', 'description': 'جزئیات داده قیمت برای بررسی داخلی.',
+        'noindex': True, 'private_staff': True, 'candidate': candidate, 'current_product': current_product,
+        'current_label': STATUS_LABELS[current_status], 'snapshot_label': STATUS_LABELS.get(candidate.match_status, STATUS_LABELS['invalid']),
+        'category_label': CATEGORY_LABELS.get(candidate.price_category, 'نامشخص'),
+        'unit_label': UNIT_LABELS.get(candidate.unit, 'نامشخص'), 'reviews': reviews,
+        'review_form': form, 'can_review': can_review,
+    }, status=status)
+
+
 @login_required(login_url='staff_login')
 @require_safe
 def price_candidates(request):
-    _require_view_permission(request.user)
+    _require_permission(request.user)
     status = request.GET.get('status', '')
     if status and status not in dict(PriceCandidate.MATCH_CHOICES):
-        from django.http import HttpResponseBadRequest
         return HttpResponseBadRequest('Invalid filter.')
     stats = {item['match_status']: item['count'] for item in PriceCandidate.objects.values('match_status').annotate(count=Count('id'))}
     rows = PriceCandidate.objects.select_related('suggested_product').order_by('-collected_at', '-pk')
@@ -72,21 +84,54 @@ def price_candidates(request):
     return render(request, 'staff/prices.html', {
         'page_title': 'نامزدهای قیمت | داروبانک', 'description': 'بخش داخلی بررسی داده‌های قیمت.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'stats': stats,
-        'total': sum(stats.values()), 'status_labels': STATUS_LABELS,
+        'total': sum(stats.values()), 'can_import': request.user.has_perm('pricing.add_pricecandidate'),
+    })
+
+
+@login_required(login_url='staff_login')
+@require_http_methods(['GET', 'POST'])
+def price_upload(request):
+    _require_permission(request.user, 'pricing.add_pricecandidate')
+    form = PriceUploadForm(request.POST or None, request.FILES or None)
+    result = None
+    if request.method == 'POST' and form.is_valid():
+        data = form.cleaned_data
+        try:
+            result = stage_csv(
+                data['csv_file'], data['source_name'], data['source_url'],
+                commit=data['action'] == 'stage', rights_attested=data['rights_attested'], staged_by=request.user,
+            )
+            result['mode'] = data['action']
+        except ImportValidationError as exc:
+            form.add_error(None, 'فایل معتبر نیست؛ هیچ داده‌ای ثبت نشد. ' + str(exc))
+    return render(request, 'staff/upload.html', {
+        'page_title': 'ورود فایل قیمت | داروبانک', 'description': 'ورود مرحله‌ای فایل قیمت.',
+        'noindex': True, 'private_staff': True, 'form': form, 'result': result,
     })
 
 
 @login_required(login_url='staff_login')
 @require_safe
 def price_candidate_detail(request, pk):
-    _require_view_permission(request.user)
-    candidate = get_object_or_404(PriceCandidate.objects.select_related('suggested_product'), pk=pk)
-    current_status, current_product = _current_suggestion(candidate)
-    return render(request, 'staff/price_detail.html', {
-        'page_title': 'جزئیات نامزد قیمت | داروبانک', 'description': 'جزئیات داده قیمت برای بررسی داخلی.',
-        'noindex': True, 'private_staff': True, 'candidate': candidate, 'current_product': current_product,
-        'current_label': STATUS_LABELS[current_status],
-        'snapshot_label': STATUS_LABELS.get(candidate.match_status, STATUS_LABELS['invalid']),
-        'category_label': CATEGORY_LABELS.get(candidate.price_category, 'نامشخص'),
-        'unit_label': UNIT_LABELS.get(candidate.unit, 'نامشخص'),
-    })
+    _require_permission(request.user)
+    candidate = get_object_or_404(PriceCandidate.objects.select_related('suggested_product', 'staged_by'), pk=pk)
+    return _detail_response(request, candidate)
+
+
+@login_required(login_url='staff_login')
+@require_POST
+def price_review(request, pk):
+    _require_permission(request.user, 'pricing.review_pricecandidate')
+    candidate = get_object_or_404(PriceCandidate.objects.select_related('staged_by'), pk=pk)
+    form = PriceReviewForm(request.POST)
+    if not form.is_valid():
+        return _detail_response(request, candidate, form=form, status=400)
+    try:
+        record_preliminary_review(candidate_id=pk, actor=request.user, **form.cleaned_data)
+    except ReviewConflict as exc:
+        form.add_error(None, str(exc))
+        candidate.refresh_from_db()
+        return _detail_response(request, candidate, form=form, status=409)
+    except PriceCandidate.DoesNotExist:
+        return HttpResponseBadRequest('Candidate no longer exists.')
+    return redirect('staff_price_detail', pk=pk)

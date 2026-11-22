@@ -87,8 +87,11 @@ def parse_date(value, field):
 
 def parse_csv(path):
     try:
-        with Path(path).open('rb') as f:
-            data = f.read(MAX_FILE_BYTES + 1)
+        if hasattr(path, 'read'):
+            data = path.read(MAX_FILE_BYTES + 1)
+        else:
+            with Path(path).open('rb') as f:
+                data = f.read(MAX_FILE_BYTES + 1)
     except OSError as exc:
         raise ImportValidationError('Cannot read input file.') from exc
     if len(data) > MAX_FILE_BYTES:
@@ -135,9 +138,11 @@ def parse_csv(path):
         raise ImportValidationError('Invalid CSV format.') from exc
 
 
-def suggest_product(row):
+def suggest_product(row, *, lock=False):
     """Suggest only an exact unique presentation; human verification remains required."""
     possibilities = ProductPresentation.objects.filter(irc_normalized=normalize_search(row['irc']))
+    if lock:
+        possibilities = possibilities.select_for_update()
     fields = ('manufacturer', 'strength', 'dosage_form', 'package_description')
     matches = [p for p in possibilities if normalize_search(p.irc) == normalize_search(row['irc']) and all(
         normalize_search(getattr(p, field)) == normalize_search(row[field]) for field in fields
@@ -149,7 +154,13 @@ def suggest_product(row):
     return PriceCandidate.MATCH_UNMATCHED, None
 
 
-def stage_csv(path, source_name, source_url, *, commit=False):
+def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None):
+    if commit and not rights_attested:
+        raise ImportValidationError('Staging requires an explicit source-rights attestation.')
+    if staged_by is not None and (not staged_by.is_authenticated or not staged_by.is_active or not staged_by.is_staff
+                                  or not staged_by.has_perm('pricing.view_pricecandidate')
+                                  or not staged_by.has_perm('pricing.add_pricecandidate')):
+        raise ImportValidationError('The staging account lacks the required staff permissions.')
     source_name, source_url = validate_source(source_name, source_url)
     # Validate the whole file before any write; malformed input cannot partially stage.
     rows = parse_csv(path)
@@ -166,6 +177,7 @@ def stage_csv(path, source_name, source_url, *, commit=False):
                 source_url=source_url, source_record_id=row['source_record_id'], payload_sha256=digest,
                 defaults={
                     'source_name': source_name, 'source_fields': row,
+                    'source_rights_attested': rights_attested, 'staged_by': staged_by,
                     'original_amount': row['amount'], 'original_currency': currency,
                     'amount_rial': amount, 'price_category': row['category'], 'unit': row['unit'],
                     'effective_date': effective, 'source_published_date': published,

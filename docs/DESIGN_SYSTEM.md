@@ -1,6 +1,6 @@
 # Design system — current development slice
 
-The shared stylesheet `static/css/site.css` is used by every current page. This is a partial system, not a complete admin or clinical UI kit. Home, search, price-status and about pages share navigation, search, footer, cards, spacing, states and typography. The development-only staff queue and login share the same visual tokens, with supplemental `static/css/staff.css`. There are no production admin components, modals, charts or mobile app components yet.
+The shared stylesheet `static/css/site.css` is used by every current page. This is a partial system, not a complete admin or clinical UI kit. Home, search, price-status and about pages share navigation, search, footer, cards, spacing, states and typography. The development-only staff queue, upload, preliminary review and login share the same visual tokens, with supplemental `static/css/staff.css`. There are no production admin components, modals, charts or mobile app components yet.
 
 ## Direction and palette comparison
 

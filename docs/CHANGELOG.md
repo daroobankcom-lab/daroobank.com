@@ -1,5 +1,11 @@
 # Implementation changelog
 
+## 2026-11-22 — development-only price staging and preliminary review
+
+**Changes:** Added permission-gated CSV upload with preview or attested staging, authenticated submitter provenance, and a separate preliminary review permission. A different reviewer can record reasoned acceptance of a current unique match, rejection, or deferral. Records include a source snapshot and product fingerprint; sequential stale forms and inconsistent payloads fail closed. Existing/CLI candidates without a submitter cannot be reviewed here. No review publishes or approves prices. Added migrations, Persian UI and synthetic workflow tests. The full 45-test Django suite, local migration/check, migration drift check and pip check passed.
+
+**Limits:** Source permission is only asserted; no real sources or prices were loaded. Review history is not database-immutable; direct SQL/bulk ORM bypass model guards, and the hash is not a signature. SQLite does not support effective row-level `select_for_update`; matching can race with catalog changes on any DB without a stronger concurrency design. The staff portal remains debug-only and is not production-ready. No browser, penetration, concurrency or clinical validation was performed. Previous entries are historical snapshots.
+
 ## 2026-11-22 — development-only read-only staff queue
 
 **Previous state:** staged price candidates were inspectable only by a local CLI; there was no session-based web access.

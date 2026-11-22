@@ -45,7 +45,7 @@ class PriceImportTests(TestCase):
             writer.writerows(rows)
 
     def stage(self, commit=False):
-        return stage_csv(self.path, 'منبع آزمایشی', 'https://example.org/feed', commit=commit)
+        return stage_csv(self.path, 'منبع آزمایشی', 'https://example.org/feed', commit=commit, rights_attested=commit)
 
     def test_dry_run_does_not_write_and_command_requires_attestation(self):
         self.write_csv([self.row])
@@ -122,7 +122,7 @@ class PriceImportTests(TestCase):
         self.write_csv([self.row])
         for url in ['http://example.org', 'https://user:pass@example.org', 'https://example.org?key=secret', 'https://example.org/#fragment']:
             with self.subTest(url=url), self.assertRaises(ImportValidationError):
-                stage_csv(self.path, 'example', url, commit=True)
+                stage_csv(self.path, 'example', url, commit=True, rights_attested=True)
         self.assertEqual(PriceCandidate.objects.count(), 0)
 
     def test_missing_columns_invalid_dates_and_extra_data_fail_closed(self):

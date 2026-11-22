@@ -70,6 +70,7 @@ class ApiContractTests(TestCase):
         for path, url, params, status in [
             ('/api/v1/search/', reverse('search_api'), {'q': 'شرکت نمونه'}, 200),
             ('/api/v1/search/', reverse('search_api'), {'q': 'شرکت نمونه', 'cursor': 'bad'}, 400),
+            ('/api/v1/search/', reverse('search_api'), {'q': 'نمونه\x00نامعتبر'}, 400),
             ('/api/v1/products/{id}/', reverse('presentation_api', args=[self.product.pk]), {}, 200),
             ('/api/v1/products/{id}/', reverse('presentation_api', args=[99999]), {}, 404),
         ]:

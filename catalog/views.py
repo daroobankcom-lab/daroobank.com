@@ -4,7 +4,7 @@ from pathlib import Path
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_safe
-from .services import (MAX_QUERY_LENGTH, MAX_RESULTS, MAX_SEARCH_CANDIDATES, InvalidSearchCursor,
+from .services import (MAX_QUERY_LENGTH, MAX_RESULTS, MAX_SEARCH_CANDIDATES, InvalidSearchCursor, InvalidSearchQuery,
                        get_public_presentation, search_product_page, serialize_presentation)
 
 SITE_URL = 'https://daroobank.com'
@@ -25,6 +25,12 @@ def search(request):
     try:
         results, next_cursor = search_product_page(query, request.GET.get('cursor', ''))
         response = render_page(request, 'search.html', title='جست‌وجوی دارو | داروبانک', description='جست‌وجو در اطلاعات دارویی منتشرشده داروبانک.', noindex=True, query=query, results=results, next_cursor=next_cursor)
+    except InvalidSearchQuery:
+        response = render(request, 'search_query_error.html', {
+            'page_title': 'عبارت نامعتبر | داروبانک', 'description': 'عبارت جست‌وجو قابل پردازش نیست.',
+            'noindex': True,
+        }, status=400)
+        response['X-Robots-Tag'] = 'noindex, follow'
     except InvalidSearchCursor:
         response = render(request, 'search_cursor_error.html', {
             'page_title': 'ادامه جست‌وجو | داروبانک', 'description': 'ادامه جست‌وجو در دسترس نیست.',
@@ -62,6 +68,8 @@ def search_api(request):
             'limit': MAX_RESULTS, 'candidate_scan_limit': MAX_SEARCH_CANDIDATES,
             'pagination_available': True, 'next_cursor': next_cursor,
         }})
+    except InvalidSearchQuery:
+        response = JsonResponse({'error': {'code': 'invalid_query', 'message': 'Search query contains unsupported characters.'}}, status=400)
     except InvalidSearchCursor:
         response = JsonResponse({'error': {'code': 'invalid_cursor', 'message': 'Search cursor is invalid or expired; restart the search.'}}, status=400)
     response['X-Robots-Tag'] = 'noindex, follow'

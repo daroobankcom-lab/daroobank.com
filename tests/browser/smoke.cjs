@@ -224,6 +224,18 @@ async function run() {
       assert.match(await page.locator('h1').innerText(), /داروی عمومی ساختگی مرورگر/);
       await checkLayout(page, `product detail ${width}`);
       if (width === 390) await auditAccessibility(page, 'product detail');
+      response = await page.goto(base + '/search/?q=synthetic%00canary');
+      assert.equal(response.status(), 400);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.equal(response.headers()['referrer-policy'], 'no-referrer');
+      assert.match(await page.locator('h1').innerText(), /عبارت جست‌وجو قابل پردازش نیست/);
+      assert.equal(await page.locator('#drug-search').inputValue(), '');
+      assert(!(await page.locator('body').innerText()).includes('synthetic'));
+      await checkLayout(page, `invalid query ${width}`);
+      if (width === 390) await auditAccessibility(page, 'invalid search query');
+      await page.locator('#drug-search').fill('Browser Synthetic Product');
+      await Promise.all([page.waitForURL('**/search/?q=Browser*'), page.locator('#drug-search').press('Enter')]);
+      assert.equal(await page.locator('.result-card').count(), 1);
       response = await page.goto(base + '/prices/');
       assert.equal(response.status(), 200);
       await checkLayout(page, `prices ${width}`);

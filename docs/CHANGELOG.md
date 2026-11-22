@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — invalid public-search query handling
+
+**Changes:** A NUL in a public search previously caused a PostgreSQL text error. Search now rejects NUL or surrogate code points in the retained query prefix before a database query, returning HTTP 400 with a blank recovery form or an `invalid_query` API error; the invalid input is not echoed. Existing 120-character truncation and other search normalization remain unchanged. Added PostgreSQL, API contract and synthetic browser regression tests.
+
+**Limits:** This narrow check is not general input sanitization, logging protection, rate limiting, clinical verification or production hardening. Search URLs can still appear in access logs; never enter personal data.
+
 ## 2026-11-22 — internal inspection keyboard and contrast checks
 
 **Changes:** Styled numeric inspection filters consistently with the existing controls. Expanded synthetic Chromium coverage for keyboard focus and Enter submission on source-date and catalog-quality inspections, including forced-colors emulation for the source-date form. Added computed text contrast checks for selected workspace, source summary and scan elements; deliberate low-contrast, background-image and missing-focus mutations are rejected.

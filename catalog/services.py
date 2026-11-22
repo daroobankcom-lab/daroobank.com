@@ -20,6 +20,10 @@ CURSOR_MAX_AGE = 3600
 CURSOR_SALT = 'catalog.search.cursor.v1'
 
 
+class InvalidSearchQuery(ValueError):
+    """The bounded search query contains characters PostgreSQL cannot store."""
+
+
 class InvalidSearchCursor(ValueError):
     """A cursor is invalid, expired, belongs to another query or is stale."""
 
@@ -81,7 +85,12 @@ def is_public_presentation(product):
 
 def search_product_page(query, cursor=''):
     """Return one bounded, forward-only page; no consistent snapshot is promised."""
-    normalized = normalize_search((query or '')[:MAX_QUERY_LENGTH])
+    bounded = (query or '')[:MAX_QUERY_LENGTH]
+    # PostgreSQL text rejects NUL; surrogate code points cannot be encoded as UTF-8.
+    # Fail before querying or encoding a cursor, without echoing the bad input.
+    if any(char == '\x00' or '\ud800' <= char <= '\udfff' for char in bounded):
+        raise InvalidSearchQuery
+    normalized = normalize_search(bounded)
     if not normalized:
         if cursor:
             raise InvalidSearchCursor

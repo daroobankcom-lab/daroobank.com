@@ -15,7 +15,7 @@
       "get": {
         "operationId": "searchPresentations",
         "summary": "Search public presentation records",
-        "description": "Empty queries return no results. The first 120 characters are used after trimming. Each page validates at most 150 candidates and returns at most 30; the database may scan more. A next cursor can be present even on an empty page. Reuse it with the same normalized query within one hour; data changes may invalidate it or change page membership. Results are not a snapshot. Search terms may appear in access logs.",
+        "description": "Empty queries return no results. The first 120 characters are used after trimming; NUL and surrogate code points in that prefix cause an invalid_query error. Each page validates at most 150 candidates and returns at most 30; the database may scan more. A next cursor can be present even on an empty page. Reuse it with the same normalized query within one hour; data changes may invalidate it or change page membership. Results are not a snapshot. Search terms may appear in access logs.",
         "parameters": [
           {
             "name": "q",
@@ -47,7 +47,7 @@
             }
           },
           "400": {
-            "description": "Invalid, stale or expired cursor",
+            "description": "Invalid query (invalid_query) or invalid, stale or expired cursor (invalid_cursor)",
             "content": {
               "application/json": {
                 "schema": {

@@ -1,10 +1,12 @@
 """Opt-in, isolated PostgreSQL + real Chromium smoke tests with synthetic data."""
 import os
 import subprocess
+from datetime import timedelta
 from pathlib import Path
 from unittest import skipUnless
 
 from django.conf import settings
+from django.contrib.auth.models import Permission
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.db import connection
 from django.test import override_settings
@@ -13,6 +15,7 @@ from django.utils import timezone
 from catalog.identity import digest, ingredient_snapshot, revise_identity
 from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresentation
 from catalog.test_identity import ALL, INGREDIENT, build, user
+from sources.services import record_claim
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -28,6 +31,14 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(connection.vendor, 'postgresql')
         self.assertRegex(connection.settings_dict['NAME'], r'^test_daroobank_browser_[0-9a-f]{32}$')
         author = user('browser-author', *ALL, 'view_productcandidate')
+        author.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                    codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        record_claim(actor=author, data={
+            'source_name': 'منبع ساختگی مرورگر', 'source_url': 'https://example.org/fixture',
+            'owner': 'مالک فرضی', 'evidence_url': 'https://example.org/evidence', 'evidence_note': '',
+            'claims_collection': True, 'claims_storage': False, 'claims_publication': False,
+            'starts_on': None, 'expires_on': timezone.localdate() - timedelta(days=1),
+        })
         user('browser-reviewer', 'view_identityworkspace', 'review_identityworkspace')
         ingredient, _, formulation, product, package = build(author)
         leaf = ingredient

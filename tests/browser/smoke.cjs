@@ -223,6 +223,15 @@ async function run() {
       assert.equal(new URL(page.url()).search, '?status=pending');
       assert.equal(await page.locator('#status').inputValue(), 'pending');
       await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
+      await page.getByRole('link', {name: 'ورود به ادعاهای منبع'}).click();
+      assert.equal(new URL(page.url()).pathname, '/staff/sources/');
+      assert.match(await page.locator('#date-summary-heading').innerText(), /خلاصه تاریخ در همین صفحه/);
+      const summary = page.locator('section[aria-labelledby="date-summary-heading"]');
+      assert.match(await summary.innerText(), /فقط 1 ادعای نمایش‌داده‌شده/);
+      assert.match(await summary.locator('.staff-stat-grid > div').first().innerText(), /گذشته\s+1/);
+      await checkLayout(page, `source date summary ${width}`);
+      if (width === 390) await auditAccessibility(page, 'source date summary');
+      await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       await page.getByRole('link', {name: 'ورود به هویت ساختگی کاتالوگ'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/catalog/identity/');
       await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();

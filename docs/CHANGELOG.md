@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — page-local source claim date summary
+
+**Changes:** Added a read-only date-category summary for the currently displayed, review-filtered page of source claims, using one local date for all rows. Tests cover boundaries, invalid claims, permissions, pagination, no writes and synthetic Chromium layout/accessibility checks.
+
+**Limits:** Counts are page-local, not a global inventory or a consistent snapshot. Dates and claims are unverified; the summary does not establish source rights or authorize use, and does not alert or calculate upcoming expiry. Database filtering/counting work is not bounded by the page size.
+
 ## 2026-11-22 — workspace landing and unreviewed queue shortcuts
 
 **Changes:** Active staff now land on the permission-scoped workspace by default after login; Django's explicit safe `next` destination still takes precedence and its own permissions remain enforced. Added shortcuts to the existing unreviewed filters for product, price, source and clinical queues. They add no counts, data writes, new review states or permissions.

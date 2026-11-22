@@ -1,12 +1,15 @@
 import io
-from datetime import date
+from datetime import date, datetime, timezone as datetime_timezone
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import connection
 from django.test import Client, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
 from catalog.intake import stage_products
 from catalog.models import ProductCandidate, ProductPresentation
@@ -260,3 +263,74 @@ class SourceClaimTests(TestCase):
         self.assertEqual(ProductPresentation.objects.count(), 0)
         self.assertNotContains(self.client.get(reverse('sitemap')), '/staff/')
         self.assertEqual(self.client.get(reverse('search_api'), {'q': '001234'}).json()['data'], [])
+
+    def test_date_summary_is_current_page_only_and_uses_one_local_date(self):
+        today = date(2026, 6, 1)
+        groups = [
+            ('expired', {'starts_on': None, 'expires_on': date(2026, 5, 31)}),
+            ('future', {'starts_on': date(2026, 6, 2), 'expires_on': None}),
+            ('within_dates', {'starts_on': today, 'expires_on': today}),
+            ('unknown', {'starts_on': None, 'expires_on': None}),
+            ('invalid', {'starts_on': None, 'expires_on': None}),
+        ]
+        claims = {}
+        for label, dates in groups:
+            claims[label] = [self.claim(owner=f'{label} synthetic owner {i}', **dates) for i in range(5)]
+        for claim in claims['invalid']:
+            # Simulate a bypassed immutable-model guard; no real data involved.
+            SourceClaim.objects.filter(pk=claim.pk).update(owner='tampered synthetic owner')
+        before = list(SourceClaim.objects.order_by('pk').values_list('pk', 'owner', 'payload_sha256'))
+        self.client.force_login(self.viewer)
+        with patch('sources.staff_views.timezone.localdate', return_value=today) as localdate:
+            with CaptureQueriesContext(connection) as queries:
+                first = self.client.get(reverse('staff_sources'))
+        self.assertEqual(localdate.call_count, 1)
+        # Paginator count and page fetch only; no per-row claim queries.
+        self.assertEqual(sum('"sources_sourceclaim"' in query['sql'] for query in queries), 2)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.context['date_summary_today'], today)
+        self.assertEqual(first.context['date_counts'],
+                         {'expired': 0, 'future': 5, 'within_dates': 5, 'unknown': 5, 'invalid': 5})
+        self.assertContains(first, 'فقط 20 ادعای نمایش‌داده‌شده')
+        self.assertContains(first, 'این آمار شامل صفحات دیگر نیست')
+        self.assertContains(first, '2026-06-01')
+        with patch('sources.staff_views.timezone.localdate', return_value=today):
+            second = self.client.get(reverse('staff_sources'), {'page': 2})
+        self.assertEqual(second.context['date_counts'],
+                         {'expired': 5, 'future': 0, 'within_dates': 0, 'unknown': 0, 'invalid': 0})
+        self.assertContains(second, 'فقط 5 ادعای نمایش‌داده‌شده')
+        self.assertEqual(list(SourceClaim.objects.order_by('pk').values_list('pk', 'owner', 'payload_sha256')), before)
+        self.assert_private(first)
+
+    def test_date_summary_respects_review_filter_permission_and_empty_page(self):
+        today = date(2026, 6, 1)
+        pending = self.claim(owner='pending synthetic', starts_on=today, expires_on=today)
+        reviewed = self.claim(owner='deferred synthetic', starts_on=None, expires_on=None)
+        review_claim(actor=self.reviewer, claim_id=reviewed.pk, **self.review_data(reviewed, 'defer'))
+        self.client.force_login(self.viewer)
+        with patch('sources.staff_views.timezone.localdate', return_value=today):
+            response = self.client.get(reverse('staff_sources'), {'status': 'pending'})
+            empty = self.client.get(reverse('staff_sources'), {'status': 'reject'})
+        self.assertEqual([claim.pk for claim in response.context['page']], [pending.pk])
+        self.assertEqual(response.context['date_counts'],
+                         {'expired': 0, 'future': 0, 'within_dates': 1, 'unknown': 0, 'invalid': 0})
+        self.assertEqual(sum(empty.context['date_counts'].values()), 0)
+        self.assertContains(empty, 'فقط 0 ادعای نمایش‌داده‌شده')
+        self.client.force_login(self.add_only)
+        response = self.client.get(reverse('staff_sources'))
+        self.assertEqual(response.status_code, 403)
+        self.assertNotContains(response, 'خلاصه تاریخ در همین صفحه', status_code=403)
+
+    def test_date_summary_uses_active_timezone_across_midnight(self):
+        self.claim(owner='boundary synthetic', starts_on=None, expires_on=date(2026, 6, 1))
+        self.client.force_login(self.viewer)
+        instant = datetime(2026, 6, 1, 21, 0, tzinfo=datetime_timezone.utc)
+        with patch('django.utils.timezone.now', return_value=instant):
+            with timezone.override('Asia/Tehran'):
+                tehran = self.client.get(reverse('staff_sources'))
+            with timezone.override('America/Los_Angeles'):
+                los_angeles = self.client.get(reverse('staff_sources'))
+        self.assertEqual(tehran.context['date_summary_today'], date(2026, 6, 2))
+        self.assertEqual(tehran.context['date_counts']['expired'], 1)
+        self.assertEqual(los_angeles.context['date_summary_today'], date(2026, 6, 1))
+        self.assertEqual(los_angeles.context['date_counts']['unknown'], 1)

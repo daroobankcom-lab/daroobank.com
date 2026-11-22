@@ -4,6 +4,7 @@ from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from .forms import SourceClaimForm, SourceReviewForm
@@ -31,11 +32,17 @@ def claims(request):
     elif status:
         rows = rows.filter(latest_decision=status)
     page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    # One local date for every row in this response, including across midnight.
+    # This summary is only for the current page, not a database-wide count.
+    today = timezone.localdate()
+    date_counts = dict.fromkeys(('expired', 'future', 'within_dates', 'unknown', 'invalid'), 0)
     for claim in page.object_list:
-        claim.date_status = date_label(claim)
+        claim.date_status = date_label(claim, today=today)
+        date_counts[claim.date_status] += 1
     return render(request, 'staff/source_claims.html', {
         'page_title': 'ادعاهای منبع | داروبانک', 'description': 'ثبت داخلی ادعاهای منبع.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status,
+        'date_summary_today': today, 'date_counts': date_counts,
         'can_add': request.user.has_perm(ADD), 'can_prices': request.user.has_perm('pricing.view_pricecandidate'),
         'can_products': request.user.has_perm('catalog.view_productcandidate'),
         'can_clinical': request.user.has_perm('clinical.view_clinicaldraft'),

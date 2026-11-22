@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — focused accessibility and CSRF regression review
+
+**Changes:** Expanded the isolated synthetic Chromium workflow to public product detail, logout, invalid-form error associations, missing-token rejection and keyboard skip navigation. Added automated axe WCAG-tagged checks on ten representative page states, corrected three reported contrast issues and the home-link accessible name, and added same-origin, hostile/null Origin and HTTPS Referer CSRF regression cases with valid tokens. No clinical or published data were added.
+
+**Limits:** Axe reports inconclusive contrast items for manual review. The local headless Chromium process intermittently crashed at startup on this lean container; no automatic retries hide the failure. No complete WCAG, screen-reader, device or security assessment is claimed. See [Testing strategy](TESTING_STRATEGY.md#opt-in-synthetic-chromium-smoke-test).
+
 ## 2026-11-22 — isolated Chromium checks and staff CSRF fix
 
 **Changes:** Added opt-in, isolated synthetic PostgreSQL/Chromium smoke checks in CI. Chromium revealed that the staff `no-referrer` policy generated `Origin: null` on form submission and caused Django's CSRF protection to reject real logins. Staff responses now use `same-origin`: form requests retain a valid Origin while cross-origin requests omit referrers. Existing private cache and indexing headers are unchanged.

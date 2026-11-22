@@ -6,6 +6,7 @@ const path = require('node:path');
 const zlib = require('node:zlib');
 const { execFileSync } = require('node:child_process');
 const { chromium } = require('playwright-core');
+const AxeBuilder = require('@axe-core/playwright').default;
 
 const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
@@ -38,6 +39,15 @@ async function checkLayout(page, label) {
   }));
   assert.equal(state.dir, 'rtl', label + ': missing RTL');
   assert(state.scrollWidth <= state.width, `${label}: horizontal overflow ${state.scrollWidth} > ${state.width}`);
+}
+
+async function auditAccessibility(page, label) {
+  const result = await new AxeBuilder({page}).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+  const violations = result.violations.map(v => ({id: v.id, impact: v.impact,
+    nodes: v.nodes.map(n => ({target: n.target, summary: n.failureSummary}))}));
+  assert.deepEqual(violations, [], label + ': automated accessibility violations');
+  const incomplete = result.incomplete.map(item => item.id + ':' + JSON.stringify(item.nodes.map(n => n.target)));
+  console.log(`axe ${label}: ${incomplete.length} rules require manual review${incomplete.length ? ' (' + incomplete.join(', ') + ')' : ''}`);
 }
 
 async function login(page, username) {
@@ -99,6 +109,10 @@ async function run() {
       await checkLayout(page, `home ${width}`);
       await page.keyboard.press('Tab');
       assert.equal(await page.evaluate(() => document.activeElement.className), 'skip-link');
+      if (width === 390) await auditAccessibility(page, 'home');
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'drug-search', 'skip link must bypass navigation');
       await page.locator('#drug-search').fill('Browser Synthetic Product');
       await Promise.all([page.waitForURL('**/search/?q=Browser*'), page.locator('form[role=search] button').click()]);
       assert.equal(page.url().includes('/search/'), true);
@@ -106,21 +120,35 @@ async function run() {
       assert.match(await page.locator('.result-card').innerText(), /داروی عمومی ساختگی مرورگر/);
       assert(!((await page.locator('body').innerText()).includes('ماده ساختگی خصوصی مرورگر')));
       await checkLayout(page, `search ${width}`);
+      if (width === 390) await auditAccessibility(page, 'search results');
+      await page.locator('.result-title-link').click();
+      assert.match(page.url(), /\/products\/\d+\/$/);
+      assert.match(await page.locator('h1').innerText(), /داروی عمومی ساختگی مرورگر/);
+      await checkLayout(page, `product detail ${width}`);
+      if (width === 390) await auditAccessibility(page, 'product detail');
       response = await page.goto(base + '/prices/');
       assert.equal(response.status(), 200);
       await checkLayout(page, `prices ${width}`);
+      if (width === 390) await auditAccessibility(page, 'prices');
+      response = await page.goto(base + '/about/');
+      assert.equal(response.status(), 200);
+      await checkLayout(page, `about ${width}`);
+      if (width === 390) await auditAccessibility(page, 'about');
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);
       assert.equal(response.status(), 200);
       assert(page.url().includes('/staff/login/'));
       assert.match(response.headers()['cache-control'], /no-store/);
+      if (width === 390) await auditAccessibility(page, 'login');
       await login(page, author);
       response = await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
       assert.equal(response.status(), 200);
       await checkLayout(page, `identity form ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity form');
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);
       assert.equal(response.status(), 200);
       assert.match(response.headers()['x-robots-tag'], /noindex/);
       await checkLayout(page, `lineage ${width}`);
+      if (width === 390) await auditAccessibility(page, 'lineage');
       await page.getByRole('link', {name: 'بررسی بخش بعدی'}).click();
       assert.match(await page.locator('body').innerText(), /گام ۲۱|گام 21/);
       await checkLayout(page, `lineage next ${width}`);
@@ -129,6 +157,31 @@ async function run() {
     const authorContext = await contextFor(browser, 390, errors);
     const page = await authorContext.newPage();
     await login(page, author);
+    // A valid session must still be unable to submit a POST without a CSRF token.
+    const rejected = await page.evaluate(async () => (await fetch('/staff/catalog/identity/new/ingredient/', {
+      method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'name_fa=csrf-canary',
+    })).status);
+    assert.equal(rejected, 403, 'missing CSRF token must be rejected');
+    await page.goto(base + '/staff/catalog/identity/new/ingredient/');
+    await page.locator('#id_source_name').fill('   ');
+    await page.locator('#id_source_url').fill('https://example.org/fixture');
+    await page.locator('#id_name_fa').fill('ماده تازه ساختگی مرورگر');
+    await page.locator('#id_synthetic_ack').check();
+    const [invalid] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith('/identity/new/ingredient/') && r.request().method() === 'POST'),
+      page.locator('form.staff-review-form button[type=submit]').click(),
+    ]);
+    assert.equal(invalid.status(), 200);
+    const sourceField = page.locator('#id_source_name');
+    assert.equal(await sourceField.getAttribute('aria-invalid'), 'true');
+    const describedBy = await sourceField.getAttribute('aria-describedby');
+    assert(describedBy && describedBy.split(/\s+/).includes('id_source_name_error'));
+    assert((await page.locator('#id_source_name_error').innerText()).trim());
+    await auditAccessibility(page, 'invalid identity form');
+    await sourceField.fill('منبع ساختگی');
+    await Promise.all([page.waitForURL(/\/staff\/catalog\/identity\/ingredient\/\d+\/$/),
+      page.locator('form.staff-review-form button[type=submit]').click()]);
+    assert.match(await page.locator('body').innerText(), /ماده تازه ساختگی مرورگر/);
     let child = await revision(page, `/staff/catalog/identity/ingredient/${ids.ingredient}/correction/`, '#id_name_fa', 'ماده اصلاحی ساختگی مرورگر');
     assert.match(child, /\/ingredient\/\d+\/$/);
     assert.match(await page.locator('body').innerText(), /ماده اصلاحی ساختگی مرورگر/);
@@ -157,11 +210,17 @@ async function run() {
     assert.equal(conflict.status(), 409);
     assert.match(await second.locator('body').innerText(), /صفحه را دوباره بارگذاری کنید/);
     assert.equal(await second.locator('form[action$="/review/"]').count(), 0);
+    await auditAccessibility(second, 'stale review');
     // An actual cross-origin navigation is intercepted before it leaves the test;
     // same-origin policy must not send the private staff URL to the destination.
     await first.evaluate(() => { const a = document.createElement('a'); a.href = 'https://example.org/privacy-test'; a.id = 'external-test'; a.textContent = 'External synthetic link'; document.body.append(a); });
     const [external] = await Promise.all([first.waitForRequest('https://example.org/privacy-test'), first.locator('#external-test').click()]);
     assert.equal(external.headers()['referer'], undefined);
+    await page.goto(base + '/staff/catalog/identity/');
+    await Promise.all([page.waitForURL(base + '/'), page.locator('form[action="/staff/logout/"] button').click()]);
+    const afterLogout = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.ingredient}/`);
+    assert.equal(afterLogout.status(), 200);
+    assert(page.url().includes('/staff/login/'), 'logout must remove access to private pages');
     await firstContext.close(); await secondContext.close(); await authorContext.close();
     assert.deepEqual(errors, [], 'browser JavaScript errors');
     console.log(`browser checks passed (Chromium ${browser.version()}, widths 320/390/768/1440)`);

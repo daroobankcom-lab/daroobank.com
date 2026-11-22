@@ -136,7 +136,7 @@ svg {
   font-weight: 700;
 }
 .brand small span {
-  color: #95aaa4;
+  color: #526d63;
 }
 .main-nav {
   display: flex;
@@ -822,7 +822,7 @@ svg {
 }
 .approach-note small {
   font-size: 9px;
-  color: #8ca199;
+  color: #526d63;
 }
 .approach-copy h2 {
   font-size: 32px;
@@ -907,7 +907,7 @@ svg {
 }
 .final-banner p {
   margin: 0;
-  color: #c2e2d5;
+  color: #d4ede3;
   font-size: 12px;
 }
 .kicker.light {

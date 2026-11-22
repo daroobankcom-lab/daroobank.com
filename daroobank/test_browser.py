@@ -11,7 +11,7 @@ from django.test import override_settings
 from django.utils import timezone
 
 from catalog.identity import digest, ingredient_snapshot, revise_identity
-from catalog.models import ProductPresentation
+from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresentation
 from catalog.test_identity import ALL, INGREDIENT, build, user
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -47,5 +47,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
                                 capture_output=True, text=True, timeout=180)
         self.assertEqual(result.returncode, 0, f'Chromium test failed:\n{result.stdout}\n{result.stderr}')
+        self.assertEqual(IngredientDraft.objects.filter(name_fa='csrf-canary').count(), 0)
+        self.assertEqual(IngredientDraft.objects.filter(name_fa='ماده تازه ساختگی مرورگر').count(), 1)
+        self.assertEqual(IdentityPackageReview.objects.count(), 1)
         self.assertIn('browser checks passed', result.stdout)
         print(result.stdout.strip())

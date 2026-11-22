@@ -150,6 +150,33 @@ class StaffPriceAccessTests(TestCase):
         self.assertEqual(client.post(reverse('staff_logout'), {'csrfmiddlewaretoken': token}).status_code, 302)
         self.assertEqual(client.get(reverse('staff_prices')).status_code, 302)
 
+    @override_settings(STAFF_PORTAL_ENABLED=True, CSRF_TRUSTED_ORIGINS=[])
+    def test_csrf_origin_and_secure_referer_with_real_token(self):
+        # A supplied token and cookie are not enough when the Origin is hostile.
+        login = reverse('staff_login')
+        cases = [
+            ('same origin', False, {'HTTP_ORIGIN': 'http://testserver'}, 302),
+            ('null origin', False, {'HTTP_ORIGIN': 'null'}, 403),
+            ('other origin', False, {'HTTP_ORIGIN': 'https://attacker.example'}, 403),
+            ('wrong port', False, {'HTTP_ORIGIN': 'http://testserver:8080'}, 403),
+            ('secure same origin', True, {'HTTP_ORIGIN': 'https://testserver'}, 302),
+            ('secure same-origin referer', True, {'HTTP_REFERER': 'https://testserver/staff/login/'}, 302),
+            ('secure missing referer', True, {}, 403),
+            ('secure foreign referer', True, {'HTTP_REFERER': 'https://attacker.example/'}, 403),
+            ('secure downgrade referer', True, {'HTTP_REFERER': 'http://testserver/staff/login/'}, 403),
+        ]
+        for label, secure, headers, expected in cases:
+            with self.subTest(label=label):
+                client = Client(enforce_csrf_checks=True)
+                response = client.get(login, secure=secure)
+                token = response.cookies['csrftoken'].value
+                response = client.post(login, {'username': 'viewer', 'password': 'test-only-strong-passphrase',
+                                                'csrfmiddlewaretoken': token}, secure=secure, **headers)
+                self.assertEqual(response.status_code, expected)
+                self.assert_private(response)
+                result = client.get(reverse('staff_prices'), secure=secure)
+                self.assertEqual(result.status_code, 200 if expected == 302 else 302)
+
     def test_wrong_password_and_staff_pages_not_indexed(self):
         response = self.client.post(reverse('staff_login'), {'username': 'viewer', 'password': 'incorrect'})
         self.assertEqual(response.status_code, 200)

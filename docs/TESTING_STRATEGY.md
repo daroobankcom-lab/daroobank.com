@@ -111,3 +111,8 @@ At 390 CSS pixels, axe-core 4.14.1 runs the `wcag2a`, `wcag2aa`, `wcag21a`, `wca
 ## Development image build-context checks
 
 The Compose CI job creates synthetic root and nested environment, backup, cache and `node_modules` probes in its ephemeral checkout. It checks Git ignore behavior, builds the image, checks that excluded probes are absent and `.env.example` templates outside excluded directories remain, and verifies actual PostgreSQL readiness and a nonexistent-database failure. It also checks named-volume persistence after normal shutdown. No real credentials or backups are used. This is not a secret scan, a test of every possible pathname, production image hardening, disaster recovery or a substitute for protecting pre-existing image layers and tracked history.
+
+
+## CI action pin and credential review
+
+The workflow pins the official checkout, setup-python and setup-node actions to full version-specific commit SHAs and disables checkout credential persistence. The three v7 actions run on the Node 24 Actions runtime (the browser suite itself uses Node 22), requiring a compatible hosted runner. GitHub CI must exercise both jobs after pin changes; recheck release notes, official tag-to-commit mappings and updates periodically. Pinning is not an upstream-code audit, secret scan, immutable container-image policy, or proof that package/cache downloads are safe.

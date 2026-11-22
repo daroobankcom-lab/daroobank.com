@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — CI action runtime and pin review
+
+**Changes:** Updated official checkout, setup-python and setup-node actions to version-specific v7 commit SHAs using the Node 24 Actions runtime, and disabled checkout credential persistence. Preserved the Python 3.11 and browser Node 22 environments and the PostgreSQL, browser and Compose checks.
+
+**Limits:** SHA pins need regular review and do not verify upstream code, package downloads or mutable container images. This is not a complete supply-chain or production security assessment. See [Deployment](DEPLOYMENT.md#development-ci-and-proposed-cicd).
+
 ## 2026-11-22 — development build-context and PostgreSQL readiness review
 
 **Changes:** Excluded local environment variants and JavaScript dependencies from Git/build context while preserving `.env.example` templates; hardened Docker exclusion ordering for backups and local dependency/cache directories. Added synthetic CI probes for root/nested excluded files and template exceptions, real PostgreSQL readiness and nonexistent-database checks; no schema or data migration changed.

@@ -30,8 +30,10 @@ jobs:
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: '5432'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
           cache: pip
@@ -46,7 +48,7 @@ jobs:
           python manage.py makemigrations --check --dry-run
       - name: Run synthetic tests on PostgreSQL
         run: python manage.py test -v 1 --noinput
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: npm
@@ -68,7 +70,9 @@ jobs:
       POSTGRES_USER: runner_${{ github.run_id }}
       POSTGRES_PASSWORD: ci_${{ github.run_id }}_${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Prepare synthetic build-context probes
         run: |
           mkdir -p .cache/context-probe backups/context-probe node_modules/context-probe tests/browser/node_modules/context-probe

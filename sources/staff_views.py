@@ -1,0 +1,97 @@
+"""Development-only registry of unverified source claims."""
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import OuterRef, Subquery
+from django.http import Http404, HttpResponseBadRequest
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_http_methods, require_POST, require_safe
+
+from .forms import SourceClaimForm, SourceReviewForm
+from .models import SourceClaim, SourceClaimReview
+from .services import ADD, FIELDS, REVIEW, VIEW, ClaimError, ReviewConflict, date_label, record_claim, require_staff, review_claim
+
+
+def get_claim(pk):
+    if not 1 <= pk <= 9_223_372_036_854_775_807:
+        raise Http404('Claim not found')
+    return get_object_or_404(SourceClaim.objects.select_related('recorded_by'), pk=pk)
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def claims(request):
+    require_staff(request.user, VIEW)
+    status = request.GET.get('status', '')
+    if status not in ('', 'pending', 'further_review', 'reject', 'defer'):
+        return HttpResponseBadRequest('Invalid filter.')
+    latest = SourceClaimReview.objects.filter(claim_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
+    rows = SourceClaim.objects.select_related('recorded_by').annotate(latest_decision=Subquery(latest)).order_by('-pk')
+    if status == 'pending':
+        rows = rows.filter(latest_decision__isnull=True)
+    elif status:
+        rows = rows.filter(latest_decision=status)
+    page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    for claim in page.object_list:
+        claim.date_status = date_label(claim)
+    return render(request, 'staff/source_claims.html', {
+        'page_title': 'ادعاهای منبع | داروبانک', 'description': 'ثبت داخلی ادعاهای منبع.',
+        'noindex': True, 'private_staff': True, 'page': page, 'status': status,
+        'can_add': request.user.has_perm(ADD), 'can_prices': request.user.has_perm('pricing.view_pricecandidate'),
+        'can_products': request.user.has_perm('catalog.view_productcandidate'),
+    })
+
+
+@login_required(login_url='staff_login')
+@require_http_methods(['GET', 'POST'])
+def create(request):
+    require_staff(request.user, VIEW, ADD)
+    form = SourceClaimForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        try:
+            claim, _created = record_claim(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS})
+            return redirect('staff_source_detail', pk=claim.pk)
+        except ClaimError as exc:
+            form.add_error(None, str(exc))
+    return render(request, 'staff/source_create.html', {
+        'page_title': 'ثبت ادعای منبع | داروبانک', 'description': 'ثبت ادعای حقوق منبع.',
+        'noindex': True, 'private_staff': True, 'form': form,
+    })
+
+
+def detail_response(request, claim, *, form=None, status=200):
+    reviews = list(claim.reviews.select_related('reviewer').order_by('-pk')[:25])
+    current_status = date_label(claim)
+    can_review = (request.user.has_perm(REVIEW) and claim.recorded_by_id != request.user.pk and current_status != 'invalid')
+    if can_review and form is None:
+        form = SourceReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0, 'expected_hash': claim.payload_sha256})
+    return render(request, 'staff/source_detail.html', {
+        'page_title': 'ادعای منبع | داروبانک', 'description': 'مشخصات ادعای منبع.',
+        'noindex': True, 'private_staff': True, 'claim': claim, 'date_status': current_status,
+        'reviews': reviews, 'can_review': can_review, 'review_form': form,
+    }, status=status)
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def detail(request, pk):
+    require_staff(request.user, VIEW)
+    return detail_response(request, get_claim(pk))
+
+
+@login_required(login_url='staff_login')
+@require_POST
+def review(request, pk):
+    require_staff(request.user, VIEW, REVIEW)
+    claim = get_claim(pk)
+    form = SourceReviewForm(request.POST)
+    if not form.is_valid():
+        return detail_response(request, claim, form=form, status=400)
+    try:
+        review_claim(actor=request.user, claim_id=pk, **form.cleaned_data)
+    except ReviewConflict as exc:
+        form.add_error(None, str(exc))
+        claim.refresh_from_db()
+        return detail_response(request, claim, form=form, status=409)
+    except SourceClaim.DoesNotExist:
+        return HttpResponseBadRequest('Claim no longer exists.')
+    return redirect('staff_source_detail', pk=pk)

@@ -1,6 +1,7 @@
 from django.urls import path
 from catalog import views, staff_views as product_staff_views
 from pricing import staff_views
+from sources import staff_views as source_staff_views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -13,6 +14,10 @@ urlpatterns = [
     path('about/', views.about, name='about'),
     path('staff/login/', staff_views.StaffLoginView.as_view(), name='staff_login'),
     path('staff/logout/', staff_views.StaffLogoutView.as_view(), name='staff_logout'),
+    path('staff/sources/', source_staff_views.claims, name='staff_sources'),
+    path('staff/sources/new/', source_staff_views.create, name='staff_source_create'),
+    path('staff/sources/<int:pk>/review/', source_staff_views.review, name='staff_source_review'),
+    path('staff/sources/<int:pk>/', source_staff_views.detail, name='staff_source_detail'),
     path('staff/products/', product_staff_views.candidates, name='staff_products'),
     path('staff/products/import/', product_staff_views.upload, name='staff_product_upload'),
     path('staff/products/<int:pk>/review/', product_staff_views.review, name='staff_product_review'),

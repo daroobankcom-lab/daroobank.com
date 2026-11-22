@@ -21,6 +21,8 @@ export DAROOBANK_DEBUG=1
 
 The local SQLite database and `.env` are ignored by Git. `.env.example` is documentation only; export its variables in the shell (Django does not load it automatically). Development settings are not production-ready. See [development guide](docs/DEVELOPMENT_GUIDE.md) and [implementation changelog](docs/CHANGELOG.md).
 
+The debug-only staff portal also contains a source-rights assertion ledger with separate review permissions. These claims are unverified, do not authorize source use, and do not enable crawling or publication; use synthetic data only. See the [development guide](docs/DEVELOPMENT_GUIDE.md#development-only-source-rights-assertions).
+
 ## Documentation
 
 - [Implementation changelog](docs/CHANGELOG.md) · [Gap analysis](docs/GAP_ANALYSIS.md) · [Resource review](docs/RESOURCE_REVIEW.md) · [Design system](docs/DESIGN_SYSTEM.md)

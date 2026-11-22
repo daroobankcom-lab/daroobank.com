@@ -6,6 +6,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import Http404, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from sources.services import related_claims
+
 from .comparisons import product_comparison_context
 from .intake import IntakeError, ReviewConflict, require_staff, review_product, stage_products
 from .models import ProductCandidate, ProductCandidateReview
@@ -34,6 +36,7 @@ def candidates(request):
         'page_title': 'نامزدهای فرآورده | داروبانک', 'description': 'صف داخلی نامزدهای فرآورده.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status,
         'can_import': request.user.has_perm(ADD), 'can_prices': request.user.has_perm('pricing.view_pricecandidate'),
+        'can_sources': request.user.has_perm('sources.view_sourceclaim'),
     })
 
 
@@ -74,6 +77,7 @@ def detail_response(request, candidate, *, form=None, status=200):
         'page_title': 'نامزد فرآورده | داروبانک', 'description': 'جزئیات داخلی نامزد فرآورده.',
         'noindex': True, 'private_staff': True, 'candidate': candidate, 'reviews': reviews,
         'can_review': can_review, 'review_form': form, 'comparison': product_comparison_context(candidate),
+        'source_claims': related_claims(request.user, candidate.source_url),
     }, status=status)
 
 

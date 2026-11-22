@@ -1,5 +1,11 @@
 # Implementation changelog
 
+## 2026-11-22 — source assertions and independent preliminary triage
+
+**Changes:** Added a development-only internal ledger of source-rights assertions with explicit scopes, owner, evidence URL, claimed dates, recorder, duplicate detection and a separate preliminary reviewer. Added a paginated/filterable Persian staff queue and exact-URL, permission-gated, capped links from product and price candidate details. Validation and synthetic tests cover access boundaries, CSRF, sequential conflicts and integrity, date labels and no public writes.
+
+**Limits:** Claims, evidence, dates and triage are unverified and do not authorize or gate intake, source use, crawling or publication. Source hints are not part of candidate review snapshots. Fingerprints omit actor/time and are not signatures; bulk ORM/SQL can bypass model guards; SQLite concurrency is unproven. Only synthetic local testing, not legal/source verification, browser accessibility, penetration or production testing.
+
 ## 2026-11-22 — price revision triage and safer suggestions
 
 **Changes:** Added a staff price-queue filter for the latest preliminary review, combinable with the original match-status filter. Detail pages show up to 10 same-source/ID revisions and a conditional exact whole-Rial difference only when source name, unit/category and nonempty normalized identity fields match. Dates and original currencies remain explicit; no price or trend is approved/published. Hardened matching against invalid/normalization-empty identifiers and conservatively marks more than 100 same-IRC indexed presentations ambiguous. Malformed Unicode in stored JSON is not rendered as valid staff data. All 99 Django tests, system/migration checks, pip check and a synthetic price CSV dry run passed.

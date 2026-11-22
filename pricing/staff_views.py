@@ -10,6 +10,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from sources.services import related_claims
+
 from .comparisons import price_revision_context
 from .forms import PriceReviewForm, PriceUploadForm
 from .importer import ImportValidationError, match_fields_valid, stage_csv, suggest_product
@@ -34,8 +36,11 @@ class StaffLoginView(LoginView):
 
     def get_default_redirect_url(self):
         user = self.request.user
-        if user.is_staff and user.has_perm('catalog.view_productcandidate') and not user.has_perm('pricing.view_pricecandidate'):
-            return reverse('staff_products')
+        if user.is_staff and not user.has_perm('pricing.view_pricecandidate'):
+            if user.has_perm('catalog.view_productcandidate'):
+                return reverse('staff_products')
+            if user.has_perm('sources.view_sourceclaim'):
+                return reverse('staff_sources')
         return super().get_default_redirect_url()
 
 
@@ -83,6 +88,7 @@ def _detail_response(request, candidate, *, form=None, status=200):
         'category_label': CATEGORY_LABELS.get(candidate.price_category, 'نامشخص'),
         'unit_label': UNIT_LABELS.get(candidate.unit, 'نامشخص'), 'reviews': reviews,
         'review_form': form, 'can_review': can_review, 'comparison': price_revision_context(candidate),
+        'source_claims': related_claims(request.user, candidate.source_url),
     }, status=status)
 
 
@@ -111,6 +117,7 @@ def price_candidates(request):
         'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'review_status': review_status, 'stats': stats,
         'total': sum(stats.values()), 'can_import': request.user.has_perm('pricing.add_pricecandidate'),
         'can_products': request.user.has_perm('catalog.view_productcandidate'),
+        'can_sources': request.user.has_perm('sources.view_sourceclaim'),
     })
 
 

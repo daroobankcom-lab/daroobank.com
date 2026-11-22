@@ -16,7 +16,7 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = [x.strip() for x in os.environ.get('DAROOBANK_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if x.strip()]
 if DEBUG:
     ALLOWED_HOSTS += ['.e2b.app', 'testserver']
-INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing']
+INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing', 'sources']
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'daroobank.middleware.StaffPrivacyHeadersMiddleware',

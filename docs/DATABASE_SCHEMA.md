@@ -31,3 +31,8 @@ Current implementation: `catalog.ProductPresentation` and its SQLite development
 - Search normalized names using B-tree for exact/prefix and measured `pg_trgm` GIN for similarity; maintain a search projection for published content. Test normalized Arabic/Persian and half-space variants; avoid indexing raw PHI.
 - Index price history `(package_id, category, unit, effective_at DESC, published_at DESC)`, source record/run, pending review state and content audience/status. Add FKs, constrained status transitions and transactional publication; do not derive identity from fuzzy similarity. Use query plans and realistic data before adding indexes.
 - Effective date, collection time, verification time and publication time mean different things; never fill an unknown effective date with collection time. Soft withdrawal/history rather than destructive update, with retention exceptions documented and legally approved.
+
+
+## Implemented development-only source assertions
+
+The current Django models `SourceClaim` and `SourceClaimReview` are a limited local ledger, separate from the planned ingestion/audit schema above. A claim holds an exact source URL, asserted owner, evidence URL/note, claimed collection/storage/republication scopes, optional dates, fingerprint and recorder/time; a review holds a separate reviewer, non-approval decision, reason and assertion snapshot. Ordinary model saves/deletes are guarded but bulk operations and SQL bypass these guards; hashes are not signatures and omit recorder/time. They do not implement the planned `source` authorization, revocation, crawler or audit entities and are not a production compliance record.

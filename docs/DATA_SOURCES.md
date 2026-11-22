@@ -19,3 +19,8 @@ Research performed 22 November 2026. Evidence below is not authorization for aut
 3. Obtain representative authorized samples and record identifier semantics, unit/currency and effective date definitions; resolve ambiguous IRC scope and packaging.
 4. Assess accuracy, completeness, latency, update cadence, historical coverage, conflict resolution and access constraints. Never assume registration implies availability.
 5. Perform legal and clinical review; test adapter with sanitized permitted fixtures; enable manual approval first. Keep source ownership and permissions distinct from source claim accuracy.
+
+
+## Implemented development ledger versus planned authorization
+
+The development-only `sources` ledger records unverified assertions, evidence URL references, claimed scopes and optional dates; another staff user can record preliminary triage. It does not fetch evidence, verify rights, issue approvals, enforce expiry or gate the existing CSV intake and review. A product/price candidate page can show capped exact-URL hints to separately authorized staff; absence or presence of an assertion proves nothing. The acquisition checklist above remains a future operational requirement, not an implemented enforcement mechanism. Never use synthetic ledger entries as evidence of a real licence.

@@ -1,0 +1,20 @@
+# Testing strategy and performance budgets
+
+No application exists, so no application tests or benchmarks have been run. Targets below are provisional acceptance budgets, not observed performance or promises; revisit with representative Iranian traffic, hosting and device/network conditions.
+
+## Quality gates
+
+- **Unit/property tests:** Unicode ي/ی, ك/ک, Persian/Arabic/ASCII digits, half-space, mixed RTL/LTR; identity ambiguity, currency and exact Toman-to-Rial conversion, decimal edge cases, effective dates and price percentages including zero/missing prior value.
+- **Integration/database:** foreign keys, duplicate source revision, idempotent retries, append-only history, concurrent approvals, atomic publication/rollback, backdated corrections, cache invalidation, migrations and backup restore.
+- **API/security:** contract schemas, pagination stability, malicious input, rate limiting, CSRF, authentication, MFA, object authorization, reviewer separation, no drafts/raw/PHI leakage and role escalation. Dependency scans and secret scanning.
+- **Frontend:** mobile RTL and mixed-direction, keyboard and screen-reader flows, WCAG 2.2 AA target, contrast, real-device usability and low-JS fallback; patient versus professional views, explicit sources, stale/unknown prices, noindex and canonical tags.
+- **Ingestion:** permitted sanitized fixtures for pagination and format drift, empty/partial responses, checkpoint recovery, HTTP timeouts, rate limiting, duplicate/missing IDs, maker/strength/form/pack mismatches, anomalies, source conflict and replay. Verify failed or partial runs never supersede verified data or mark missing products discontinued. Include timezone and 23:00→01:00 cross-midnight tests.
+- **Clinical:** independent reviewer checks claims, references, scope, translations and correction/withdrawal; licensed interaction dataset coverage distinguishes verified negative vs not assessed. No safety-critical tool release without independent clinical validation.
+
+## Measurable target proposal
+
+On a defined low-end Android test device with throttled 4G and warm cache: p75 LCP <2.5 s, CLS <0.1 and INP <200 ms for indexable pages; target initial compressed JS <50 KB for public content pages, with an explicit exception process for complex tools. On a staging dataset of 100,000 synthetic packages with representative Persian variants and recorded concurrency, target server-side search p95 <300 ms and p99 <1 s, error rate <1%; measure DB plans, cache status, CPU and dataset size. Verify crawler at maximum configured concurrency does not increase public search p95 by >20% relative to identical baseline, on documented resources. These are experimental budgets, not achieved results. Run Lighthouse/WebPageTest-style controlled browser tests and load tests, recording tool versions, hardware, sample size, dataset and network. Do not use production PHI.
+
+## Release criteria
+
+All relevant tests pass in CI and staging; no critical unresolved security issues; editorial/source approvals and backup restoration signed off; performance measured against agreed targets. Test failures block release. Accessibility and Persian search failures receive explicit triage rather than silent waivers.

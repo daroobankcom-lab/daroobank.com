@@ -49,9 +49,47 @@ class ReviewForm(forms.Form):
     reason = forms.CharField(label='دلیل', min_length=12, max_length=1000, widget=forms.Textarea(attrs={'rows': 4}))
     expected_review = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
     expected_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
+    expected_evidence_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
+
+    def clean_expected_evidence_hash(self):
+        value = self.cleaned_data['expected_evidence_hash']
+        if not HASH.fullmatch(value):
+            raise forms.ValidationError('شناسه ارجاع‌ها معتبر نیست.')
+        return value
 
     def clean_expected_hash(self):
         value = self.cleaned_data['expected_hash']
         if not HASH.fullmatch(value):
             raise forms.ValidationError('شناسه پیش‌نویس معتبر نیست.')
         return value
+
+
+class ReferenceForm(forms.Form):
+    reference_title = forms.CharField(label='عنوان ارجاع ساختگی', max_length=300)
+    reference_url = forms.URLField(label='نشانی HTTPS ارجاع', max_length=200)
+    reference_location = forms.CharField(label='محل دقیق در ارجاع', max_length=300)
+    reference_author = forms.CharField(label='نویسنده یا سازمان اعلام‌شده (اختیاری)', max_length=200, required=False)
+    reference_version = forms.CharField(label='نسخه اعلام‌شده (اختیاری)', max_length=200, required=False)
+    reference_published_on = forms.DateField(label='تاریخ انتشار اعلام‌شده (میلادی)', input_formats=['%Y-%m-%d'], required=False,
+                                             widget=forms.DateInput(attrs={'type': 'date'}))
+    reference_accessed_on = forms.DateField(label='تاریخ دسترسی اعلام‌شده (میلادی)', input_formats=['%Y-%m-%d'], required=False,
+                                            widget=forms.DateInput(attrs={'type': 'date'}))
+    relation = forms.ChoiceField(label='رابطه ادعایی با گزاره', choices=[('', 'انتخاب کنید'),
+        ('supports', 'پشتیبان ادعایی'), ('contradicts', 'متناقض ادعایی'),
+        ('context', 'زمینه ادعایی'), ('unclear', 'رابطه نامشخص')])
+    synthetic_ack = forms.BooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
+    expected_draft_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
+    expected_evidence_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
+
+    def clean(self):
+        from .evidence import ASSERTION_FIELDS, validate_reference
+        data = super().clean()
+        if all(key in data for key in ASSERTION_FIELDS):
+            try:
+                validate_reference({key: data[key] for key in ASSERTION_FIELDS})
+            except DraftError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+        for key in ('expected_draft_hash', 'expected_evidence_hash'):
+            if key in data and not HASH.fullmatch(data[key]):
+                self.add_error(key, 'شناسه معتبر نیست.')
+        return data

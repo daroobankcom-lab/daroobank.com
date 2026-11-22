@@ -1,6 +1,6 @@
 # ADR 0005: private clinical statement drafts, not publication
 
-Status: development-only implementation, 22 November 2026.
+Status: development-only implementation, 22 November 2026; extended with supplementary reference assertions by [ADR 0006](0006-clinical-evidence-assertions.md). The text below records the original slice.
 
 ## Decision
 

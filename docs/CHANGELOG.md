@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — supplementary clinical reference assertions
+
+**Changes:** Added up to ten unverified supplementary reference assertions per draft version, explicit asserted relationship labels, deduplication, separate-recorder review separation, sequential evidence-set stale checks and bounded review snapshots. Staff can inspect historical snapshot metadata and see whether its fingerprint differs from the current set; old reviews are explicitly marked without a snapshot. Added synthetic tests for role separation, caps, corruption, migration and public exclusion.
+
+**Limits:** Claimed relationships, citations, dates, licences and reviewer qualifications are not verified; no clinical approval or publication occurs. The set fingerprint includes recorder IDs but omits timestamps, and hashes are not signatures. The limit and SQLite stale checks are not concurrency or audit guarantees; bulk ORM/SQL bypass guards. No real evidence, browser accessibility, medical, legal or production validation was performed.
+
 ## 2026-11-22 — private synthetic clinical statement drafts
 
 **Changes:** Added a development-only clinical draft domain with separate view/add/review permissions, a Persian RTL queue, asserted citation metadata, branched parent-linked versions and independent preliminary triage snapshots. Integrated separately permissioned exact-URL source-claim hints and clinical-only login navigation. Added synthetic role, CSRF, input, version, stale and corruption tests; there is no approval or publication action.

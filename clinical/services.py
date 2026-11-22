@@ -15,8 +15,9 @@ from .models import ClinicalDraft, ClinicalDraftReview
 VIEW = 'clinical.view_clinicaldraft'
 ADD = 'clinical.add_clinicaldraft'
 REVIEW = 'clinical.review_clinicaldraft'
-FIELDS = ('subject', 'audience', 'title', 'statement', 'reference_title', 'reference_url',
-          'reference_location', 'reference_author', 'reference_version', 'reference_published_on', 'reference_accessed_on')
+REFERENCE_FIELDS = ('reference_title', 'reference_url', 'reference_location', 'reference_author',
+                    'reference_version', 'reference_published_on', 'reference_accessed_on')
+FIELDS = ('subject', 'audience', 'title', 'statement') + REFERENCE_FIELDS
 LIMITS = {'subject': 200, 'title': 200, 'statement': 4000, 'reference_title': 300, 'reference_location': 300,
           'reference_author': 200, 'reference_version': 200}
 OPTIONAL = {'reference_author', 'reference_version'}
@@ -36,23 +37,34 @@ def require_staff(user, *perms):
         raise PermissionDenied
 
 
-def validate_data(data):
-    if not isinstance(data, dict) or set(data) != set(FIELDS):
-        raise DraftError('ساختار پیش‌نویس معتبر نیست.')
-    if not isinstance(data['audience'], str) or data['audience'] not in dict(ClinicalDraft.AUDIENCES):
-        raise DraftError('مخاطب معتبر نیست.')
-    for field, limit in LIMITS.items():
-        value = data[field]
-        if (not isinstance(value, str) or value != value.strip() or len(value) > limit
-                or any(unicodedata.category(c) == 'Cs' or (unicodedata.category(c) == 'Cc' and
-                       (field != 'statement' or c not in '\n\r\t')) for c in value)
-                or (field not in OPTIONAL and not normalize_search(value))):
-            raise DraftError('متن یا مشخصات ارجاع معتبر نیست.')
+def _validate_text(field, value):
+    if (not isinstance(value, str) or value != value.strip() or len(value) > LIMITS[field]
+            or any(unicodedata.category(c) == 'Cs' or (unicodedata.category(c) == 'Cc' and
+                   (field != 'statement' or c not in '\n\r\t')) for c in value)
+            or (field not in OPTIONAL and not normalize_search(value))):
+        raise DraftError('متن یا مشخصات ارجاع معتبر نیست.')
+
+
+def validate_reference_data(data):
+    if not isinstance(data, dict) or set(data) != set(REFERENCE_FIELDS):
+        raise DraftError('ساختار ارجاع معتبر نیست.')
+    for field in ('reference_title', 'reference_location', 'reference_author', 'reference_version'):
+        _validate_text(field, data[field])
     if not valid_private_source_url(data['reference_url']):
         raise DraftError('نشانی ارجاع باید HTTPS معتبر و بدون اطلاعات محرمانه باشد.')
     for field in ('reference_published_on', 'reference_accessed_on'):
         if data[field] is not None and type(data[field]) is not date:
             raise DraftError('تاریخ ارجاع معتبر نیست.')
+
+
+def validate_data(data):
+    if not isinstance(data, dict) or set(data) != set(FIELDS):
+        raise DraftError('ساختار پیش‌نویس معتبر نیست.')
+    if not isinstance(data['audience'], str) or data['audience'] not in dict(ClinicalDraft.AUDIENCES):
+        raise DraftError('مخاطب معتبر نیست.')
+    for field in ('subject', 'title', 'statement'):
+        _validate_text(field, data[field])
+    validate_reference_data({key: data[key] for key in REFERENCE_FIELDS})
 
 
 def draft_data(draft):
@@ -114,7 +126,7 @@ def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change
         parent = None
         if parent_id is not None:
             try:
-                parent = ClinicalDraft.objects.select_for_update().select_related('parent').get(pk=parent_id)
+                parent = ClinicalDraft.objects.select_for_update(of=('self',)).select_related('parent').get(pk=parent_id)
             except ClinicalDraft.DoesNotExist as exc:
                 raise DraftConflict('نسخه پیشین در دسترس نیست.') from exc
             if not valid_draft(parent) or parent.payload_sha256 != expected_parent_hash:
@@ -126,23 +138,36 @@ def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change
                                             change_reason=change_reason, payload_sha256=digest)
 
 
-def review_draft(*, actor, draft_id, decision, reason, expected_review, expected_hash):
+def review_draft(*, actor, draft_id, decision, reason, expected_review, expected_hash, expected_evidence_hash=None):
     require_staff(actor, VIEW, REVIEW)
     if (type(draft_id) is not int or not 1 <= draft_id <= 9_223_372_036_854_775_807
             or decision not in dict(ClinicalDraftReview.DECISIONS) or not valid_review_reason(reason)
             or type(expected_review) is not int or expected_review < 0
-            or not isinstance(expected_hash, str) or not HASH.fullmatch(expected_hash)):
+            or not isinstance(expected_hash, str) or not HASH.fullmatch(expected_hash)
+            or (expected_evidence_hash is not None and (not isinstance(expected_evidence_hash, str)
+                or not HASH.fullmatch(expected_evidence_hash)))):
         raise DraftConflict('اطلاعات بازبینی معتبر نیست.')
     with transaction.atomic():
-        draft = ClinicalDraft.objects.select_for_update().select_related('parent').get(pk=draft_id)
+        draft = ClinicalDraft.objects.select_for_update(of=('self',)).select_related('parent').get(pk=draft_id)
         if draft.author_id == actor.pk:
             raise PermissionDenied
         if not valid_draft(draft) or draft.payload_sha256 != expected_hash:
             raise DraftConflict('پیش‌نویس یا نسخه پیشین تغییر کرده یا ناسازگار است.')
+        from .evidence import evidence_state
+        evidence = evidence_state(draft)
+        if evidence['status'] != 'available':
+            raise DraftConflict('ارجاع‌های تکمیلی ناسازگارند یا از سقف مجاز بیشترند.')
+        if any(item.recorded_by_id == actor.pk for item in evidence['items']):
+            raise PermissionDenied
+        if ((expected_evidence_hash is None and evidence['items'])
+                or (expected_evidence_hash is not None and expected_evidence_hash != evidence['fingerprint'])):
+            raise DraftConflict('ارجاع‌های تکمیلی تغییر کرده‌اند؛ صفحه را تازه کنید.')
         latest = draft.reviews.order_by('-pk').first()
         if (latest.pk if latest else 0) != expected_review:
             raise DraftConflict('بازبینی جدیدی ثبت شده؛ صفحه را تازه کنید.')
         return ClinicalDraftReview.objects.create(draft=draft, reviewer=actor, decision=decision, reason=reason.strip(),
             draft_payload_sha256=draft.payload_sha256,
             review_snapshot={**snapshot(draft_data(draft), draft.parent_id, draft.parent_payload_sha256, draft.change_reason),
-                             'author_id': draft.author_id})
+                             'author_id': draft.author_id, 'evidence_version': 1,
+                             'evidence_fingerprint': evidence['fingerprint'],
+                             'evidence_snapshot': evidence['snapshot']})

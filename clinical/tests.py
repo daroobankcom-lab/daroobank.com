@@ -13,6 +13,7 @@ from catalog.models import ProductPresentation
 from pricing.models import PriceCandidate
 from sources.services import record_claim
 from .models import ClinicalDraft, ClinicalDraftReview
+from .evidence import evidence_state
 from .services import DraftConflict, DraftError, create_draft, draft_data, fingerprint, review_draft, valid_draft, valid_payload
 
 
@@ -50,7 +51,8 @@ class ClinicalWorkflowTests(TestCase):
 
     def review_data(self, draft, decision='further_review', expected_review=0):
         return {'decision': decision, 'reason': 'این مورد ساختگی به بررسی بیشتری نیاز دارد.',
-                'expected_review': expected_review, 'expected_hash': draft.payload_sha256}
+                'expected_review': expected_review, 'expected_hash': draft.payload_sha256,
+                'expected_evidence_hash': evidence_state(draft)['fingerprint']}
 
     def assert_private(self, response):
         self.assertIn('private', response['Cache-Control']); self.assertIn('no-store', response['Cache-Control'])

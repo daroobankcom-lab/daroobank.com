@@ -7,7 +7,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from sources.services import related_claims
-from .forms import DraftForm, RevisionForm, ReviewForm
+from .forms import DraftForm, ReferenceForm, RevisionForm, ReviewForm
+from .evidence import ASSERTION_FIELDS, add_reference, evidence_state, reviewed_evidence
 from .models import ClinicalDraft, ClinicalDraftReview
 from .services import ADD, FIELDS, REVIEW, VIEW, DraftConflict, DraftError, create_draft, draft_data, require_staff, review_draft, valid_draft
 
@@ -87,15 +88,33 @@ def revise(request, pk):
 def detail_response(request, draft, *, form=None, status=200):
     valid = valid_draft(draft)
     reviews = list(draft.reviews.select_related('reviewer').order_by('-pk')[:25])
-    can_review = valid and request.user.has_perm(REVIEW) and draft.author_id != request.user.pk
+    evidence = evidence_state(draft) if valid else {'status': 'invalid'}
+    contributor = evidence['status'] == 'available' and any(item.recorded_by_id == request.user.pk for item in evidence['items'])
+    can_review = (valid and evidence['status'] == 'available' and request.user.has_perm(REVIEW)
+                  and draft.author_id != request.user.pk and not contributor)
     if can_review and form is None:
-        form = ReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0, 'expected_hash': draft.payload_sha256})
+        form = ReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0, 'expected_hash': draft.payload_sha256,
+                                   'expected_evidence_hash': evidence['fingerprint']})
+    for review in reviews:
+        historical = reviewed_evidence(review) if valid else {'status': 'unavailable'}
+        review.evidence_history = historical
+        if historical['status'] == 'legacy':
+            review.evidence_status = 'legacy'
+        elif historical['status'] == 'invalid':
+            review.evidence_status = 'invalid'
+        elif evidence['status'] != 'available':
+            review.evidence_status = 'unknown'
+        elif historical['fingerprint'] == evidence['fingerprint']:
+            review.evidence_status = 'same'
+        else:
+            review.evidence_status = 'changed'
     children = list(draft.revisions.select_related('parent').order_by('-pk')[:11]) if valid else []
     for child in children[:10]: child.is_valid = valid_draft(child)
     return render(request, 'staff/clinical_detail.html', {
         'page_title': 'پیش‌نویس علمی | داروبانک', 'description': 'جزئیات داخلی پیش‌نویس.',
         'noindex': True, 'private_staff': True, 'draft': draft, 'valid': valid, 'reviews': reviews,
         'review_form': form, 'can_review': can_review, 'can_add': valid and request.user.has_perm(ADD),
+        'evidence': evidence, 'reviewer_is_contributor': contributor,
         'children': children[:10], 'children_limited': len(children) > 10,
         'source_claims': related_claims(request.user, draft.reference_url) if valid else None,
     }, status=status)
@@ -125,3 +144,33 @@ def review(request, pk):
     except ClinicalDraft.DoesNotExist:
         return HttpResponseBadRequest('Draft no longer exists.')
     return redirect('staff_clinical_detail', pk=pk)
+
+
+@login_required(login_url='staff_login')
+@require_http_methods(['GET', 'POST'])
+def reference_create(request, pk):
+    require_staff(request.user, VIEW, ADD)
+    draft = get_draft(pk)
+    if not valid_draft(draft):
+        return detail_response(request, draft, status=409)
+    state = evidence_state(draft)
+    if state['status'] != 'available':
+        return detail_response(request, draft, status=409)
+    form = ReferenceForm(request.POST or None, initial={'expected_draft_hash': draft.payload_sha256,
+                                                        'expected_evidence_hash': state['fingerprint']})
+    status = 200
+    if request.method == 'POST' and form.is_valid():
+        try:
+            add_reference(actor=request.user, draft_id=draft.pk,
+                data={key: form.cleaned_data[key] for key in ASSERTION_FIELDS},
+                expected_draft_hash=form.cleaned_data['expected_draft_hash'],
+                expected_evidence_hash=form.cleaned_data['expected_evidence_hash'])
+            return redirect('staff_clinical_detail', pk=draft.pk)
+        except DraftError as exc:
+            form.add_error(None, str(exc))
+        except DraftConflict as exc:
+            form.add_error(None, str(exc)); status = 409
+    return render(request, 'staff/clinical_reference_form.html', {
+        'page_title': 'ارجاع تکمیلی | داروبانک', 'description': 'ثبت ارجاع ساختگی برای نسخه داخلی.',
+        'noindex': True, 'private_staff': True, 'form': form, 'draft': draft,
+    }, status=status)

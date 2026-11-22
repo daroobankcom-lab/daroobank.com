@@ -71,3 +71,39 @@ class ClinicalDraftReview(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError('Reviews cannot be deleted through this model.')
+
+
+class ClinicalReferenceAssertion(models.Model):
+    """Supplementary asserted citation for a single draft version; never verified."""
+    RELATIONS = [('supports', 'Claimed support'), ('contradicts', 'Claimed contradiction'),
+                 ('context', 'Context'), ('unclear', 'Unclear relationship')]
+    draft = models.ForeignKey(ClinicalDraft, on_delete=models.PROTECT, related_name='additional_references')
+    draft_payload_sha256 = models.CharField(max_length=64)
+    reference_title = models.CharField(max_length=300)
+    reference_url = models.URLField(max_length=200)
+    reference_location = models.CharField(max_length=300)
+    reference_author = models.CharField(max_length=200, blank=True)
+    reference_version = models.CharField(max_length=200, blank=True)
+    reference_published_on = models.DateField(null=True, blank=True)
+    reference_accessed_on = models.DateField(null=True, blank=True)
+    relation = models.CharField(max_length=20, choices=RELATIONS)
+    payload_sha256 = models.CharField(max_length=64)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='clinical_reference_assertions')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        default_permissions = ()  # clinical draft add/view permissions govern the workflow
+        ordering = ['pk']
+        constraints = [
+            models.UniqueConstraint(fields=['draft', 'payload_sha256'], name='unique_clinical_reference_assertion'),
+            models.CheckConstraint(condition=Q(relation__in=['supports', 'contradicts', 'context', 'unclear']),
+                                   name='clinical_reference_valid_relation'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('Reference assertions cannot be edited; record a new assertion.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Reference assertions cannot be deleted through this model.')

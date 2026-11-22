@@ -1,7 +1,8 @@
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_safe
-from .services import MAX_QUERY_LENGTH, MAX_RESULTS, search_products
+from .services import (MAX_QUERY_LENGTH, MAX_RESULTS, MAX_SEARCH_CANDIDATES, get_public_presentation,
+                       search_products, serialize_presentation)
 
 SITE_URL = 'https://daroobank.com'
 
@@ -44,14 +45,43 @@ def sitemap(request):
 @require_safe
 def search_api(request):
     query = request.GET.get('q', '').strip()[:MAX_QUERY_LENGTH]
-    data = [{
-        'id': p.pk, 'name_fa': p.name_fa, 'name_en': p.name_en,
-        'manufacturer': p.manufacturer, 'strength': p.strength,
-        'dosage_form': p.dosage_form, 'package_description': p.package_description,
-        'irc': p.irc or None, 'source': {'name': p.source_name, 'url': p.source_url,
-                                      'verified_at': p.verified_at.isoformat()},
-    } for p in search_products(query)]
-    response = JsonResponse({'data': data, 'meta': {'limit': MAX_RESULTS, 'pagination_available': False}})
+    data = [serialize_presentation(product) for product in search_products(query)]
+    response = JsonResponse({'data': data, 'meta': {'limit': MAX_RESULTS, 'candidate_scan_limit': MAX_SEARCH_CANDIDATES, 'pagination_available': False}})
+    response['X-Robots-Tag'] = 'noindex, follow'
+    response['Cache-Control'] = 'no-store'
+    response['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@require_safe
+def presentation_detail(request, pk):
+    try:
+        product = get_public_presentation(pk)
+    except Http404:
+        response = render(request, 'presentation_not_found.html', {
+            'page_title': 'فرآورده یافت نشد | داروبانک', 'description': 'صفحه در دسترس نیست.', 'noindex': True,
+        }, status=404)
+        response['X-Robots-Tag'] = 'noindex, follow'
+        response['Cache-Control'] = 'no-store'
+        response['Referrer-Policy'] = 'no-referrer'
+        return response
+    response = render_page(
+        request, 'presentation_detail.html', title=f'{product.name_fa} | داروبانک',
+        description='مشخصات فرآورده و بسته‌بندی و منبع ثبت‌شده در داروبانک.',
+        noindex=True, product=product,
+    )
+    response['Cache-Control'] = 'no-store'
+    response['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@require_safe
+def presentation_api(request, pk):
+    try:
+        product = get_public_presentation(pk)
+        response = JsonResponse({'data': serialize_presentation(product)})
+    except Http404:
+        response = JsonResponse({'error': {'code': 'not_found', 'message': 'Presentation not found.'}}, status=404)
     response['X-Robots-Tag'] = 'noindex, follow'
     response['Cache-Control'] = 'no-store'
     response['Referrer-Policy'] = 'no-referrer'

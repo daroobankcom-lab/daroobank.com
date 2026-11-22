@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="inner-hero presentation-hero">
+  <div class="container">
+    <nav class="breadcrumbs" aria-label="مسیر صفحه"><a href="{% url 'home' %}">خانه</a><span aria-hidden="true">/</span><a href="{% url 'search' %}">جست‌وجو</a><span aria-hidden="true">/</span><span>مشخصات فرآورده</span></nav>
+    <div class="kicker"><span></span> مشخصات فرآورده و بسته‌بندی</div>
+    <h1>{{ product.name_fa }}</h1>
+    {% if product.name_en %}<p class="presentation-english"><bdi dir="ltr">{{ product.name_en }}</bdi></p>{% endif %}
+    <p>این صفحه مشخصات یک فرآورده و بسته مشخص را نمایش می‌دهد، نه راهنمای مصرف دارو.</p>
+  </div>
+</section>
+<section class="section presentation-section"><div class="container">
+  <div class="presentation-layout">
+    <div class="presentation-main">
+      <section class="presentation-panel" aria-labelledby="identity-heading">
+        <h2 id="identity-heading">مشخصات ثبت‌شده</h2>
+        <p class="presentation-intro">اطلاعات زیر مربوط به همین شکل، مقدار و بسته‌بندی است.</p>
+        <dl class="presentation-data">
+          <div><dt>شرکت سازنده</dt><dd>{{ product.manufacturer }}</dd></div>
+          <div><dt>شکل دارویی</dt><dd>{{ product.dosage_form }}</dd></div>
+          <div><dt>مقدار یا غلظت</dt><dd><bdi>{{ product.strength }}</bdi></dd></div>
+          <div><dt>بسته‌بندی</dt><dd>{{ product.package_description }}</dd></div>
+          <div><dt>کد IRC ثبت‌شده</dt><dd>{% if product.irc %}<bdi dir="ltr">{{ product.irc }}</bdi>{% else %}نامشخص{% endif %}</dd></div>
+        </dl>
+      </section>
+      <section class="presentation-panel" aria-labelledby="limits-heading">
+        <h2 id="limits-heading">آنچه هنوز در دسترس نیست</h2>
+        <p>برای این فرآورده قیمت تأییدشده، موجودی و اطلاعات بالینی در این صفحه ارائه نمی‌شود. نبود داده به معنی نبود محصول، عدم تأیید، ایمنی یا عدم تداخل نیست.</p>
+        <a class="text-link" href="{% url 'prices' %}">وضعیت اطلاعات قیمت <span aria-hidden="true">←</span></a>
+      </section>
+    </div>
+    <aside class="presentation-side" aria-label="منبع و یادآوری">
+      <section class="presentation-panel source-panel" aria-labelledby="source-heading">
+        <div class="kicker"><span></span> شفافیت داده</div><h2 id="source-heading">منبع ثبت‌شده</h2>
+        <p><a href="{{ product.source_url }}" rel="noopener noreferrer">{{ product.source_name }} <span aria-hidden="true">↗</span></a></p>
+        <p>تاریخ بررسی ثبت‌شده (میلادی، زمان تهران): <time datetime="{{ product.verified_at|date:'c' }}">{{ product.verified_at|date:'Y/m/d H:i' }}</time></p>
+        <p>این تاریخ و وضعیت انتشار به‌تنهایی نشان‌دهنده تأیید بالینی یا مجوز بازنشر نیستند.</p>
+      </section>
+      <section class="presentation-notice"><h2>برای تصمیم درمانی</h2><p>این صفحه جایگزین توصیه پزشک یا داروساز نیست. برای مصرف، تغییر یا قطع دارو با متخصص مشورت کنید.</p></section>
+      <a class="button-outline presentation-back" href="{% url 'search' %}">بازگشت به جست‌وجو ←</a>
+    </aside>
+  </div>
+</div></section>
+{% endblock %}

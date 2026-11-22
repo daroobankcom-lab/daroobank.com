@@ -19,7 +19,7 @@ export DAROOBANK_DEBUG=1
 ## Actual layout
 
 - `daroobank/`: Django settings, URL configuration and WSGI entrypoint.
-- `catalog/`: narrow presentation model, search normalization/service, read-only views and tests.
+- `catalog/`: narrow presentation model, search normalization/service, read-only search and presentation detail views/API, and tests.
 - `pricing/`: local CSV candidate staging, inspection and preliminary independent review; no public prices or network crawler.
 - `templates/`, `static/`: server-rendered Persian pages, shared tokens and locally hosted OFL-licensed Vazirmatn font.
 - `docs/`: product, decisions, source research and operational plans.
@@ -76,3 +76,9 @@ An active staff user needs both `pricing.view_pricecandidate` and `pricing.add_p
 A different active staff user with both `pricing.view_pricecandidate` and `pricing.review_pricecandidate` can record a reasoned preliminary suggestion acceptance, rejection or deferral on the candidate page. A submitter cannot review their own candidate, including if they have all permissions. Acceptance requires a unique current exact suggestion and a matching product fingerprint; stale review versions and inconsistent stored payload/derived values are rejected. Rejection and deferral do not assert a product match. Events store the reviewer, reason, timestamp, candidate snapshot and product identity snapshot/hash. The detail page shows at most 25 recent events. A review is neither price approval nor proof of source rights, and it cannot publish.
 
 Identical replays do not alter the original submitter or attestation, including legacy or CLI-created records; these must be investigated through a future controlled provenance workflow, not edited directly to bypass separation. The model's ordinary `save()`/`delete()` guard is **not** database immutability: bulk ORM operations and direct SQL can alter or delete history. The hash is a consistency fingerprint, not a signature or proof of untampered source provenance; the source URL is not part of the payload hash. `select_for_update` has no row-locking effect on SQLite, and product matching cannot prevent concurrent insertions or edits from creating ambiguity. Optimistic checks are useful for sequential stale forms, not a proven concurrent authorization or matching guarantee. Do not rely on this local workflow for real data or release decisions; production needs a designed isolation/locking strategy, transaction and concurrency tests against its actual DB, durable audit protections and independent security review.
+
+## Development presentation pages and API
+
+Search links to `/products/<id>/`; `/api/v1/products/<id>/` returns the same presentation fields as search. Both reuse public visibility checks, show only published dated records with required identity fields and valid HTTPS source URLs without embedded credentials, and return a generic 404 for missing, unpublished or ineligible records. They are deliberately noindex, no-store and excluded from the sitemap pending real governance. A timestamp or `published` flag is not clinical approval or proof of source rights. No prices, availability or clinical guidance are provided. URLs are displayed to users: do not enter private URLs, query tokens or personal information. A source is not automatically fetched or validated as authoritative.
+
+Search is bounded to the first 150 SQL-matched rows examined and at most 30 valid results; there is no pagination or completeness guarantee. Bypassed model writes can corrupt metadata or leave search projections stale. Do not use the development implementation or its local empty/synthetic database as a medical or market source.

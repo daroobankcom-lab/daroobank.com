@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — dependency advisory checks
+
+**Changes:** Added isolated `pip-audit` checks for resolved Python requirements and Python packages in the development image, plus an npm audit for browser dependencies. The local requirements and npm audits found no known advisories at the time of review. Older pip/setuptools in the ignored local development venv were updated after retaining the old wheels and package list under ignored `.cache/`; no application dependency pins, database or business logic changed.
+
+**Limits:** Advisory databases change; checks require external registries and do not scan operating-system packages, Chromium, bundled native libraries or the auditor's own dependencies. Version pins are not package hashes, image tags remain mutable and this is not a production security assessment. See [Testing strategy](TESTING_STRATEGY.md#known-dependency-vulnerability-checks).
+
 ## 2026-11-22 — CI action runtime and pin review
 
 **Changes:** Updated official checkout, setup-python and setup-node actions to version-specific v7 commit SHAs using the Node 24 Actions runtime, and disabled checkout credential persistence. Preserved the Python 3.11 and browser Node 22 environments and the PostgreSQL, browser and Compose checks.

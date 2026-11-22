@@ -116,3 +116,12 @@ The Compose CI job creates synthetic root and nested environment, backup, cache 
 ## CI action pin and credential review
 
 The workflow pins the official checkout, setup-python and setup-node actions to full version-specific commit SHAs and disables checkout credential persistence. The three v7 actions run on the Node 24 Actions runtime (the browser suite itself uses Node 22), requiring a compatible hosted runner. GitHub CI must exercise both jobs after pin changes; recheck release notes, official tag-to-commit mappings and updates periodically. Pinning is not an upstream-code audit, secret scan, immutable container-image policy, or proof that package/cache downloads are safe.
+
+
+## Known dependency vulnerability checks
+
+CI runs `pip-audit==2.10.1` from isolated tool virtual environments against the resolved `requirements.txt` dependencies and, separately, the exact Python package list installed in the development web image. It also runs `npm audit --audit-level=info` against the browser-test lockfile. A known advisory, unresolved dependency or unavailable advisory registry causes the relevant step to fail; results change as registries update. These checks query external PyPI/npm services, do not send database data, and do not automatically upgrade dependencies.
+
+A local audit on 2026-11-22 found no advisories for the resolved application requirements or npm lockfile, but did flag the locally created Python venv's older pip and setuptools. Only the ignored development venv was updated after retaining its old tool wheels and package list in the ignored `.cache/security-tool-backup/`; the application requirements and database were unchanged. New virtual environments can inherit different tool versions and should be independently reviewed.
+
+These scans depend on registry advisory coverage and do not prove safety: they do not cover OS packages, bundled native libraries, Chromium binary vulnerabilities, container image contents outside Python distributions, GitHub actions, source integrity, the auditor's own dependencies or unknown vulnerabilities. Python requirements and auditor dependencies are not hash-locked; image tags remain mutable. CI is not a production security assessment or a substitute for updating, reviewing and scanning deployed environments.

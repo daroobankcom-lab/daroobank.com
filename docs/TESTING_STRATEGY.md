@@ -70,3 +70,8 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 
 
 `catalog/test_quality_irc.py` exercises indexed clues across the original batch boundary, 50-row forward pagination, published/unpublished records, stale/invalid indexes, cursor binding/tampering/expiry/anchor changes, private permissions, methods, headers, local CLI and no writes or raw data rendering. It uses synthetic PostgreSQL data and does not establish full-catalog completeness, identity, concurrent snapshot consistency, medical validity, browser accessibility or production load/security.
+
+
+## Synthetic catalog identity tests
+
+`catalog/test_identity.py` exercises the private assertion chain, multi-ingredient ordering, validation and rollback, independent review, stale/conflicting graphs, corrupted dependencies, permission and staff gate, CSRF, bounded list, public exclusion and two-connection competing PostgreSQL reviews. These synthetic tests do not prove audit integrity, clinical identity, browser accessibility, correctness against uncooperative writers or production readiness. See [ADR 0012](ARCHITECTURE_DECISIONS/0012-synthetic-identity-drafts.md).

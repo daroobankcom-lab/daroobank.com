@@ -1,0 +1,129 @@
+"""Development-only identity workspace; never publish or establish equivalence."""
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.http import Http404, HttpResponseBadRequest
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_http_methods, require_POST, require_safe
+
+from daroobank.validation import valid_review_reason
+from .identity import (ADD, VIEW, REVIEW, MAX_ID, INGREDIENT_FIELDS, FORMULATION_FIELDS, PRODUCT_FIELDS, PACKAGE_FIELDS,
+    IdentityConflict, IdentityError, create_ingredient, create_formulation, create_product, create_package,
+    digest, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot, require_staff, review_package, safe_snapshot)
+from .identity_forms import ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm
+from .models import IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft
+
+KINDS = {
+    'ingredient': (IngredientDraft, IngredientForm, INGREDIENT_FIELDS, ingredient_snapshot, 'ماده مؤثره'),
+    'formulation': (FormulationDraft, FormulationForm, FORMULATION_FIELDS, formulation_snapshot, 'فرمولاسیون ژنریک'),
+    'product': (IdentityProductDraft, ProductForm, PRODUCT_FIELDS, product_snapshot, 'فرآورده'),
+    'package': (IdentityPackageDraft, PackageForm, PACKAGE_FIELDS, package_snapshot, 'بسته‌بندی'),
+}
+
+
+def _kind(kind):
+    if kind not in KINDS: raise Http404('Not found')
+    return KINDS[kind]
+
+
+def _object(kind, pk):
+    model = _kind(kind)[0]
+    if not 1 <= pk <= MAX_ID: raise Http404('Not found')
+    return get_object_or_404(model, pk=pk)
+
+
+def _authors(graph):
+    product = graph['product']; form = product['formulation']
+    return {graph['recorded_by_id'], product['recorded_by_id'], form['recorded_by_id'],
+            *(ingredient['recorded_by_id'] for ingredient in form['ingredients'])}
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def listing(request):
+    require_staff(request.user, VIEW)
+    kind = request.GET.get('kind', 'ingredient')
+    if kind not in KINDS: return HttpResponseBadRequest('Invalid category.')
+    model, _, _, snapshot, label = _kind(kind)
+    page = Paginator(model.objects.order_by('-pk'), 20).get_page(request.GET.get('page', 1))
+    for item in page.object_list:
+        item.snapshot = safe_snapshot(item, snapshot)
+        item.title = (item.snapshot.get('name_fa') or item.snapshot.get('name') or item.snapshot.get('description')) if item.snapshot else ''
+    return render(request, 'staff/identity_list.html', {'page_title': 'هویت ساختگی کاتالوگ | داروبانک',
+        'description': 'ساختار خصوصی کاتالوگ.', 'private_staff': True, 'noindex': True, 'page': page,
+        'kind': kind, 'label': label, 'can_add': request.user.has_perm(ADD)})
+
+
+@login_required(login_url='staff_login')
+@require_http_methods(['GET', 'POST'])
+def create(request, kind):
+    require_staff(request.user, VIEW, ADD)
+    _, form_class, fields, _, label = _kind(kind)
+    form = form_class(request.POST if request.method == 'POST' else None)
+    parts = ComponentFormSet(request.POST if request.method == 'POST' else None, prefix='parts') if kind == 'formulation' else None
+    status = 200
+    if request.method == 'POST':
+        valid = form.is_valid()
+        parts_valid = parts.is_valid() if parts else True
+        if valid and parts_valid:
+            data = {key: form.cleaned_data[key] for key in fields}
+            try:
+                if kind == 'ingredient': obj = create_ingredient(actor=request.user, data=data)
+                elif kind == 'formulation': obj = create_formulation(actor=request.user, data=data,
+                    components=[part.cleaned_data for part in parts if part.cleaned_data])
+                elif kind == 'product': obj = create_product(actor=request.user, data=data, formulation_id=form.cleaned_data['formulation_id'])
+                else: obj = create_package(actor=request.user, data=data, product_id=form.cleaned_data['product_id'])
+                return redirect('staff_identity_detail', kind=kind, pk=obj.pk)
+            except IdentityError as exc:
+                form.add_error(None, str(exc))
+            except IdentityConflict as exc:
+                form.add_error(None, str(exc)); status = 409
+    return render(request, 'staff/identity_form.html', {'page_title': 'ثبت هویت ساختگی | داروبانک',
+        'description': 'ثبت ساختار خصوصی.', 'private_staff': True, 'noindex': True, 'form': form,
+        'parts': parts, 'kind': kind, 'label': label}, status=status)
+
+
+def _detail(request, kind, obj, *, review_form=None, status=200):
+    snapshot = safe_snapshot(obj, _kind(kind)[3])
+    reviews, can_review = [], False
+    if kind == 'package' and snapshot:
+        reviews = list(obj.reviews.select_related('reviewer').order_by('-pk')[:25])
+        if snapshot:
+            can_review = request.user.has_perm(REVIEW) and request.user.pk not in _authors(snapshot)
+            if can_review and review_form is None:
+                review_form = IdentityReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0,
+                                                           'expected_graph_hash': digest(snapshot)})
+        for review in reviews:
+            try:
+                review.safe = (isinstance(review.graph_snapshot, dict) and digest(review.graph_snapshot) == review.graph_sha256
+                               and valid_review_reason(review.reason))
+            except (TypeError, ValueError, UnicodeError):
+                review.safe = False
+    return render(request, 'staff/identity_detail.html', {'page_title': 'جزئیات هویت ساختگی | داروبانک',
+        'description': 'زنجیره ادعایی کاتالوگ.', 'private_staff': True, 'noindex': True, 'kind': kind,
+        'label': _kind(kind)[4], 'obj': obj, 'snapshot': snapshot, 'reviews': reviews,
+        'can_review': can_review, 'review_form': review_form, 'can_add': request.user.has_perm(ADD)}, status=status)
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def detail(request, kind, pk):
+    require_staff(request.user, VIEW)
+    return _detail(request, kind, _object(kind, pk))
+
+
+@login_required(login_url='staff_login')
+@require_POST
+def review(request, pk):
+    require_staff(request.user, VIEW, REVIEW)
+    package = _object('package', pk)
+    form = IdentityReviewForm(request.POST)
+    if not form.is_valid(): return _detail(request, 'package', package, review_form=form, status=400)
+    try:
+        review_package(actor=request.user, package_id=pk, **form.cleaned_data)
+    except IdentityConflict as exc:
+        form.add_error(None, str(exc))
+        package.refresh_from_db()
+        return _detail(request, 'package', package, review_form=form, status=409)
+    except IdentityPackageDraft.DoesNotExist:
+        return HttpResponseBadRequest('Package no longer exists.')
+    return redirect('staff_identity_detail', kind='package', pk=pk)

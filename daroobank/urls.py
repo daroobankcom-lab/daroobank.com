@@ -1,5 +1,5 @@
 from django.urls import path
-from catalog import views, staff_views as product_staff_views, quality_views
+from catalog import views, staff_views as product_staff_views, quality_views, identity_views
 from pricing import staff_views
 from sources import staff_views as source_staff_views
 from ingestion import staff_views as ingestion_staff_views
@@ -29,6 +29,10 @@ urlpatterns = [
     path('staff/sources/new/', source_staff_views.create, name='staff_source_create'),
     path('staff/sources/<int:pk>/review/', source_staff_views.review, name='staff_source_review'),
     path('staff/sources/<int:pk>/', source_staff_views.detail, name='staff_source_detail'),
+    path('staff/catalog/identity/', identity_views.listing, name='staff_identity_list'),
+    path('staff/catalog/identity/new/<str:kind>/', identity_views.create, name='staff_identity_create'),
+    path('staff/catalog/identity/package/<int:pk>/review/', identity_views.review, name='staff_identity_review'),
+    path('staff/catalog/identity/<str:kind>/<int:pk>/', identity_views.detail, name='staff_identity_detail'),
     path('staff/catalog/quality/', quality_views.quality, name='staff_catalog_quality'),
     path('staff/catalog/quality/<int:pk>/irc/', quality_views.quality_irc, name='staff_catalog_quality_irc'),
     path('staff/products/', product_staff_views.candidates, name='staff_products'),

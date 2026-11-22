@@ -105,3 +105,8 @@ Product and price committed CSV staging uses PostgreSQL transaction advisory loc
 ## Indexed IRC inspection
 
 The DEBUG-only indexed IRC clue page uses `catalog.view_productpresentation` and can reveal IDs and status for unpublished presentations; group permissions apply. It does not intentionally render source names, URLs or IRC values. Its signed cursor contains IDs and a keyed digest; it is not encrypted, not an access grant and can be guessable when a known debug secret protects low-entropy codes. Cursor URLs may be logged. The local command/service operate outside the web gate. A stale or corrupt index can hide matching records and results are not a snapshot, evidence, authorization or identity verification; use synthetic data only. See [ADR 0011](ARCHITECTURE_DECISIONS/0011-indexed-irc-inspection.md).
+
+
+## Synthetic identity drafts
+
+The development-only staff identity workspace uses independent view/add/review permissions, CSRF and staff privacy headers. Full source assertions and graph snapshots are visible to authorized viewers; the checkbox does not prevent sensitive input. Direct service calls are outside the web gate. Never use real patient or proprietary data. Locks coordinate same-package review service calls; hashes and model guards are not tamper-proof, bulk ORM/SQL bypass them and out-of-band writes can race. No clinical, identity or production security approval is implied. See [ADR 0012](ARCHITECTURE_DECISIONS/0012-synthetic-identity-drafts.md).

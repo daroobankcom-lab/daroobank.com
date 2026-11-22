@@ -40,6 +40,7 @@ def candidates(request):
         'can_sources': request.user.has_perm('sources.view_sourceclaim'),
         'can_clinical': request.user.has_perm('clinical.view_clinicaldraft'),
         'can_quality': request.user.has_perm('catalog.view_productpresentation'),
+        'can_identity': request.user.has_perm('catalog.view_identityworkspace'),
     })
 
 

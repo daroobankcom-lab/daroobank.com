@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — private synthetic identity drafts
+
+**Changes:** Added a private, permission-scoped draft chain from ingredients through ordered formulation components and products to packages, with asserted sources and preliminary independent package review. Bounded staff pages, conflict checks, PostgreSQL migration and synthetic tests are included. Public catalog records and eligibility are unchanged.
+
+**Limits:** A development prototype, not a comprehensive identity model, verified source, clinical approval, equivalence or publication workflow. Hashes are not signatures; bulk ORM/SQL bypass guards, direct writes can race, and only cooperative reviews are serialized. No real patient or proprietary data, browser/accessibility, medical or production validation. See [ADR 0012](ARCHITECTURE_DECISIONS/0012-synthetic-identity-drafts.md).
+
 ## 2026-11-22 — cross-batch indexed IRC clues
 
 **Changes:** Added a private, permission-scoped indexed IRC inspection page and local command anchored on a presentation ID. Forward signed cursors paginate bounded indexed clues across the catalog; inconsistent indexes are flagged, anchor drift or cursor tampering stops inspection, and raw names/URLs/codes are not deliberately output.

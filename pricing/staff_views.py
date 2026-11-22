@@ -44,6 +44,8 @@ class StaffLoginView(LoginView):
                 return reverse('staff_sources')
             if user.has_perm('clinical.view_clinicaldraft'):
                 return reverse('staff_clinical_drafts')
+            if user.has_perm('catalog.view_identityworkspace'):
+                return reverse('staff_identity_list')
             if user.has_perm('catalog.view_productpresentation'):
                 return reverse('staff_catalog_quality')
         return super().get_default_redirect_url()

@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container"><p><a href="{% url 'staff_identity_list' %}?kind={{ kind }}">بازگشت ←</a></p><h1>{{ label }} · شناسه {{ obj.pk }}</h1>
+<div class="staff-alert">داده ساختگی و ادعایی؛ هیچ منبع، هویت، ایمنی یا معادل بودن تأیید نشده و چیزی منتشر نمی‌شود. هش فقط برای تشخیص بعضی ناسازگاری‌هاست.</div>
+{% if snapshot %}<div class="staff-panel"><h2>داده زنجیره ادعایی</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere" dir="ltr">{{ snapshot }}</pre></div>
+{% else %}<div class="staff-empty">رکورد یا وابستگی آن ناسازگار است؛ جزئیات و بازبینی غیرفعال‌اند.</div>{% endif %}
+{% if kind == 'package' %}<h2>آخرین بازبینی‌های مقدماتی (حداکثر ۲۵)</h2>{% for review in reviews %}<article class="staff-panel">{% if review.safe %}<p>{{ review.get_decision_display }} · {{ review.created_at }}</p><p>{{ review.reason }}</p>{% else %}<p>بازبینی ناسازگار؛ جزئیات پنهان شد.</p>{% endif %}</article>{% empty %}<p>بازبینی‌ای ثبت نشده است.</p>{% endfor %}
+{% if can_review and review_form %}<div class="staff-panel"><h2>ثبت بازبینی مستقل مقدماتی</h2><form method="post" action="{% url 'staff_identity_review' obj.pk %}" class="staff-review-form">{% csrf_token %}{{ review_form.non_field_errors }}{% for field in review_form %}{% if field.is_hidden %}{{ field }}{{ field.errors }}{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endif %}{% endfor %}<button class="staff-button" type="submit">ثبت بازبینی</button></form></div>{% endif %}{% endif %}
+</div></section>{% endblock %}

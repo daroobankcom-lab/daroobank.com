@@ -9,6 +9,8 @@ import re
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
+from daroobank.validation import valid_review_reason
+
 from .importer import FIELDS, LIMITS, ImportValidationError, parse_csv, suggest_product, validate_source
 from .models import PriceCandidate, PriceCandidateReview
 
@@ -65,8 +67,7 @@ def ensure_candidate_integrity(candidate):
 def record_preliminary_review(*, candidate_id, actor, decision, reason, expected_review, expected_product, expected_product_hash):
     if not actor.is_authenticated or not actor.is_active or not actor.is_staff or not actor.has_perm('pricing.view_pricecandidate') or not actor.has_perm('pricing.review_pricecandidate'):
         raise PermissionDenied
-    if (decision not in dict(PriceCandidateReview.DECISIONS) or not isinstance(reason, str)
-            or not 12 <= len(reason.strip()) <= 1000 or not isinstance(expected_review, int)
+    if (decision not in dict(PriceCandidateReview.DECISIONS) or not valid_review_reason(reason) or not isinstance(expected_review, int)
             or expected_review < 0 or not isinstance(expected_product, int) or expected_product < 0
             or not isinstance(expected_product_hash, str)):
         raise ReviewConflict('نتیجه یا توضیح بررسی معتبر نیست.')

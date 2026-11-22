@@ -5,11 +5,11 @@ import io
 import json
 import re
 import unicodedata
-from urllib.parse import urlsplit
 
-from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.validators import URLValidator
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
+
+from daroobank.validation import valid_private_source_url, valid_review_reason
 
 from .models import ProductCandidate, ProductCandidateReview
 from .normalization import normalize_search
@@ -40,13 +40,8 @@ def valid_source(name, url):
             or any(unicodedata.category(c) in ('Cc', 'Cs') for c in name)
             or not isinstance(url, str) or len(url) > 200 or url != url.strip()):
         raise IntakeError('نام یا نشانی منبع معتبر نیست.')
-    try:
-        URLValidator(schemes=['https'])(url)
-        parsed = urlsplit(url)
-        if parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment:
-            raise IntakeError('نشانی منبع نباید رمز، پارامتر یا قطعه داشته باشد.')
-    except (ValidationError, ValueError) as exc:
-        raise IntakeError('نشانی منبع باید HTTPS معتبر و بدون اطلاعات محرمانه باشد.') from exc
+    if not valid_private_source_url(url):
+        raise IntakeError('نشانی منبع باید HTTPS معتبر و بدون اطلاعات محرمانه باشد.')
 
 
 def valid_fields(row):
@@ -121,8 +116,7 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
 
 def review_product(*, candidate_id, actor, decision, reason, expected_review, expected_hash):
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.review_productcandidate')
-    if (decision not in dict(ProductCandidateReview.DECISIONS) or not isinstance(reason, str)
-            or not 12 <= len(reason.strip()) <= 1000 or type(expected_review) is not int or expected_review < 0
+    if (decision not in dict(ProductCandidateReview.DECISIONS) or not valid_review_reason(reason) or type(expected_review) is not int or expected_review < 0
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
     with transaction.atomic():

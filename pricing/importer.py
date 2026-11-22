@@ -8,12 +8,10 @@ import unicodedata
 from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
-from urllib.parse import urlsplit
 
-from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
 from django.db import transaction
 
+from daroobank.validation import valid_private_source_url
 from catalog.models import ProductPresentation
 from catalog.normalization import normalize_search
 from .models import PriceCandidate
@@ -45,16 +43,13 @@ class ImportValidationError(ValueError):
 
 
 def validate_source(name, url):
-    name, url = name.strip(), url.strip()
-    if not name or len(name) > 200 or not url or len(url) > 200:
+    if not isinstance(name, str) or not isinstance(url, str):
         raise ImportValidationError('Source name and HTTPS URL are required and must be at most 200 characters.')
-    try:
-        URLValidator(schemes=['https'])(url)
-    except ValidationError as exc:
-        raise ImportValidationError('The source URL must be a valid HTTPS URL.') from exc
-    parsed = urlsplit(url)
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ImportValidationError('Source URL must not contain credentials, query parameters, or a fragment.')
+    name, url = name.strip(), url.strip()
+    if (not name or len(name) > 200 or any(unicodedata.category(c) in ('Cc', 'Cs') for c in name)):
+        raise ImportValidationError('Source name is invalid or oversized.')
+    if not valid_private_source_url(url):
+        raise ImportValidationError('Source URL must be valid HTTPS without credentials, query parameters, or a fragment.')
     return name, url
 
 

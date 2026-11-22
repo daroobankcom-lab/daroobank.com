@@ -4,15 +4,14 @@ import json
 import re
 import unicodedata
 from datetime import date
-from urllib.parse import urlsplit
 
-from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.validators import URLValidator
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 
 from catalog.normalization import normalize_search
+from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import SourceClaim, SourceClaimReview
 
 FIELDS = ('source_name', 'source_url', 'owner', 'evidence_url', 'evidence_note', 'claims_collection',
@@ -37,17 +36,8 @@ def require_staff(user, *perms):
 
 
 def validate_url(value):
-    if (not isinstance(value, str) or not value or len(value) > 200 or value != value.strip()
-            or '?' in value or '#' in value
-            or any(unicodedata.category(c) in ('Cc', 'Cs') for c in value)):
-        raise ClaimError('نشانی HTTPS معتبر لازم است.')
-    try:
-        URLValidator(schemes=['https'])(value)
-        parsed = urlsplit(value)
-        if parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment:
-            raise ClaimError('نشانی نباید شامل رمز، پارامتر یا قطعه باشد.')
-    except (ValidationError, ValueError) as exc:
-        raise ClaimError('نشانی HTTPS معتبر و بدون اطلاعات محرمانه لازم است.') from exc
+    if not valid_private_source_url(value):
+        raise ClaimError('نشانی HTTPS معتبر و بدون اطلاعات محرمانه لازم است.')
 
 
 def validate_data(data):
@@ -106,9 +96,7 @@ def record_claim(*, actor, data):
 
 def review_claim(*, actor, claim_id, decision, reason, expected_review, expected_hash):
     require_staff(actor, VIEW, REVIEW)
-    if (decision not in dict(SourceClaimReview.DECISIONS) or not isinstance(reason, str)
-            or not 12 <= len(reason.strip()) <= 1000
-            or any(unicodedata.category(c) == 'Cs' or (unicodedata.category(c) == 'Cc' and c not in '\n\r\t') for c in reason)
+    if (decision not in dict(SourceClaimReview.DECISIONS) or not valid_review_reason(reason)
             or type(expected_review) is not int or expected_review < 0
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')

@@ -36,18 +36,9 @@ class StaffLoginView(LoginView):
     extra_context = {'page_title': 'ورود همکاران | داروبانک', 'description': 'ورود به بخش داخلی داروبانک.', 'noindex': True, 'private_staff': True}
 
     def get_default_redirect_url(self):
-        user = self.request.user
-        if user.is_staff and not user.has_perm('pricing.view_pricecandidate'):
-            if user.has_perm('catalog.view_productcandidate'):
-                return reverse('staff_products')
-            if user.has_perm('sources.view_sourceclaim'):
-                return reverse('staff_sources')
-            if user.has_perm('clinical.view_clinicaldraft'):
-                return reverse('staff_clinical_drafts')
-            if user.has_perm('catalog.view_identityworkspace'):
-                return reverse('staff_identity_list')
-            if user.has_perm('catalog.view_productpresentation'):
-                return reverse('staff_catalog_quality')
+        # Django's safe explicit `next` is resolved before this default.
+        if self.request.user.is_active and self.request.user.is_staff:
+            return reverse('staff_workspace')
         return super().get_default_redirect_url()
 
 

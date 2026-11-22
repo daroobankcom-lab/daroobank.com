@@ -90,7 +90,7 @@ class ProductIntakeTests(TestCase):
         group.permissions.add(Permission.objects.get(content_type__app_label='catalog', codename='view_productcandidate'))
         user.groups.add(group)
         response = self.client.post(reverse('staff_login'), {'username': 'group-test', 'password': 'test-only-passphrase'})
-        self.assertRedirects(response, reverse('staff_products'))
+        self.assertRedirects(response, reverse('staff_workspace'))
         self.assertEqual(self.client.get(reverse('staff_product_upload')).status_code, 403)
 
     @override_settings(STAFF_PORTAL_ENABLED=False, SECURE_SSL_REDIRECT=False)

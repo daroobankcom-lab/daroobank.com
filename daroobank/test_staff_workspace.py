@@ -87,6 +87,49 @@ class StaffWorkspaceTests(TestCase):
                 if 'staff_identity_list' not in expected:
                     self.assertEqual(self.client.get(reverse('staff_identity_list')).status_code, 403)
 
+    def test_pending_shortcuts_use_existing_filters_and_permissions(self):
+        mappings = [
+            ('catalog', 'view_productcandidate', 'staff_products', 'status=pending', 'status'),
+            ('pricing', 'view_pricecandidate', 'staff_prices', 'review=pending', 'review_status'),
+            ('sources', 'view_sourceclaim', 'staff_sources', 'status=pending', 'status'),
+            ('clinical', 'view_clinicaldraft', 'staff_clinical_drafts', 'status=pending', 'status'),
+        ]
+        for index, (app, permission, route, query, context_key) in enumerate(mappings):
+            with self.subTest(permission=permission):
+                user = get_user_model().objects.create_user(f'pending-{index}', is_staff=True)
+                user.user_permissions.add(self.permission(app, permission))
+                self.client.force_login(user)
+                workspace = self.client.get(reverse('staff_workspace'))
+                expected = reverse(route) + '?' + query
+                self.assertContains(workspace, f'href="{expected}"')
+                pending = [link for link in workspace.context['links'] if link.get('pending_filter')]
+                self.assertEqual([(link['route'], link['pending_filter']) for link in pending], [(route, query)])
+                queue = self.client.get(expected)
+                self.assertEqual(queue.status_code, 200)
+                self.assertEqual(queue.context[context_key], 'pending')
+                for _, _, other_route, other_query, _ in mappings:
+                    if other_route != route:
+                        self.assertNotContains(workspace, f'href="{reverse(other_route)}?{other_query}"')
+                        self.assertEqual(self.client.get(reverse(other_route) + '?' + other_query).status_code, 403)
+
+    def test_default_login_landing_and_safe_next(self):
+        # Even an active staff account with no view permission gets the empty workspace.
+        credentials = {'username': self.user.username, 'password': 'synthetic-passphrase'}
+        workspace = reverse('staff_workspace')
+        for next_url, expected in [('', workspace), ('https://evil.example/path', workspace),
+                                   ('//evil.example/path', workspace), ('javascript:alert(1)', workspace),
+                                   (reverse('staff_identity_list') + '?kind=package',
+                                    reverse('staff_identity_list') + '?kind=package')]:
+            with self.subTest(next_url=next_url):
+                self.client.logout()
+                response = self.client.post(reverse('staff_login'), {**credentials, 'next': next_url})
+                self.assertRedirects(response, expected, fetch_redirect_response=False)
+                if next_url.startswith('/staff/catalog/identity/'):
+                    # A safe next URL does not confer destination permissions.
+                    self.assertEqual(self.client.get(expected).status_code, 403)
+                else:
+                    self.assertContains(self.client.get(expected), 'بخشی برای این حساب قابل نمایش نیست')
+
     def test_revoked_permission_removes_link_and_destination_access(self):
         perm = self.permission('catalog', 'view_identityworkspace')
         self.user.user_permissions.add(perm)
@@ -106,3 +149,44 @@ class StaffWorkspaceTests(TestCase):
         token = client.cookies['csrftoken'].value
         self.assertRedirects(client.post(reverse('staff_logout'), {'csrfmiddlewaretoken': token}), reverse('home'))
         self.assertEqual(client.get(reverse('staff_workspace')).status_code, 302)
+
+    def test_shortcuts_only_include_records_with_no_review_event(self):
+        # Synthetic rows created directly to exercise existing filters, not to
+        # imply that these assertions or review snapshots are valid or approved.
+        from catalog.models import ProductCandidate, ProductCandidateReview
+        from clinical.models import ClinicalDraft, ClinicalDraftReview
+        from pricing.models import PriceCandidate, PriceCandidateReview
+        from sources.models import SourceClaim, SourceClaimReview
+
+        admin = get_user_model().objects.create_superuser('queue-admin', 'queue@example.org', 'synthetic-passphrase')
+        common = {'source_name': 'ساختگی', 'source_url': 'https://example.org', 'payload_sha256': 'a' * 64}
+        rows = {}
+        for i, label in enumerate(('unreviewed', 'deferred')):
+            product = ProductCandidate.objects.create(**common, source_record_id=label, source_fields={}, staged_by=admin)
+            price = PriceCandidate.objects.create(**common, source_record_id=label, source_fields={}, staged_by=admin,
+                original_amount='1', original_currency='RIAL', amount_rial=1, price_category='retail',
+                unit='package', match_status='unmatched')
+            claim = SourceClaim.objects.create(**{**common, 'source_url': f'https://example.org/{label}'},
+                owner='مالک ساختگی', evidence_url='https://example.org/evidence', claims_collection=True, recorded_by=admin)
+            draft = ClinicalDraft.objects.create(subject='موضوع ساختگی', audience='patient', title=label,
+                statement='متن ساختگی', reference_title='ارجاع ساختگی', reference_url='https://example.org',
+                reference_location='بخش ساختگی', payload_sha256='a' * 64, author=admin)
+            rows[label] = (product, price, claim, draft)
+            if i:
+                ProductCandidateReview.objects.create(candidate=product, reviewer=admin, decision='defer',
+                    reason='ساختگی', candidate_payload_sha256='a' * 64, review_snapshot={})
+                PriceCandidateReview.objects.create(candidate=price, reviewer=admin, decision='defer',
+                    reason='ساختگی', candidate_payload_sha256='a' * 64, review_snapshot={})
+                SourceClaimReview.objects.create(claim=claim, reviewer=admin, decision='defer',
+                    reason='ساختگی', claim_payload_sha256='a' * 64, review_snapshot={})
+                ClinicalDraftReview.objects.create(draft=draft, reviewer=admin, decision='defer',
+                    reason='ساختگی', draft_payload_sha256='a' * 64, review_snapshot={})
+        self.client.force_login(admin)
+        workspace = self.client.get(reverse('staff_workspace'))
+        pending_links = {item['route']: item['pending_filter'] for item in workspace.context['links'] if item.get('pending_filter')}
+        routes = ('staff_products', 'staff_prices', 'staff_sources', 'staff_clinical_drafts')
+        for index, route in enumerate(routes):
+            with self.subTest(route=route):
+                response = self.client.get(reverse(route) + '?' + pending_links[route])
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual([item.pk for item in response.context['page']], [rows['unreviewed'][index].pk])

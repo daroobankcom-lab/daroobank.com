@@ -78,7 +78,7 @@ class SourceClaimTests(TestCase):
         user = get_user_model().objects.create_user('source-group', password='test-only-password', is_staff=True)
         user.groups.add(group)
         self.client.logout()
-        self.assertRedirects(self.client.post(reverse('staff_login'), {'username': 'source-group', 'password': 'test-only-password'}), reverse('staff_sources'))
+        self.assertRedirects(self.client.post(reverse('staff_login'), {'username': 'source-group', 'password': 'test-only-password'}), reverse('staff_workspace'))
 
     @override_settings(STAFF_PORTAL_ENABLED=False, SECURE_SSL_REDIRECT=False)
     def test_disabled_portal_for_all_actions(self):

@@ -24,7 +24,11 @@ def workspace(request):
         ('catalog.view_identityworkspace', 'staff_identity_list', 'هویت ساختگی کاتالوگ', 'ساختار آزمایشی ماده، فرآورده و بسته.'),
         ('catalog.view_productpresentation', 'staff_catalog_quality', 'بازرسی کاتالوگ', 'بررسی محدود فنی رکوردهای کاتالوگ.'),
     ]
-    links = [{'route': route, 'label': label, 'description': description}
+    # These are existing queue filters, not counts or a new review state.
+    pending_filters = {'staff_products': 'status=pending', 'staff_prices': 'review=pending',
+                       'staff_sources': 'status=pending', 'staff_clinical_drafts': 'status=pending'}
+    links = [{'route': route, 'label': label, 'description': description,
+              'pending_filter': pending_filters.get(route)}
              for permission, route, label, description in destinations if user.has_perm(permission)]
     if visible_kinds(user):
         links.append({'route': 'staff_import_receipts', 'label': 'رسیدهای ورود فایل',

@@ -140,7 +140,7 @@ class CatalogQualityTests(TestCase):
     def test_login_landing_for_quality_only_user_and_navigation(self):
         self.client.logout()
         response = self.client.post(reverse('staff_login'), {'username': 'quality', 'password': 'test-password-123'})
-        self.assertRedirects(response, reverse('staff_catalog_quality'))
+        self.assertRedirects(response, reverse('staff_workspace'))
         self.client.force_login(self.candidate_user)
         self.assertNotContains(self.client.get(reverse('staff_products')), reverse('staff_catalog_quality'))
         self.candidate_user.user_permissions.add(Permission.objects.get(codename='view_productpresentation'))

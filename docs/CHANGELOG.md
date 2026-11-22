@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — workspace landing and unreviewed queue shortcuts
+
+**Changes:** Active staff now land on the permission-scoped workspace by default after login; Django's explicit safe `next` destination still takes precedence and its own permissions remain enforced. Added shortcuts to the existing unreviewed filters for product, price, source and clinical queues. They add no counts, data writes, new review states or permissions.
+
+**Limits:** Unreviewed means no recorded review event, not all outstanding work or eligibility for this reviewer. Existing reviewed/deferred records are excluded. The portal remains development-only, synthetic-data-only and not a production dashboard.
+
 ## 2026-11-22 — permission-scoped staff workspace navigation
 
 **Changes:** Added a private, read-only `/staff/` navigation page and return link from private staff pages. Active staff see only links corresponding to existing view permissions; the page does not show counts, records or operational status. Login landing behavior and destination authorization are unchanged. Synthetic role, permission revocation, privacy, CSRF logout and Chromium/axe checks cover the new page.

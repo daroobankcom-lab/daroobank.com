@@ -192,7 +192,7 @@ class IdentityTests(TestCase):
         self.assertEqual(self.client.get(reverse('staff_identity_list')).status_code, 200)
         self.client.logout()
         response = self.client.post(reverse('staff_login'), {'username': 'identity-viewer', 'password': 'test-only'})
-        self.assertRedirects(response, reverse('staff_identity_list'))
+        self.assertRedirects(response, reverse('staff_workspace'))
         inactive = user('identity-inactive', *ALL)
         inactive.is_active = False; inactive.save()
         self.client.force_login(inactive)

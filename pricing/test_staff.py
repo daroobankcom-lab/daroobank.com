@@ -142,7 +142,7 @@ class StaffPriceAccessTests(TestCase):
             'csrfmiddlewaretoken': token, 'next': 'https://evil.example/',
         })
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], reverse('staff_prices'))
+        self.assertEqual(response['Location'], reverse('staff_workspace'))
         self.assertEqual(client.get(reverse('staff_logout')).status_code, 405)
         self.assertEqual(client.post(reverse('staff_logout')).status_code, 403)
         client.get(reverse('staff_prices'))

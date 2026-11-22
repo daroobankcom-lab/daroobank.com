@@ -27,7 +27,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                         'Use daroobank.browser_test_settings for isolated browser tests')
         self.assertEqual(connection.vendor, 'postgresql')
         self.assertRegex(connection.settings_dict['NAME'], r'^test_daroobank_browser_[0-9a-f]{32}$')
-        author = user('browser-author', *ALL)
+        author = user('browser-author', *ALL, 'view_productcandidate')
         user('browser-reviewer', 'view_identityworkspace', 'review_identityworkspace')
         ingredient, _, formulation, product, package = build(author)
         leaf = ingredient

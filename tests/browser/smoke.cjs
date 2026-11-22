@@ -128,7 +128,7 @@ async function login(page, username) {
   const [result] = await Promise.all([page.waitForResponse(r => r.url().includes('/staff/login/') && r.request().method() === 'POST'), page.keyboard.press('Enter')]);
   assert.equal(result.status(), 302, `login response ${result.status()}`);
   assert.equal(result.request().headers().origin, origin, 'login must retain a same-origin CSRF Origin');
-  await page.waitForURL('**/staff/catalog/identity/');
+  await page.waitForURL('**/staff/');
 }
 
 async function revision(page, url, field, value) {
@@ -212,15 +212,21 @@ async function run() {
       assert.match(response.headers()['cache-control'], /no-store/);
       if (width === 390) await auditAccessibility(page, 'login');
       await login(page, author);
-      await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/');
       assert.match(await page.locator('h1').innerText(), /فضای کاری همکاران/);
       assert.equal(await page.locator('a[href="/staff/catalog/identity/"]').count(), 1);
       assert.equal(await page.locator('a[href="/staff/prices/"]').count(), 0);
       await checkLayout(page, `staff workspace ${width}`);
       if (width === 390) await auditAccessibility(page, 'staff workspace');
+      await page.getByRole('link', {name: 'بدون بازبینی: نامزدهای فرآورده'}).click();
+      assert.equal(new URL(page.url()).pathname, '/staff/products/');
+      assert.equal(new URL(page.url()).search, '?status=pending');
+      assert.equal(await page.locator('#status').inputValue(), 'pending');
+      await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       await page.getByRole('link', {name: 'ورود به هویت ساختگی کاتالوگ'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/catalog/identity/');
+      await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
+      assert.equal(new URL(page.url()).pathname, '/staff/');
       response = await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
       assert.equal(response.status(), 200);
       await checkLayout(page, `identity form ${width}`);

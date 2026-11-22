@@ -76,7 +76,7 @@ class ClinicalWorkflowTests(TestCase):
         group.permissions.add(Permission.objects.get(content_type__app_label='clinical', codename='view_clinicaldraft'))
         user = get_user_model().objects.create_user('clinical-group', password='test-only-password', is_staff=True); user.groups.add(group)
         self.client.logout()
-        self.assertRedirects(self.client.post(reverse('staff_login'), {'username': user.username, 'password': 'test-only-password'}), reverse('staff_clinical_drafts'))
+        self.assertRedirects(self.client.post(reverse('staff_login'), {'username': user.username, 'password': 'test-only-password'}), reverse('staff_workspace'))
 
     @override_settings(STAFF_PORTAL_ENABLED=False, SECURE_SSL_REDIRECT=False)
     def test_all_endpoints_disabled_without_debug_portal(self):

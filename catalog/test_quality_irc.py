@@ -131,7 +131,7 @@ class CatalogIRCInspectionTests(TestCase):
         for r in [response, second]:
             self.assertEqual(r['Cache-Control'], 'private, no-store, max-age=0')
             self.assertEqual(r['X-Robots-Tag'], 'noindex, nofollow')
-            self.assertEqual(r['Referrer-Policy'], 'no-referrer')
+            self.assertEqual(r['Referrer-Policy'], 'same-origin')
             self.assertNotContains(r, self.fields['name_fa'])
             self.assertNotContains(r, self.fields['source_url'])
 

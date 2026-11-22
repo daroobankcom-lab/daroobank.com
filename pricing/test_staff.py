@@ -39,7 +39,7 @@ class StaffPriceAccessTests(TestCase):
         self.assertIn('no-store', response['Cache-Control'])
         self.assertIn('private', response['Cache-Control'])
         self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
 
     @override_settings(STAFF_PORTAL_ENABLED=False, SECURE_SSL_REDIRECT=False)
     def test_portal_is_not_accessible_when_disabled(self):

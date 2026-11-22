@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — isolated Chromium checks and staff CSRF fix
+
+**Changes:** Added opt-in, isolated synthetic PostgreSQL/Chromium smoke checks in CI. Chromium revealed that the staff `no-referrer` policy generated `Origin: null` on form submission and caused Django's CSRF protection to reject real logins. Staff responses now use `same-origin`: form requests retain a valid Origin while cross-origin requests omit referrers. Existing private cache and indexing headers are unchanged.
+
+**Limits:** Same-origin requests and logs can contain staff URLs; never use sensitive data. The browser runs without an OS sandbox in trusted test environments. A few viewports and keyboard assertions are not full accessibility, device, security or clinical validation. See [Testing strategy](TESTING_STRATEGY.md#opt-in-synthetic-chromium-smoke-test).
+
 ## 2026-11-22 — synthetic correction ancestry inspection
 
 **Changes:** Added permission-scoped, read-only, bounded parent-path inspection for the four private identity draft types, with signed, graph-bound continuation cursors. Invalid graphs/links stop inspection without rendering their details. Added synthetic pagination, corruption, stale/expired cursor, role, privacy, bounded-query and data-isolation tests. No schema, review or public behavior changed.

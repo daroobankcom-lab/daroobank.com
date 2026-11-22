@@ -128,7 +128,7 @@ class WindowStaffTests(TestCase):
     def assert_private(self, response):
         self.assertIn('no-store', response['Cache-Control'])
         self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
 
     def test_authorization_headers_navigation_and_default(self):
         url = reverse('staff_ingestion_window')

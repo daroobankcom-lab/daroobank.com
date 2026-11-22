@@ -59,7 +59,7 @@ class SourceClaimTests(TestCase):
         self.assertIn('private', response['Cache-Control'])
         self.assertIn('no-store', response['Cache-Control'])
         self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
 
     def test_staff_permissions_group_and_login_redirect(self):
         for name in ['staff_sources', 'staff_source_create']:

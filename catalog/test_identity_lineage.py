@@ -222,7 +222,7 @@ class IdentityLineageTests(TestCase):
         response = self.client.get(path)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
         self.assertEqual(self.client.post(path, {}).status_code, 405)
         with override_settings(STAFF_PORTAL_ENABLED=False): self.assertEqual(self.client.get(path).status_code, 404)
         self.assertEqual(self.client.get(reverse('staff_identity_lineage', args=['unknown', 1])).status_code, 404)

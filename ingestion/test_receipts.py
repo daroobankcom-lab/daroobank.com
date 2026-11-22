@@ -62,7 +62,7 @@ class ReceiptTests(TestCase):
     def assert_private(self, response):
         self.assertIn('private', response['Cache-Control']); self.assertIn('no-store', response['Cache-Control'])
         self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
 
     def test_web_stages_receipts_and_replays_count_all_rows(self):
         for kind, author in [('product', self.product_author), ('price', self.price_author)]:

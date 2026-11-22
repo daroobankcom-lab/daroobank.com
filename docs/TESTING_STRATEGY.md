@@ -90,3 +90,17 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 ## Synthetic identity ancestry inspection
 
 `catalog/test_identity_lineage.py` exercises all four types, bounded path traversal, independent permission/group checks and staff gate, private headers, no writes or public data, invalid links and missing dependencies, tampered/wrong/expired/stale cursors, and the documented non-snapshot behavior. Tests use synthetic data on PostgreSQL and are not a browser, clinical, source-rights, authenticity or production security assessment. See [ADR 0015](ARCHITECTURE_DECISIONS/0015-synthetic-lineage-inspection.md).
+
+
+## Opt-in synthetic Chromium smoke test
+
+`daroobank/test_browser.py` and `tests/browser/smoke.cjs` use a real headless Chromium and an isolated, randomly named disposable PostgreSQL test database with synthetic-only fixtures. On Linux x86-64, install Node 22.17 or newer in the 22.x series and run from the project root after setting PostgreSQL environment variables for a role allowed to create/drop databases:
+
+```sh
+npm ci --prefix tests/browser --ignore-scripts
+DAROOBANK_BROWSER_TESTS=1 python manage.py test daroobank.test_browser --settings=daroobank.browser_test_settings --noinput
+```
+
+Never point this at production or use real records; do not use `--keepdb` or parallel execution. Django creates and removes the separate test database; an interrupted run may require manual removal of the specific `test_daroobank_browser_<random>` database after verifying its identity. The live server binds to loopback, the browser subprocess receives no database credentials, and non-test-origin requests are intercepted. The bundled Chromium and libraries are extracted to a temporary directory and removed after the run. The browser runs without its OS sandbox, so use a trusted isolated development/CI environment. The optional test is skipped in the normal suite and is run separately in CI.
+
+It checks real login/CSRF and same-origin form submissions, cross-origin referrer suppression, public synthetic search isolation, responsive overflow and RTL at 320/390/768/1440 CSS pixels, basic tab focus, identity correction flows, private lineage pagination and stale review conflict. This narrow automated smoke test is not a comprehensive accessibility, screen-reader, device, other-browser, security, load, medical or production assessment.

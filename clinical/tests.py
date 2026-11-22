@@ -57,7 +57,7 @@ class ClinicalWorkflowTests(TestCase):
     def assert_private(self, response):
         self.assertIn('private', response['Cache-Control']); self.assertIn('no-store', response['Cache-Control'])
         self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
 
     def test_access_permissions_group_and_clinical_only_login(self):
         for name, args in [('staff_clinical_drafts', []), ('staff_clinical_create', []),

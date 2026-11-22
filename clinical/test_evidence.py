@@ -67,7 +67,7 @@ class ClinicalEvidenceTests(TestCase):
 
     def assert_private(self, response):
         self.assertIn('no-store', response['Cache-Control']); self.assertIn('private', response['Cache-Control'])
-        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow'); self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow'); self.assertEqual(response['Referrer-Policy'], 'same-origin')
 
     def test_add_form_permissions_duplicate_provenance_and_privacy(self):
         draft = self.draft(); url = reverse('staff_clinical_reference_create', args=[draft.pk])

@@ -9,3 +9,6 @@ staticfiles/
 # Do not commit database backups.
 *.dump
 *.backup
+
+# Isolated development browser-test dependencies.
+tests/browser/node_modules/

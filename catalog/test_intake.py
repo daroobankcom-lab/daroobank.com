@@ -64,7 +64,7 @@ class ProductIntakeTests(TestCase):
         self.assertIn('private', response['Cache-Control'])
         self.assertIn('no-store', response['Cache-Control'])
         self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')
 
     def test_access_roles_and_anonymous_redirect(self):
         for name in ['staff_products', 'staff_product_upload']:

@@ -18,5 +18,7 @@ class StaffPrivacyHeadersMiddleware:
             response['Cache-Control'] = 'private, no-store, max-age=0'
             response['Pragma'] = 'no-cache'
             response['X-Robots-Tag'] = 'noindex, nofollow'
-            response['Referrer-Policy'] = 'no-referrer'
+            # Preserve same-origin form Origin/Referer for Django CSRF validation,
+            # while withholding staff URLs from other origins.
+            response['Referrer-Policy'] = 'same-origin'
         return response

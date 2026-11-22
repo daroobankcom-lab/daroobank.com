@@ -1,0 +1,11 @@
+{
+  "name": "daroobank-browser-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Synthetic development-only browser tests",
+  "engines": {"node": ">=22"},
+  "devDependencies": {
+    "@sparticuz/chromium": "153.0.0",
+    "playwright-core": "1.65.1"
+  }
+}

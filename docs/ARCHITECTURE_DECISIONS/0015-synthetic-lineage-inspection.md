@@ -4,7 +4,7 @@ Status: development-only, 2026-11-22.
 
 ## Decision
 
-Provide a read-only staff inspection of the recorded immediate-parent correction path for one ingredient, formulation, product or package. It uses the same active staff and `catalog.view_identityworkspace` permission as the private identity workspace; the web route also requires the development staff gate and applies private/no-store/noindex/no-referrer headers. Direct service calls enforce the user permission but do not enforce the web gate. Use synthetic, nonconfidential data only.
+Provide a read-only staff inspection of the recorded immediate-parent correction path for one ingredient, formulation, product or package. It uses the same active staff and `catalog.view_identityworkspace` permission as the private identity workspace; the web route also requires the development staff gate and applies private/no-store/noindex and same-origin referrer headers. Direct service calls enforce the user permission but do not enforce the web gate. Use synthetic, nonconfidential data only.
 
 From the selected record, inspect at most 20 parent links per request using the existing type-specific immediate-link and graph validators. Validated child and parent IDs and the relative step count are displayed; source fields, names, change reasons and raw graph hashes are not deliberately rendered. An invalid/missing graph or link stops the traversal and suppresses that link's details. No recorded incoming link is reported as such, not as proof of a true origin or complete history. No records, reviews, flags or public content are changed. Parallel child branches are not inspected; the path follows only the selected child's one immediate parent at each step.
 

@@ -127,7 +127,7 @@ class CatalogQualityTests(TestCase):
             self.assertNotContains(response, 'پیش‌نویس محرمانه')
             self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
             self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-            self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+            self.assertEqual(response['Referrer-Policy'], 'same-origin')
             self.assertEqual(self.client.head(url).status_code, 200)
             self.assertEqual(self.client.post(url).status_code, 405)
             self.assertEqual(self.client.put(url).status_code, 405)

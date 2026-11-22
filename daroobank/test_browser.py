@@ -1,0 +1,51 @@
+"""Opt-in, isolated PostgreSQL + real Chromium smoke tests with synthetic data."""
+import os
+import subprocess
+from pathlib import Path
+from unittest import skipUnless
+
+from django.conf import settings
+from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.db import connection
+from django.test import override_settings
+from django.utils import timezone
+
+from catalog.identity import digest, ingredient_snapshot, revise_identity
+from catalog.models import ProductPresentation
+from catalog.test_identity import ALL, INGREDIENT, build, user
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+@skipUnless(os.environ.get('DAROOBANK_BROWSER_TESTS') == '1', 'Optional Chromium dependencies are not enabled')
+@override_settings(STAFF_PORTAL_ENABLED=True)
+class SyntheticBrowserTests(StaticLiveServerTestCase):
+    """The live server uses Django's throwaway test DB, never the development DB."""
+
+    def test_public_and_private_synthetic_workflows_in_chromium(self):
+        self.assertTrue(getattr(settings, 'DAROOBANK_BROWSER_ISOLATED', False),
+                        'Use daroobank.browser_test_settings for isolated browser tests')
+        self.assertEqual(connection.vendor, 'postgresql')
+        self.assertRegex(connection.settings_dict['NAME'], r'^test_daroobank_browser_[0-9a-f]{32}$')
+        author = user('browser-author', *ALL)
+        user('browser-reviewer', 'view_identityworkspace', 'review_identityworkspace')
+        ingredient, _, formulation, product, package = build(author)
+        leaf = ingredient
+        for i in range(22):
+            leaf = revise_identity(actor=author, kind='ingredient', parent_id=leaf.pk,
+                data={**INGREDIENT, 'name_fa': f'ماده ساختگی خصوصی مرورگر {i}'},
+                change_reason='اصلاح ساختگی برای آزمایش مرورگر', expected_graph_hash=digest(ingredient_snapshot(leaf)))
+        ProductPresentation.objects.create(name_fa='داروی عمومی ساختگی مرورگر', name_en='Browser Synthetic Product',
+            manufacturer='سازنده فرضی', strength='1 mg', dosage_form='قرص', package_description='10 عدد',
+            irc='001', source_name='منبع ساختگی', source_url='https://example.org/public',
+            verified_at=timezone.now(), published=True)
+        # The subprocess receives only what it needs; database credentials are not propagated.
+        env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG', 'TMPDIR') if key in os.environ}
+        env.update(BROWSER_BASE_URL=self.live_server_url, BROWSER_AUTHOR='browser-author', BROWSER_REVIEWER='browser-reviewer',
+                   BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
+                   BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk))
+        result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
+                                capture_output=True, text=True, timeout=180)
+        self.assertEqual(result.returncode, 0, f'Chromium test failed:\n{result.stdout}\n{result.stderr}')
+        self.assertIn('browser checks passed', result.stdout)
+        print(result.stdout.strip())

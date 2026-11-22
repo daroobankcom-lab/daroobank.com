@@ -46,6 +46,17 @@ jobs:
           python manage.py makemigrations --check --dry-run
       - name: Run synthetic tests on PostgreSQL
         run: python manage.py test -v 1 --noinput
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/browser/package-lock.json
+      - name: Install browser test dependencies
+        run: npm ci --prefix tests/browser --ignore-scripts
+      - name: Run isolated synthetic Chromium tests
+        env:
+          DAROOBANK_BROWSER_TESTS: '1'
+        run: python manage.py test daroobank.test_browser --settings=daroobank.browser_test_settings -v 1 --noinput
   compose:
     runs-on: ubuntu-latest
     timeout-minutes: 15

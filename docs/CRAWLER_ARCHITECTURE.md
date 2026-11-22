@@ -1,6 +1,6 @@
 # Crawler and ingestion architecture
 
-The system includes local CSV candidate staging and an offline, non-persistent window inspection utility, but no network source adapter, crawler, scheduler, credentials, source permissions or inspected Iranian source API exists. Except for the explicitly described window inspection utility, the crawler architecture below is design only. Do not operate an adapter or republish data until permission, permitted rate, scope, retention and terms are recorded and validated.
+The system includes local CSV candidate staging with development-only successful web intake summaries, and an offline, non-persistent window inspection utility, but no network source adapter, crawler, scheduler, credentials, source permissions or inspected Iranian source API exists. Apart from the explicitly described window inspection and web-intake receipt utilities, the crawler architecture below is design only. Do not operate an adapter or republish data until permission, permitted rate, scope, retention and terms are recorded and validated.
 
 ## Source discovery gate
 
@@ -28,3 +28,6 @@ Manual start, pause, resume and retry are authorized, auditable and idempotent; 
 ## Implemented offline window inspection
 
 `ingestion/schedule.py` computes the current or next half-open daily interval for a supplied aware instant, defaulting to 23:00–01:00 Asia/Tehran. Per-invocation start, end and IANA timezone are configurable; equal times are rejected. It returns local and UTC boundaries, distinguishing same-day from overnight, and rejects ambiguous or nonexistent local boundary times. It consults installed timezone data rather than assuming a fixed Tehran offset. See [ADR 0002](ARCHITECTURE_DECISIONS/0002-offline-ingestion-window.md) and the [development guide](DEVELOPMENT_GUIDE.md#offline-ingestion-window-inspection) for usage and limitations. There is no schedule persistence, rights check, scheduler, worker, network access, dispatch, run history, lock, checkpoint or publication. An open window must never be treated as authorization to operate a source.
+
+
+The development `ImportReceipt` summarizes only a successful web CSV staging request; it is not a crawler run, failure report, checkpoint or batch manifest. It does not retain row membership and is absent for CLI, direct calls to the original importer services and historical imports; the receipt wrappers themselves can also be called directly by local code. Receipt creation and candidate staging share a transaction; this is not a tamper-proof audit or a production concurrency guarantee. See [ADR 0003](ARCHITECTURE_DECISIONS/0003-web-intake-receipts.md).

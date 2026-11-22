@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from sources.services import related_claims
+from ingestion.receipts import stage_price_with_receipt
 
 from .comparisons import price_revision_context
 from .forms import PriceReviewForm, PriceUploadForm
@@ -130,10 +131,12 @@ def price_upload(request):
     if request.method == 'POST' and form.is_valid():
         data = form.cleaned_data
         try:
-            result = stage_csv(
-                data['csv_file'], data['source_name'], data['source_url'],
-                commit=data['action'] == 'stage', rights_attested=data['rights_attested'], staged_by=request.user,
-            )
+            if data['action'] == 'stage':
+                result, receipt = stage_price_with_receipt(data['csv_file'], data['source_name'], data['source_url'],
+                                                          actor=request.user, rights_attested=data['rights_attested'])
+                result['receipt_id'] = receipt.pk
+            else:
+                result = stage_csv(data['csv_file'], data['source_name'], data['source_url'], staged_by=request.user)
             result['mode'] = data['action']
         except ImportValidationError as exc:
             form.add_error(None, 'فایل معتبر نیست؛ هیچ داده‌ای ثبت نشد. ' + str(exc))

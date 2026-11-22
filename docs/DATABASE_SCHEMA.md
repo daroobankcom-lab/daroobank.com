@@ -36,3 +36,8 @@ Current implementation: `catalog.ProductPresentation` and its SQLite development
 ## Implemented development-only source assertions
 
 The current Django models `SourceClaim` and `SourceClaimReview` are a limited local ledger, separate from the planned ingestion/audit schema above. A claim holds an exact source URL, asserted owner, evidence URL/note, claimed collection/storage/republication scopes, optional dates, fingerprint and recorder/time; a review holds a separate reviewer, non-approval decision, reason and assertion snapshot. Ordinary model saves/deletes are guarded but bulk operations and SQL bypass these guards; hashes are not signatures and omit recorder/time. They do not implement the planned `source` authorization, revocation, crawler or audit entities and are not a production compliance record.
+
+
+## Implemented development-only web intake summaries
+
+`ImportReceipt` records a successful web CSV staging operation's domain, asserted source, actor/time and counts; price summaries include match categories for all input rows. Basic count and domain consistency have database constraints, and a single transaction wraps candidate and receipt writes. There is deliberately no raw file, filename, file hash, per-row membership, failure record or CLI/history backfill. Ordinary model guards are not database immutability. This is not the planned `crawl_run`, `checkpoint` or durable audit schema.

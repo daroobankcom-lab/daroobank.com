@@ -35,3 +35,48 @@ def window(request):
         'can_products': user.has_perm(VIEW_PERMS[0]), 'can_prices': user.has_perm(VIEW_PERMS[1]),
         'can_sources': user.has_perm(VIEW_PERMS[2]),
     })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def receipts(request):
+    from django.core.paginator import Paginator
+    from django.http import HttpResponseBadRequest
+    from .models import ImportReceipt
+    from .receipts import visible_kinds
+
+    kinds = visible_kinds(request.user)
+    if not kinds:
+        raise PermissionDenied
+    selected = request.GET.get('kind', '')
+    if selected not in ('', ImportReceipt.PRODUCT, ImportReceipt.PRICE):
+        return HttpResponseBadRequest('Invalid filter.')
+    if selected and selected not in kinds:
+        raise PermissionDenied
+    rows = ImportReceipt.objects.filter(kind__in=[selected] if selected else kinds).select_related('actor').order_by('-pk')
+    page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    return render(request, 'staff/import_receipts.html', {
+        'page_title': 'رسیدهای ورود فایل | داروبانک', 'description': 'خلاصه ثبت‌های داخلی فایل.',
+        'noindex': True, 'private_staff': True, 'page': page, 'kind': selected,
+        'can_products': ImportReceipt.PRODUCT in kinds, 'can_prices': ImportReceipt.PRICE in kinds,
+    })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def receipt_detail(request, pk):
+    from django.http import Http404
+    from django.shortcuts import get_object_or_404
+    from .models import ImportReceipt
+    from .receipts import visible_kinds
+
+    kinds = visible_kinds(request.user)
+    if not kinds:
+        raise PermissionDenied
+    if not 1 <= pk <= 9_223_372_036_854_775_807:
+        raise Http404('Receipt not found')
+    receipt = get_object_or_404(ImportReceipt.objects.select_related('actor').filter(kind__in=kinds), pk=pk)
+    return render(request, 'staff/import_receipt_detail.html', {
+        'page_title': 'رسید ورود فایل | داروبانک', 'description': 'خلاصه یک ثبت داخلی.',
+        'noindex': True, 'private_staff': True, 'receipt': receipt,
+    })

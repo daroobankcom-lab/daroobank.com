@@ -5,6 +5,7 @@
   <div class="staff-topline"><div><div class="kicker"><span></span> فضای داخلی · داده‌های بررسی‌نشده</div><h1>نامزدهای قیمت</h1><p>داده‌های این بخش هنوز تأیید یا منتشر نشده‌اند.</p></div><form method="post" action="{% url 'staff_logout' %}">{% csrf_token %}<button class="staff-logout" type="submit">خروج از حساب</button></form></div>
   {% if can_products %}<p><a class="staff-detail-link" href="{% url 'staff_products' %}">صف نامزدهای فرآورده ←</a></p>{% endif %}
   {% if can_sources %}<p><a class="staff-detail-link" href="{% url 'staff_sources' %}">ادعاهای منبع ←</a></p>{% endif %}
+  <p><a class="staff-detail-link" href="{% url 'staff_import_receipts' %}">رسیدهای ورود فایل ←</a></p>
   <p><a class="staff-detail-link" href="{% url 'staff_ingestion_window' %}">بررسی آزمایشی پنجره جمع‌آوری ←</a></p>
   <div class="staff-alert">وضعیت تطبیق بر اساس زمان ورود و وضعیت بازبینی بر اساس آخرین رویداد است؛ هیچ‌کدام تأیید نهایی نیستند. برای مشاهده تطبیق فعلی، جزئیات هر ردیف را باز کنید. ثبت بازبینی اولیه به معنای تأیید منبع، قیمت یا انتشار نیست.</div>
   <div class="staff-stat-grid"><div><span>همه نامزدها</span><strong>{{ total }}</strong></div><div><span>پیشنهاد تطبیق</span><strong>{{ stats.suggested|default:0 }}</strong></div><div><span>تطبیق مبهم یا بیش از سقف بررسی</span><strong>{{ stats.ambiguous|default:0 }}</strong></div><div><span>بدون تطبیق</span><strong>{{ stats.unmatched|default:0 }}</strong></div></div>

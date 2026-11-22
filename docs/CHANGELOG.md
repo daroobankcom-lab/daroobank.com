@@ -1,5 +1,11 @@
 # Implementation changelog
 
+## 2026-11-22 — web intake receipts
+
+**Changes:** Added minimal successful-web-stage receipts for product/price CSV imports, written transactionally with candidates, plus permission-filtered Persian list/detail pages and links from uploads and queues. Stored counts distinguish created and duplicate rows; price match counts include duplicates and reflect that request's catalog. Added count constraints and synthetic rollback, permission, replay, CSRF and pagination tests.
+
+**Limits:** Receipts are not source-rights proof, verified data, complete logs, batch manifests or immutable audit. No raw file, filename, file hash or row membership is retained; previews, failures, older imports and CLI/direct imports are absent. Replays create new receipts, without request idempotency. Model guards can be bypassed with bulk ORM/SQL, and SQLite concurrency/crash behavior and production security are unproven. No source, clinical, browser or production validation was performed.
+
 ## 2026-11-22 — offline ingestion-window inspection and input hardening
 
 **Changes:** Added a pure offline current/next window calculator with configurable per-call IANA timezone and local HH:MM boundaries, default Tehran 23:00–01:00, a JSON management command and a permission-gated Persian debug-only staff view. Rejects ambiguous/nonexistent local boundaries and converts to UTC using timezone rules. Shared validators now reject unsafe source URL edge cases and invalid review text across product, price and source workflows. Added synthetic timezone, permission and validation tests.

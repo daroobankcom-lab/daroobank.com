@@ -25,6 +25,8 @@ The debug-only staff portal also contains a source-rights assertion ledger with 
 
 An [offline ingestion-window inspector](docs/DEVELOPMENT_GUIDE.md#offline-ingestion-window-inspection) calculates the default Tehran 23:00–01:00 interval or a per-request alternative. It does not save a schedule, contact sources or run a crawler.
 
+Successful development web CSV staging also records a limited, permission-scoped [intake receipt](docs/DEVELOPMENT_GUIDE.md#development-only-csv-intake-receipts); it is not a complete batch manifest, source authorization or tamper-proof audit.
+
 ## Documentation
 
 - [Implementation changelog](docs/CHANGELOG.md) · [Gap analysis](docs/GAP_ANALYSIS.md) · [Resource review](docs/RESOURCE_REVIEW.md) · [Design system](docs/DESIGN_SYSTEM.md)

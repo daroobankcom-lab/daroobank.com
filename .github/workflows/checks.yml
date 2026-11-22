@@ -69,6 +69,31 @@ jobs:
       POSTGRES_PASSWORD: ci_${{ github.run_id }}_${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare synthetic build-context probes
+        run: |
+          mkdir -p .cache/context-probe backups/context-probe node_modules/context-probe tests/browser/node_modules/context-probe
+          printf 'synthetic probe\n' > .cache/context-probe/sentinel
+          printf 'synthetic probe\n' > backups/context-probe/sentinel
+          printf 'synthetic probe\n' > node_modules/context-probe/sentinel
+          printf 'synthetic probe\n' > tests/browser/node_modules/context-probe/sentinel
+          printf 'synthetic probe\n' > .cache/context-probe/.env.example
+          printf 'synthetic probe\n' > backups/context-probe/.env.example
+          printf 'synthetic probe\n' > node_modules/context-probe/.env.example
+          printf 'synthetic probe\n' > tests/browser/node_modules/context-probe/.env.example
+          printf 'CI_CONTEXT_PROBE=synthetic\n' > .env
+          printf 'synthetic probe\n' > .env.local
+          printf 'synthetic probe\n' > tests/browser/.env.local
+          printf 'synthetic example\n' > tests/browser/.env.example
+          printf 'synthetic probe\n' > context-probe.dump
+          printf 'synthetic probe\n' > tests/browser/context-probe.backup
+          git check-ignore --no-index -q .env.local
+          git check-ignore --no-index -q tests/browser/.env.local
+          git check-ignore --no-index -q node_modules/context-probe/sentinel
+          git check-ignore --no-index -q tests/browser/node_modules/context-probe/sentinel
+          git check-ignore --no-index -q context-probe.dump
+          git check-ignore --no-index -q tests/browser/context-probe.backup
+          ! git check-ignore --no-index -q .env.example
+          ! git check-ignore --no-index -q tests/browser/.env.example
       - name: Validate and start development stack
         run: |
           docker compose config --quiet
@@ -79,7 +104,10 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8000/ > /dev/null
           docker compose exec -T web python manage.py migrate --check
+          docker compose exec -T web python -m tools.wait_for_database
+          docker compose exec -T -e POSTGRES_DB="daroobank_absent_${GITHUB_RUN_ID}" web python -c "from tools.wait_for_database import wait_for_database; assert not wait_for_database(timeout=0)"
           docker compose exec -T web python manage.py shell -c "from django.db import connection; assert connection.vendor == 'postgresql'"
+          docker compose exec -T web python -c "from pathlib import Path; missing = ['.git', '.env', '.env.local', '.cache/context-probe/sentinel', 'backups/context-probe/sentinel', 'node_modules/context-probe/sentinel', 'tests/browser/node_modules/context-probe/sentinel', 'tests/browser/.env.local', 'context-probe.dump', 'tests/browser/context-probe.backup', '.cache/context-probe/.env.example', 'backups/context-probe/.env.example', 'node_modules/context-probe/.env.example', 'tests/browser/node_modules/context-probe/.env.example']; found = [p for p in missing if Path(p).exists()]; assert not found, f'excluded paths copied into image: {found}'; assert Path('.env.example').is_file() and Path('tests/browser/.env.example').is_file(), 'example templates missing'"
           docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE TABLE ci_volume_probe (value integer NOT NULL); INSERT INTO ci_volume_probe VALUES (42);"
       - name: Check volume survives normal shutdown
         run: |

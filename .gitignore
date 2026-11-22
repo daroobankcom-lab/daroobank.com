@@ -4,11 +4,13 @@ __pycache__/
 *.py[cod]
 /backups/
 .env
+.env.*
+!.env.example
 staticfiles/
 
 # Do not commit database backups.
 *.dump
 *.backup
 
-# Isolated development browser-test dependencies.
-tests/browser/node_modules/
+# Local JavaScript dependencies, including isolated browser tests.
+node_modules/

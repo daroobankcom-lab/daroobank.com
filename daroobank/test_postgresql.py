@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.apps import apps
 from django.conf import settings
@@ -48,6 +49,23 @@ class PostgreSQLConfigurationTests(SimpleTestCase):
 
 
 class PostgreSQLIntegrationTests(TestCase):
+    def test_readiness_checks_actual_postgresql_database_without_writes(self):
+        # A separate process checks only SELECT 1. The random nonexistent name is
+        # never created or dropped, and the positive case uses this test DB only.
+        env = {**os.environ, 'DAROOBANK_DEBUG': '1',
+               'POSTGRES_DB': connection.settings_dict['NAME'], 'POSTGRES_CONN_MAX_AGE': '0'}
+        script = ('from tools.wait_for_database import wait_for_database; '
+                  "print('ready' if wait_for_database(timeout=2, interval=0.1) else 'not-ready')")
+        good = subprocess.run([sys.executable, '-c', script], cwd=ROOT, env=env,
+                              capture_output=True, text=True, timeout=15)
+        self.assertEqual(good.returncode, 0, good.stderr)
+        self.assertEqual(good.stdout.strip(), 'ready')
+        env['POSTGRES_DB'] = f'absent_readiness_{uuid4().hex}'
+        bad = subprocess.run([sys.executable, '-c', script], cwd=ROOT, env=env,
+                             capture_output=True, text=True, timeout=15)
+        self.assertEqual(bad.returncode, 0, bad.stderr)
+        self.assertEqual(bad.stdout.strip(), 'not-ready')
+
     def test_migrated_models_declared_constraints_indexes_and_foreign_keys(self):
         with connection.cursor() as cursor:
             tables = set(connection.introspection.table_names(cursor))

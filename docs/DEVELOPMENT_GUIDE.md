@@ -2,11 +2,13 @@
 
 ## Current local implementation
 
-Requires Python 3.11+ and PostgreSQL. Copy `.env.example` to `.env` and replace the placeholders with unique local values. Do not commit `.env`. Compose loads it automatically:
+Requires Python 3.11+ and PostgreSQL. Copy `.env.example` to `.env` and replace the placeholders with unique local values. Never commit credentials: `.env` and `.env.*` files are ignored by Git except `.env.example`, and ignore rules do not remove already tracked files. Compose loads `.env` automatically:
 
 ```sh
 docker compose up --build
 ```
+
+The Docker build context excludes environment files other than `.env.example` templates, `.git`, `.venv`, `.cache`, `backups`, `node_modules` and dump/backup files. Existing Compose environment injection is unchanged. Never put secrets or real data in example templates or other build-context paths; ignore rules are not a substitute for secret scanning or access control, and they do not remove files from existing images or Git history. CI checks these exclusions using synthetic files in an ephemeral checkout.
 
 The development stack starts PostgreSQL 16 with a health check and persistent named volume. Django waits for a connection, applies migrations and starts the development server. PostgreSQL is bound only to localhost on `POSTGRES_PORT`; Django inside Compose uses `db:5432`. Do not run multiple migration-starting web replicas or use this development stack as a production deployment. `docker compose down` preserves data; **`docker compose down -v` deletes the database volume**. Changing credentials in `.env` does not update an already-initialized PostgreSQL volume; manage roles/password rotation explicitly.
 

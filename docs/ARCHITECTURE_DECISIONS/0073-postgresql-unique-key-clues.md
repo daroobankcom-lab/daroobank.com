@@ -1,0 +1,13 @@
+# ADR 0073: PostgreSQL unique-key clues
+
+Status: development-only implementation, 23 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md).
+
+## Decision
+
+The read-only catalog inspection also derives simple unique-key expectations from current managed model fields (`unique` and simple primary keys), `unique_together`, and unconditional field-based `UniqueConstraint` declarations without expressions, custom operator classes, included fields or explicit null-distinctness. It counts expectations with no matching PostgreSQL index on the same table and ordered key columns that is unique, valid, ready, live, non-partial and non-expression. A primary-key expectation additionally requires a primary index. An index may satisfy multiple identical expectations; names need not match. `django_migrations` has no managed model in this enumeration, so its primary key is not checked here. Missing expectations return `attention`, including when a missing table is already reported separately.
+
+The check compares current model metadata to observed catalog indexes in one statement snapshot, not against the migration history or an authenticated schema specification. A reversed-column unique index is conservatively flagged even though it can enforce equivalent ordinary uniqueness; this is deliberate, and operators must investigate rather than blindly repair. These are clues about selected index presence, not proof of constraints, duplicate-free application semantics or database readiness.
+
+## Evidence and limits
+
+Synthetic PostgreSQL tests remove the actual source-claim composite unique constraint, substitute a non-unique or partial unique index, change key order, and replace an actual primary key with a non-primary unique index, all inside rolled-back transactions. Each selected change is flagged. A separate test shows that an index using different NULL-distinctness still matches: null handling, collation, operator class, constraint deferrability and other index properties are not fully compared. Conditional/expression/custom unique declarations, check constraints, data content, indexes on unscoped tables and partition children, permissions, backups and production suitability remain outside this check. Never automatically repair based on the report; use only authorized synthetic development databases.

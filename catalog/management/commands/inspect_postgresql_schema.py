@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import DatabaseError, connection
 
-from daroobank.postgresql_inspection import expected_foreign_keys, expected_tables, inspect_schema
+from daroobank.postgresql_inspection import expected_foreign_keys, expected_tables, expected_unique_keys, inspect_schema
 
 
 class Command(BaseCommand):
@@ -15,7 +15,7 @@ class Command(BaseCommand):
         if not settings.DEBUG or connection.vendor != 'postgresql':
             raise CommandError('This inspection is available only for PostgreSQL development settings.')
         try:
-            report = inspect_schema(expected_tables(), expected_foreign_keys())
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
         except DatabaseError as exc:
             raise CommandError('PostgreSQL catalog inspection could not be completed.') from exc
         self.stdout.write(json.dumps(report, sort_keys=True))

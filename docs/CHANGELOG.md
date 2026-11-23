@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — PostgreSQL unique-key clues
+
+**Changes:** The development-only catalog inspection flags missing selected simple model-declared unique and primary-key indexes, ignoring nonunique, partial, invalid or wrong-column indexes. Rolled-back PostgreSQL tests exercise composite keys, partial indexes and primary-key loss.
+
+**Limits:** Order-sensitive clues can flag a logically equivalent reordered key; null semantics and other properties are not compared. This is not migration equivalence, data validation or production readiness; see ADR 0073.
+
 ## 2026-11-23 — PostgreSQL foreign-key behavior clues
 
 **Changes:** The read-only catalog inspection now also counts matching expected foreign keys that depart from the current Django/PostgreSQL deferred and `NO ACTION` conventions, including unexpected duplicate immediate or cascading constraints. Selected PostgreSQL DDL tests verify these cases with rolled-back synthetic data.

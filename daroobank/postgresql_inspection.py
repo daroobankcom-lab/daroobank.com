@@ -3,6 +3,7 @@ import json
 
 from django.apps import apps
 from django.db import connection
+from django.db.models import UniqueConstraint
 
 
 def expected_tables():
@@ -32,7 +33,27 @@ def expected_foreign_keys():
     return sorted(result)
 
 
-def inspect_schema(table_names, foreign_keys=()):
+def expected_unique_keys():
+    """Simple managed-model unique keys; ignore partial/expression/custom variants."""
+    result = set()
+    for model in apps.get_models(include_auto_created=True):
+        meta = model._meta
+        if not meta.managed or meta.proxy or meta.swapped:
+            continue
+        for field in meta.local_fields:
+            if field.unique and field.column:
+                result.add((meta.db_table, (field.column,), bool(field.primary_key)))
+        for group in meta.unique_together:
+            result.add((meta.db_table, tuple(meta.get_field(name).column for name in group), False))
+        for constraint in meta.constraints:
+            if (isinstance(constraint, UniqueConstraint) and constraint.fields and not constraint.expressions
+                    and constraint.condition is None and not constraint.include and not constraint.opclasses
+                    and constraint.nulls_distinct is None):
+                result.add((meta.db_table, tuple(meta.get_field(name).column for name in constraint.fields), False))
+    return sorted(result)
+
+
+def inspect_schema(table_names, foreign_keys=(), unique_keys=()):
     """Return aggregate clues from one PostgreSQL statement, never catalog names or data.
 
     Resolution follows the active search path. This is not a comparison to the
@@ -61,6 +82,9 @@ def inspect_schema(table_names, foreign_keys=()):
                 JOIN pg_catalog.pg_attribute b ON b.attrelid = c.confrelid AND b.attnum = c.confkey[1]
                 WHERE pg_catalog.cardinality(c.conkey) = 1 AND pg_catalog.cardinality(c.confkey) = 1
                   AND a.attname = f.col AND b.attname = f.dst_col
+            ), expected_unique AS (
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', name)) AS table_oid, columns, is_primary
+                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS u(name text, columns jsonb, is_primary boolean)
             )
             SELECT
                 (SELECT COUNT(*) FROM names),
@@ -81,15 +105,29 @@ def inspect_schema(table_names, foreign_keys=()):
                       AND pg_catalog.cardinality(c.conkey) = 1 AND pg_catalog.cardinality(c.confkey) = 1
                       AND a.attname = f.col AND b.attname = f.dst_col)),
                 (SELECT COUNT(*) FROM matching_fk WHERE NOT condeferrable OR NOT condeferred),
-                (SELECT COUNT(*) FROM matching_fk WHERE confupdtype <> 'a' OR confdeltype <> 'a')
-        ''', [table_names, json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys])])
+                (SELECT COUNT(*) FROM matching_fk WHERE confupdtype <> 'a' OR confdeltype <> 'a'),
+                (SELECT COUNT(*) FROM expected_unique),
+                (SELECT COUNT(*) FROM expected_unique u WHERE NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_index i
+                    WHERE i.indrelid = u.table_oid AND i.indisunique AND i.indisvalid AND i.indisready AND i.indislive
+                      AND (NOT u.is_primary OR i.indisprimary) AND i.indpred IS NULL AND i.indexprs IS NULL
+                      AND i.indnkeyatts = pg_catalog.jsonb_array_length(u.columns)
+                      AND (SELECT pg_catalog.array_agg(a.attname::text ORDER BY k.ordinal)
+                           FROM pg_catalog.unnest(i.indkey::smallint[]) WITH ORDINALITY AS k(attnum, ordinal)
+                           JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+                           WHERE k.ordinal <= i.indnkeyatts)
+                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(u.columns))))
+        ''', [table_names,
+              json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
+              json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
+                          for table, columns, primary in unique_keys])])
         values = cursor.fetchone()
     keys = ('expected_tables', 'unresolved_tables', 'non_table_relations', 'unvalidated_constraints',
             'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',
-            'nondeferred_foreign_keys', 'nondefault_action_foreign_keys')
+            'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'expected_unique_keys', 'missing_unique_keys')
     result = dict(zip(keys, values))
     result['status'] = ('attention' if any(result[key] for key in (
         'unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes',
         'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
-        'nondefault_action_foreign_keys')) else 'no_selected_issues')
+        'nondefault_action_foreign_keys', 'missing_unique_keys')) else 'no_selected_issues')
     return result

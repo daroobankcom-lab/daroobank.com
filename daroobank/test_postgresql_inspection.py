@@ -8,7 +8,7 @@ from django.db import DatabaseError, connection, transaction
 from django.test import TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from .postgresql_inspection import expected_foreign_keys, expected_tables, inspect_schema
+from .postgresql_inspection import expected_foreign_keys, expected_tables, expected_unique_keys, inspect_schema
 
 
 @override_settings(DEBUG=True)
@@ -22,8 +22,10 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertEqual(report['expected_tables'], len(expected_tables()))
         self.assertEqual(report['expected_foreign_keys'], len(expected_foreign_keys()))
         self.assertGreater(report['expected_foreign_keys'], 0)
+        self.assertEqual(report['expected_unique_keys'], len(expected_unique_keys()))
+        self.assertGreater(report['expected_unique_keys'], 0)
         for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
-                    'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys'):
+                    'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys'):
             self.assertEqual(report[key], 0, key)
         self.assertEqual(set(connection.introspection.table_names()), before)
         self.assertIn('sources_sourceclaim', expected_tables())
@@ -139,6 +141,60 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             report = inspect_schema(expected_tables(), expected_foreign_keys())
             self.assertEqual(report['missing_foreign_keys'], 0)
             self.assertEqual(report['nondefault_action_foreign_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_missing_composite_unique_is_reported_despite_nonunique_index(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
+                cursor.execute('CREATE INDEX synthetic_nonunique ON sources_sourceclaim (source_url, payload_sha256)')
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['missing_unique_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
+            self.assertNotIn('synthetic_nonunique', output.getvalue())
+            transaction.set_rollback(True)
+
+    def test_partial_unique_index_does_not_replace_full_unique(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
+                cursor.execute('CREATE UNIQUE INDEX synthetic_partial ON sources_sourceclaim (source_url, payload_sha256) WHERE claims_collection')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
+            self.assertEqual(report['missing_unique_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_reordered_unique_index_is_conservatively_reported_missing(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
+                cursor.execute('CREATE UNIQUE INDEX synthetic_reordered ON sources_sourceclaim (payload_sha256, source_url)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
+            self.assertEqual(report['missing_unique_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_unique_null_semantics_are_deliberately_not_compared(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
+                cursor.execute('CREATE UNIQUE INDEX synthetic_null_semantics ON sources_sourceclaim (source_url, payload_sha256) NULLS NOT DISTINCT')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
+            self.assertEqual(report['missing_unique_keys'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
+    def test_missing_primary_key_is_reported(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaimreview DROP CONSTRAINT sources_sourceclaimreview_pkey')
+                cursor.execute('CREATE UNIQUE INDEX synthetic_no_primary ON sources_sourceclaimreview (id)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
+            self.assertEqual(report['missing_unique_keys'], 1)
             self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 

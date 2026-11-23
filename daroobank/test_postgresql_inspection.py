@@ -8,7 +8,8 @@ from django.db import DatabaseError, connection, transaction
 from django.test import TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from .postgresql_inspection import expected_foreign_keys, expected_tables, expected_unique_keys, inspect_schema
+from .postgresql_inspection import (expected_check_constraints, expected_foreign_keys, expected_tables,
+                                     expected_unique_keys, inspect_schema)
 
 
 @override_settings(DEBUG=True)
@@ -24,8 +25,11 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertGreater(report['expected_foreign_keys'], 0)
         self.assertEqual(report['expected_unique_keys'], len(expected_unique_keys()))
         self.assertGreater(report['expected_unique_keys'], 0)
+        self.assertEqual(report['expected_check_constraints'], len(expected_check_constraints()))
+        self.assertGreater(report['expected_check_constraints'], 0)
         for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
-                    'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys'):
+                    'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys',
+                    'missing_check_constraints'):
             self.assertEqual(report[key], 0, key)
         self.assertEqual(set(connection.introspection.table_names()), before)
         self.assertIn('sources_sourceclaim', expected_tables())
@@ -37,7 +41,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             with connection.cursor() as cursor:
                 cursor.execute('SET TRANSACTION READ ONLY')
             with CaptureQueriesContext(connection) as queries:
-                report = inspect_schema(expected_tables(), expected_foreign_keys())
+                report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
             self.assertEqual(len(queries), 1)
             self.assertEqual(report['status'], 'no_selected_issues')
 
@@ -195,6 +199,51 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                 cursor.execute('CREATE UNIQUE INDEX synthetic_no_primary ON sources_sourceclaimreview (id)')
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
             self.assertEqual(report['missing_unique_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_missing_named_check_constraint_is_reported_even_with_different_name(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT source_claim_scope_present')
+                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT synthetic_equivalent CHECK (claims_collection OR claims_storage OR claims_publication)')
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['missing_check_constraints'], 1)
+            self.assertNotIn('source_claim_scope_present', output.getvalue())
+            self.assertNotIn('synthetic_equivalent', output.getvalue())
+            transaction.set_rollback(True)
+
+    def test_same_named_wrong_check_expression_is_not_detected(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT source_claim_scope_present')
+                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT source_claim_scope_present CHECK (true)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
+            self.assertEqual(report['missing_check_constraints'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
+    def test_matching_but_unvalidated_named_check_is_still_reported(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT source_claim_scope_present')
+                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT source_claim_scope_present CHECK (true) NOT VALID')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
+            self.assertEqual(report['missing_check_constraints'], 0)
+            self.assertEqual(report['unvalidated_constraints'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_wrong_constraint_type_with_expected_name_is_reported(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT source_claim_scope_present')
+                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT source_claim_scope_present UNIQUE (owner)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
+            self.assertEqual(report['missing_check_constraints'], 1)
             self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — PostgreSQL named-check clues
+
+**Changes:** Catalog inspection now reports missing explicitly named model check constraints and wrong constraint types; unvalidated checks remain separately flagged. Synthetic rolled-back PostgreSQL DDL exercises each case.
+
+**Limits:** The check compares name and type only; a same-named `CHECK (true)` can pass, and an equivalent check under another name is flagged. It does not validate data, compare migrations or certify production safety; see ADR 0074.
+
 ## 2026-11-23 — PostgreSQL unique-key clues
 
 **Changes:** The development-only catalog inspection flags missing selected simple model-declared unique and primary-key indexes, ignoring nonunique, partial, invalid or wrong-column indexes. Rolled-back PostgreSQL tests exercise composite keys, partial indexes and primary-key loss.

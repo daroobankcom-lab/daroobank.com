@@ -3,7 +3,7 @@ import json
 
 from django.apps import apps
 from django.db import connection
-from django.db.models import UniqueConstraint
+from django.db.models import CheckConstraint, UniqueConstraint
 
 
 def expected_tables():
@@ -53,7 +53,20 @@ def expected_unique_keys():
     return sorted(result)
 
 
-def inspect_schema(table_names, foreign_keys=(), unique_keys=()):
+def expected_check_constraints():
+    """Explicitly named CheckConstraints from managed model metadata only."""
+    result = set()
+    for model in apps.get_models(include_auto_created=True):
+        meta = model._meta
+        if not meta.managed or meta.proxy or meta.swapped:
+            continue
+        for constraint in meta.constraints:
+            if isinstance(constraint, CheckConstraint):
+                result.add((meta.db_table, constraint.name))
+    return sorted(result)
+
+
+def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constraints=()):
     """Return aggregate clues from one PostgreSQL statement, never catalog names or data.
 
     Resolution follows the active search path. This is not a comparison to the
@@ -85,6 +98,9 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=()):
             ), expected_unique AS (
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', name)) AS table_oid, columns, is_primary
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS u(name text, columns jsonb, is_primary boolean)
+            ), expected_checks AS (
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, constraint_name
+                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, constraint_name text)
             )
             SELECT
                 (SELECT COUNT(*) FROM names),
@@ -116,18 +132,24 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=()):
                            FROM pg_catalog.unnest(i.indkey::smallint[]) WITH ORDINALITY AS k(attnum, ordinal)
                            JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
                            WHERE k.ordinal <= i.indnkeyatts)
-                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(u.columns))))
+                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(u.columns)))),
+                (SELECT COUNT(*) FROM expected_checks),
+                (SELECT COUNT(*) FROM expected_checks e WHERE NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_constraint c
+                    WHERE c.conrelid = e.table_oid AND c.conname = e.constraint_name AND c.contype = 'c'))
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
-                          for table, columns, primary in unique_keys])])
+                          for table, columns, primary in unique_keys]),
+              json.dumps([{'table_name': table, 'constraint_name': name} for table, name in check_constraints])])
         values = cursor.fetchone()
     keys = ('expected_tables', 'unresolved_tables', 'non_table_relations', 'unvalidated_constraints',
             'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',
-            'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'expected_unique_keys', 'missing_unique_keys')
+            'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'expected_unique_keys', 'missing_unique_keys',
+            'expected_check_constraints', 'missing_check_constraints')
     result = dict(zip(keys, values))
     result['status'] = ('attention' if any(result[key] for key in (
         'unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes',
         'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
-        'nondefault_action_foreign_keys', 'missing_unique_keys')) else 'no_selected_issues')
+        'nondefault_action_foreign_keys', 'missing_unique_keys', 'missing_check_constraints')) else 'no_selected_issues')
     return result

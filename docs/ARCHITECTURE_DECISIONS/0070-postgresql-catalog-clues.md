@@ -1,6 +1,6 @@
 # ADR 0070: selected read-only PostgreSQL catalog clues
 
-Status: development-only implementation, 23 November 2026. The later [ADR 0072](0072-postgresql-foreign-key-behavior.md) adds limited FK deferrability and database-action clues, and [ADR 0073](0073-postgresql-unique-key-clues.md) adds selected unique-key clues, superseding those specific limitations below.
+Status: development-only implementation, 23 November 2026. The later [ADR 0072](0072-postgresql-foreign-key-behavior.md) adds limited FK deferrability and database-action clues, [ADR 0073](0073-postgresql-unique-key-clues.md) adds selected unique-key clues, and [ADR 0074](0074-postgresql-check-constraint-names.md) adds named-check presence clues, superseding those specific limitations below.
 
 ## Decision
 

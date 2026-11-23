@@ -1,6 +1,6 @@
 # ADR 0073: PostgreSQL unique-key clues
 
-Status: development-only implementation, 23 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md).
+Status: development-only implementation, 23 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md). [ADR 0074](0074-postgresql-check-constraint-names.md) later adds limited named-check presence clues, not expression validation.
 
 ## Decision
 

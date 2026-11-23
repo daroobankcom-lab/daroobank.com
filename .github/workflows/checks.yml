@@ -62,13 +62,19 @@ jobs:
           python manage.py makemigrations --check --dry-run
       - name: Run synthetic tests on PostgreSQL
         run: python manage.py test -v 1 --noinput
-      - name: Install PostgreSQL client for isolated restore drill
+      - name: Prepare matching PostgreSQL clients for isolated restore drill
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-16
-          echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
-          /usr/lib/postgresql/16/bin/pg_dump --version
-          /usr/lib/postgresql/16/bin/pg_restore --version
+          mkdir -p "$RUNNER_TEMP/pg16-tools"
+          for tool in pg_dump pg_restore; do
+            cat > "$RUNNER_TEMP/pg16-tools/$tool" <<EOF
+          #!/bin/sh
+          exec docker run --rm --network host -v /tmp:/tmp -v "$RUNNER_TEMP:$RUNNER_TEMP" -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE --entrypoint $tool postgres:16 "\$@"
+          EOF
+            chmod 700 "$RUNNER_TEMP/pg16-tools/$tool"
+          done
+          echo "$RUNNER_TEMP/pg16-tools" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pg16-tools/pg_dump" --version
+          "$RUNNER_TEMP/pg16-tools/pg_restore" --version
       - name: Run isolated synthetic restore drill
         env:
           DAROOBANK_RESTORE_TESTS: '1'

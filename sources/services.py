@@ -20,6 +20,7 @@ VIEW = 'sources.view_sourceclaim'
 ADD = 'sources.add_sourceclaim'
 REVIEW = 'sources.review_sourceclaim'
 SUMMARY_LIMIT = 5
+MAX_PK = 9_223_372_036_854_775_807
 
 
 class ClaimError(ValueError):
@@ -31,7 +32,7 @@ class ReviewConflict(ValueError):
 
 
 def require_staff(user, *perms):
-    if not user.is_authenticated or not user.is_active or not user.is_staff or any(not user.has_perm(p) for p in perms):
+    if user is None or not user.is_authenticated or not user.is_active or not user.is_staff or any(not user.has_perm(p) for p in perms):
         raise PermissionDenied
 
 
@@ -96,8 +97,9 @@ def record_claim(*, actor, data):
 
 def review_claim(*, actor, claim_id, decision, reason, expected_review, expected_hash):
     require_staff(actor, VIEW, REVIEW)
-    if (decision not in dict(SourceClaimReview.DECISIONS) or not valid_review_reason(reason)
-            or type(expected_review) is not int or expected_review < 0
+    if (type(claim_id) is not int or not 1 <= claim_id <= MAX_PK
+            or not isinstance(decision, str) or decision not in dict(SourceClaimReview.DECISIONS)
+            or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
     with transaction.atomic():

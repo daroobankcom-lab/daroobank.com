@@ -1,7 +1,7 @@
 from django import forms
 
 from .models import ClinicalDraft, ClinicalDraftReview
-from .services import FIELDS, HASH, DraftError, validate_data
+from .services import FIELDS, HASH, MAX_PK, DraftError, validate_data
 
 
 class DraftForm(forms.Form):
@@ -47,7 +47,7 @@ class ReviewForm(forms.Form):
         (ClinicalDraftReview.FURTHER_REVIEW, 'ارجاع برای بررسی بیشتر'), (ClinicalDraftReview.REJECT, 'رد پیش‌نویس'),
         (ClinicalDraftReview.DEFER, 'نیاز به بررسی یا مدرک بیشتر')])
     reason = forms.CharField(label='دلیل', min_length=12, max_length=1000, widget=forms.Textarea(attrs={'rows': 4}))
-    expected_review = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
+    expected_review = forms.IntegerField(min_value=0, max_value=MAX_PK, widget=forms.HiddenInput)
     expected_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
     expected_evidence_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
 

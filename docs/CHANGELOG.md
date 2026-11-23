@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — source and clinical triage boundaries
+
+**Changes:** Source review rejects malformed/out-of-range IDs, boolean IDs and non-string decisions; clinical review applies the same expectation bounds and decision type check. Both hidden fields reject out-of-range values and offer a private, explicit detail-page restart. Tests exercise direct services, permissions, HTTP errors, synthetic Chromium recovery and selected PostgreSQL review races. Clinical detail warns about stale reference snapshots.
+
+**Limits:** A controlled bypass writer can change an existing clinical reference during review despite the parent lock, leaving a coherent but already stale review snapshot. This limitation is demonstrated, not fixed. Results are not a production concurrency, source-rights, audit or clinical guarantee. See ADR 0028.
+
 ## 2026-11-22 — focusable skip target and failure categories
 
 **Changes:** The shared main landmark is focusable by native fragment navigation but not in normal Tab order. Browser checks wait for actual landmark focus before Tab, verify a missing target tabindex fails, and report only a fixed active-element region on selected failures. This follows CI run 45137885675, which failed the login skip next-focus check at 1440 pixels.

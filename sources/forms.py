@@ -2,7 +2,7 @@ import re
 from django import forms
 
 from .models import SourceClaimReview
-from .services import FIELDS, ClaimError, validate_data
+from .services import FIELDS, MAX_PK, ClaimError, validate_data
 
 
 class SourceClaimForm(forms.Form):
@@ -36,7 +36,7 @@ class SourceReviewForm(forms.Form):
         (SourceClaimReview.REJECT, 'رد ادعا'), (SourceClaimReview.DEFER, 'نیاز به مدرک یا بررسی بیشتر'),
     ])
     reason = forms.CharField(label='دلیل', min_length=12, max_length=1000, widget=forms.Textarea(attrs={'rows': 4}))
-    expected_review = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
+    expected_review = forms.IntegerField(min_value=0, max_value=MAX_PK, widget=forms.HiddenInput)
     expected_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
 
     def clean_expected_hash(self):

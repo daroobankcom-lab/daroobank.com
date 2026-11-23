@@ -22,6 +22,7 @@ LIMITS = {'subject': 200, 'title': 200, 'statement': 4000, 'reference_title': 30
           'reference_author': 200, 'reference_version': 200}
 OPTIONAL = {'reference_author', 'reference_version'}
 HASH = re.compile(r'^[0-9a-f]{64}$')
+MAX_PK = 9_223_372_036_854_775_807
 
 
 class DraftError(ValueError):
@@ -140,9 +141,9 @@ def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change
 
 def review_draft(*, actor, draft_id, decision, reason, expected_review, expected_hash, expected_evidence_hash=None):
     require_staff(actor, VIEW, REVIEW)
-    if (type(draft_id) is not int or not 1 <= draft_id <= 9_223_372_036_854_775_807
-            or decision not in dict(ClinicalDraftReview.DECISIONS) or not valid_review_reason(reason)
-            or type(expected_review) is not int or expected_review < 0
+    if (type(draft_id) is not int or not 1 <= draft_id <= MAX_PK
+            or not isinstance(decision, str) or decision not in dict(ClinicalDraftReview.DECISIONS)
+            or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
             or not isinstance(expected_hash, str) or not HASH.fullmatch(expected_hash)
             or (expected_evidence_hash is not None and (not isinstance(expected_evidence_hash, str)
                 or not HASH.fullmatch(expected_evidence_hash)))):

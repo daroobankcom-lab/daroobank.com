@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'CLAIM']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -696,6 +696,38 @@ async function run() {
       assert.equal(new URL(pricePage.url()).pathname, receiptInspection);
       await priceContext.close();
     }
+    // A malformed hidden review version gets a private 400 and a safe GET
+    // recovery link, rather than requiring the user to resubmit the bad form.
+    const reviewContext = await contextFor(browser, 390, errors);
+    const reviewPage = await reviewContext.newPage();
+    await login(reviewPage, reviewer);
+    for (const [detailPath, domain] of [[`/staff/sources/${ids.claim}/`, 'source'],
+                                        [`/staff/clinical/${ids.clinical_leaf}/`, 'clinical']]) {
+      let response = await reviewPage.goto(base + detailPath);
+      assert.equal(response.status(), 200);
+      const form = reviewPage.locator('form.staff-review-form');
+      const oldVersion = await form.locator('#id_expected_review').inputValue();
+      await form.locator('#id_decision').selectOption('defer');
+      await form.locator('#id_reason').fill('بازبینی ساختگی برای آزمایش خطا');
+      await form.locator('#id_expected_review').evaluate(el => { el.value = '9223372036854775808'; });
+      [response] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
+                                     form.locator('button[type=submit]').click()]);
+      assert.equal(response.status(), 400);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(response.headers()['x-robots-tag'], /noindex/);
+      assert.equal(response.headers()['referrer-policy'], 'same-origin');
+      const alert = reviewPage.getByRole('alert').filter({hasText: 'شناسه بازبینی معتبر نیست'});
+      assert.equal(await alert.count(), 1);
+      const retry = alert.getByRole('link', {name: 'بازگشت به جزئیات و شروع دوباره ←'});
+      assert.equal(await retry.getAttribute('href'), detailPath);
+      await checkLayout(reviewPage, `${domain} invalid review 390`);
+      await auditAccessibility(reviewPage, `${domain} invalid review`);
+      await Promise.all([reviewPage.waitForURL(base + detailPath), retry.click()]);
+      assert.equal(await reviewPage.locator('form.staff-review-form #id_expected_review').inputValue(), oldVersion);
+      assert.equal(await reviewPage.locator('form.staff-review-form #id_reason').inputValue(), '');
+      assert.equal(await reviewPage.locator('form.staff-review-form #id_decision').inputValue(), '');
+    }
+    await reviewContext.close();
     const authorContext = await contextFor(browser, 390, errors);
     const page = await authorContext.newPage();
     await login(page, author);

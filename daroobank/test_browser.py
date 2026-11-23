@@ -17,6 +17,7 @@ from catalog.identity import digest, ingredient_snapshot, revise_identity
 from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresentation
 from catalog.test_identity import ALL, INGREDIENT, build, user
 from clinical.services import create_draft, draft_data, review_draft
+from clinical.models import ClinicalDraftReview
 from clinical.evidence import evidence_state
 from ingestion.models import ImportReceipt
 from ingestion.receipts import stage_price_with_receipt
@@ -24,6 +25,7 @@ from pricing.importer import stage_csv
 from pricing.models import PriceCandidate
 from pricing.test_workflow import csv_bytes
 from sources.services import record_claim
+from sources.models import SourceClaimReview
 from tools.browser_test_diagnostics import browser_failure_annotation
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -55,7 +57,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
             clinical_leaf = create_draft(actor=author, data={**draft_data(clinical_leaf), 'title': f'نسخه خصوصی مرورگر {i}'},
                 parent_id=clinical_leaf.pk, expected_parent_hash=clinical_leaf.payload_sha256,
                 change_reason='اصلاح ساختگی برای آزمون مرورگر')
-        record_claim(actor=author, data={
+        browser_claim, _ = record_claim(actor=author, data={
             'source_name': 'منبع ساختگی مرورگر', 'source_url': 'https://example.org/fixture',
             'owner': 'مالک فرضی', 'evidence_url': 'https://example.org/evidence', 'evidence_note': '',
             'claims_collection': True, 'claims_storage': False, 'claims_publication': False,
@@ -64,6 +66,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         reviewer = user('browser-reviewer', 'view_identityworkspace', 'review_identityworkspace')
         reviewer.user_permissions.add(*Permission.objects.filter(content_type__app_label='clinical',
                                       codename__in=['view_clinicaldraft', 'review_clinicaldraft']))
+        reviewer.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                      codename__in=['view_sourceclaim', 'review_sourceclaim']))
         review_draft(actor=reviewer, draft_id=clinical_leaf.pk, decision='defer',
                      reason='دلیل خصوصی ساختگی بازبینی مرورگر', expected_review=0,
                      expected_hash=clinical_leaf.payload_sha256,
@@ -95,7 +99,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                    BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
                    BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
-                   BROWSER_RECEIPT=str(browser_receipt.pk))
+                   BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk))
         try:
             result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
                                     capture_output=True, text=True, timeout=180)
@@ -109,6 +113,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IngredientDraft.objects.filter(name_fa='csrf-canary').count(), 0)
         self.assertEqual(IngredientDraft.objects.filter(name_fa='ماده تازه ساختگی مرورگر').count(), 1)
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
+        self.assertEqual(ClinicalDraftReview.objects.count(), 1)
+        self.assertEqual(SourceClaimReview.objects.count(), 0)
         self.assertEqual(PriceCandidate.objects.count(), 1)
         self.assertEqual(ImportReceipt.objects.count(), 1)
         self.assertEqual(browser_receipt.items.count(), 2)

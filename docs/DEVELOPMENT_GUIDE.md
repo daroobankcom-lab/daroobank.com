@@ -194,6 +194,10 @@ The debug-only `/staff/operations/window/` page provides the same read-only calc
 Private product, price and source intake now consistently reject URLs with even empty `?`/`#` delimiters, empty credentials, controls or invalid Unicode, in addition to the existing HTTPS/no-secret rules. Review reasons reject invalid Unicode and non-text control characters. Previously staged records with newly invalid URLs are not rewritten and fail preliminary review until investigated through a future controlled repair workflow; do not use direct DB edits to bypass review. These checks do not prove a URL or source is legitimate, licensed or safe to fetch.
 
 
+### Source and clinical triage boundaries
+
+A malformed hidden expected-review ID in a source claim or clinical draft review is rejected; use the provided link to return to the detail page and reassess. That link starts a fresh form and discards the submitted fields. Even a successful preliminary review records only what that workflow observed: references may change concurrently or later, especially through bypass writers, and a review can already be stale when it commits. Neither the ID checks nor the review establish source rights, authenticity, clinical approval or permission to publish. Use synthetic data only; see [ADR 0028](ARCHITECTURE_DECISIONS/0028-source-clinical-triage-boundaries.md).
+
 ## Development-only CSV intake receipts
 
 After `migrate`, a successful **web** product or price staging request creates a receipt in the same database transaction as the candidate writes. Visit `/staff/operations/imports/` from either queue. Active staff with `catalog.view_productcandidate` see product receipts, and those with `pricing.view_pricecandidate` see price receipts; users with both see both. Source-only staff cannot see receipts. Filtering and pagination operate after permission filtering; cross-domain detail URLs are 404. Add permissions are still required for actual staging. Staff privacy headers and the debug-only gate apply.

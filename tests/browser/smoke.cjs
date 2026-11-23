@@ -38,7 +38,17 @@ async function checkLayout(page, label) {
     dir: document.documentElement.dir,
   }));
   assert.equal(state.dir, 'rtl', label + ': missing RTL');
-  assert(state.scrollWidth <= state.width, `${label}: horizontal overflow ${state.scrollWidth} > ${state.width}`);
+  if (state.scrollWidth > state.width) {
+    // Report geometry and selectors only; never print page content or form values.
+    const offenders = await page.evaluate(() => [...document.querySelectorAll('body *')].map(el => {
+      const r = el.getBoundingClientRect();
+      return {tag: el.tagName, id: el.id.slice(0, 80), className: typeof el.className === 'string' ? el.className.slice(0, 120) : '',
+              left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width),
+              client: el.clientWidth, scroll: el.scrollWidth};
+    }).filter(el => el.right > document.documentElement.clientWidth + 1 || el.left < -1)
+      .slice(0, 12));
+    assert.fail(`${label}: horizontal overflow ${state.scrollWidth} > ${state.width}; elements=${JSON.stringify(offenders)}`);
+  }
 }
 
 function rgb(value) {
@@ -532,7 +542,8 @@ async function run() {
         'browser-1,001,سازنده فرضی,1 mg,قرص,10 عدد,100,RIAL,retail,package,,\n' +
         'browser-2,۰۰۱,سازنده فرضی,1 mg,قرص,10 عدد,200,RIAL,retail,package,,\n' +
         'browser-3,001,سازنده فرضی,2 mg,قرص,10 عدد,300,RIAL,retail,package,,\n';
-      await pricePage.locator('#id_csv_file').setInputFiles({name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(csv)});
+      await pricePage.locator('#id_csv_file').setInputFiles({name: 'synthetic-'.repeat(15) + '.csv', mimeType: 'text/csv', buffer: Buffer.from(csv)});
+      await checkLayout(pricePage, `price preview with selected file ${width}`);
       const [preview] = await Promise.all([
         pricePage.waitForResponse(r => r.url().endsWith('/staff/prices/import/') && r.request().method() === 'POST'),
         pricePage.locator('.staff-review-form button[type=submit]').click(),

@@ -36,3 +36,5 @@ Record future decisions with context, alternatives, consequences and status. Sup
 - [0022: price-review concurrency boundaries](0022-price-review-concurrency.md) — development-only tests and input hardening, 22 November 2026.
 
 - [0023: serialize partial presentation projection writes](0023-presentation-partial-save-projections.md) — development implementation, 22 November 2026.
+
+- [0024: explicit one-row synthetic projection repair](0024-synthetic-projection-repair.md) — development-only local command, 22 November 2026.

@@ -110,7 +110,19 @@ Identical replays do not alter the original submitter or attestation, including 
 
 A presentation's `search_text` and `irc_normalized` are derived lookup projections, not identity or verification. A nonempty `ProductPresentation.save(update_fields=...)` locks the existing row inside a transaction on the routed write database, reads omitted identity fields under that lock, and writes updated projections with the requested fields. Competing partial model saves of the same row wait; a lock can persist until an outer transaction ends. This can add latency or fail on deadlocks, timeouts and serialization errors; there is no automatic retry. Empty update fields are a no-op. Deprecated Django 5.2 positional save arguments are handled but callers should use keywords. Full saves still use the instance's values and can overwrite newer changes if the instance is stale.
 
-Bulk ORM writes, direct SQL and historical migration models bypass the model override; they can still leave stale projections, as can existing records. No automatic backfill or repair is performed. The bounded catalog-quality scan can flag some inconsistencies but does not prove complete coverage, identity or correctness. The row lock does not prevent new matching rows and does not fix the price-review concurrent duplicate limitation. See [ADR 0023](ARCHITECTURE_DECISIONS/0023-presentation-partial-save-projections.md).
+Bulk ORM writes, direct SQL and historical migration models bypass the model override; they can still leave stale projections, as can existing records. No automatic backfill or repair is performed; a separate explicit one-row synthetic-only local repair exists. The bounded catalog-quality scan can flag some inconsistencies but does not prove complete coverage, identity or correctness. The row lock does not prevent new matching rows and does not fix the price-review concurrent duplicate limitation. See [ADR 0023](ARCHITECTURE_DECISIONS/0023-presentation-partial-save-projections.md).
+
+## Synthetic projection repair (local CLI only)
+
+For an isolated synthetic development database, `repair_catalog_projection` previews one internal presentation ID at a time. It is unavailable when `DEBUG` is false and has no web endpoint. It reports `consistent`, `unsafe`, or `needs_repair` and the affected projection names; only the last includes a short-lived token. The preview prints no product/source fields and makes no writes. For example, with a synthetic ID and after reviewing the preview:
+
+```sh
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py repair_catalog_projection --id 1
+# Replace the placeholder with the token from the immediately preceding preview.
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py repair_catalog_projection --id 1 --commit --confirm-synthetic --token '<preview-token>'
+```
+
+Commit rechecks the signature, ten-minute expiry, database configuration and full observed row/expected projections while holding a row lock. A changed or deleted row, invalid token or unsafe source identity fails without a repair; preview again rather than guessing. The attestation is not proof that the data are synthetic. Only differing derived `search_text`/`irc_normalized` fields are changed, using a deliberate ORM update without model save signals. This can affect public search and price matching even though no publication flag changes. There is no automatic batch, repair audit, authorization or rollback log; backup and independently review any database before any administrative operation. Shell history, process listings and logs may expose IDs and tokens. The signature is not encryption or an authorization mechanism. `DEBUG` is a development gate, not a security boundary, and must never be enabled against real data for this tool. See [ADR 0024](ARCHITECTURE_DECISIONS/0024-synthetic-projection-repair.md) for consistency checks, lock limits and remaining risks.
 
 ## Development presentation pages and API
 

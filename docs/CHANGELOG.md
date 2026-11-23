@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — explicit synthetic projection repair
+
+**Changes:** Added a DEBUG-only local command to preview a single presentation's projection drift and explicitly repair only derived fields after a signed, short-lived state/database recheck under a row lock and a synthetic-data attestation. Tests cover stale/deleted records, malformed inputs, time precision, failure rollback, private output, CLI flags, matching/search effects and selected PostgreSQL concurrency.
+
+**Limits:** Repair can alter search and matching of already-published records without changing publication flags. It does not verify identity, rights or clinical content; DEBUG and attestation do not make real data safe. There is no batch operation, audited user attribution, automatic retry or production authorization. See ADR 0024. During validation, Chromium intermittently reported horizontal overflow in the 320px price preview; geometry identified the file input extending beyond the viewport. The form grid and file input now have bounded widths, and the browser smoke checks a long selected filename. Overflow failures report bounded geometry without form values; broader browser/device coverage remains incomplete.
+
 ## 2026-11-22 — presentation partial-save projection consistency
 
 **Changes:** Nonempty partial model saves lock and read the presentation row inside a transaction before recomputing the search and IRC projections. Deprecated Django 5.2 positional save parameters are parsed before projection handling; empty updates remain no-ops. The quality inspector shares the projection field list. Synthetic PostgreSQL tests exercise overlapping partial saves, lock waits, errors, rollback, stale instances, positional calls and pricing lookup.

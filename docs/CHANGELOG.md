@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — focus failure diagnostics
+
+**Changes:** Browser failure annotations can now identify focus checks by an exact, fixed allowlist of control labels, viewport widths and failure reasons. Tests reject unrecognized and injected messages; no arbitrary assertion text is copied. The focus criterion, application CSS and failure behavior are unchanged.
+
+**Limits:** Five consecutive local synthetic Chromium runs passed; the previous CI focus failure was not reproduced or explained. The annotation is heuristic, covers selected checks only, and does not replace logs or a manual accessibility review.
+
 ## 2026-11-22 — browser failure call-site diagnostics
 
 **Changes:** Include up to two additional JavaScript call-site line numbers in browser-failure annotations, without copying arbitrary stack text or paths. A synthetic multi-frame test checks both the bound and redaction.

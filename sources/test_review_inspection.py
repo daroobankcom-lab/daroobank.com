@@ -217,6 +217,66 @@ class SourceReviewInspectionTests(TestCase):
         self.assertEqual(self.client.get(path, {'after': '٠۰0'}).status_code, 200)
         self.assertEqual(self.client.get(reverse('staff_source_review_inspection', args=[99999999]), {'after': 'bad'}).status_code, 404)
 
+    def test_detail_suppresses_inconsistent_review_but_preserves_latest_token(self):
+        claim, event = self.make()
+        self.client.force_login(self.reviewer)
+        path = reverse('staff_source_detail', args=[claim.pk])
+        good = self.client.get(path)
+        self.assertContains(good, self.reason)
+        self.assertContains(good, 'اثر انگشت و شناسه ثبت‌کننده با وضعیت فعلی برابرند')
+        SourceClaimReview.objects.filter(pk=event.pk).update(review_snapshot={'private': 'snapshot-canary'})
+        bad = self.client.get(path)
+        self.assertContains(bad, 'رکورد بازبینی یا تصویر ادعا ناسازگار است')
+        self.assertNotContains(bad, self.reason)
+        self.assertNotContains(bad, self.reviewer.get_username())
+        self.assertNotContains(bad, 'snapshot-canary')
+        self.assertEqual(bad.context['review_form'].initial['expected_review'], event.pk)
+        response = self.client.post(reverse('staff_source_review', args=[claim.pk]), {
+            'decision': 'defer', 'reason': 'بازبینی تازه ساختگی برای آزمون',
+            'expected_review': str(event.pk), 'expected_hash': claim.payload_sha256})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(SourceClaimReview.objects.filter(claim=claim).count(), 2)
+
+    def test_detail_comparison_distinguishes_changed_and_invalid_claim(self):
+        claim, _ = self.make()
+        self.client.force_login(self.viewer)
+        path = reverse('staff_source_detail', args=[claim.pk])
+        changed = {**claim_data(claim), 'owner': 'مالک جدید ساختگی'}
+        SourceClaim.objects.filter(pk=claim.pk).update(owner=changed['owner'], payload_sha256=fingerprint(changed))
+        self.assertContains(self.client.get(path), 'اثر انگشت یا شناسه ثبت‌کننده با وضعیت فعلی متفاوت است')
+        SourceClaim.objects.filter(pk=claim.pk).update(owner='ناسازگاری ساختگی')
+        response = self.client.get(path)
+        self.assertContains(response, 'مقایسه با ادعای فعلی نامشخص است')
+        self.assertNotContains(response, self.reason)
+
+    def test_detail_with_missing_reviewer_keeps_history_and_omits_untrusted_details(self):
+        claim, event = self.make()
+        self.client.force_login(self.reviewer)
+        try:
+            SourceClaimReview.objects.filter(pk=event.pk).update(reviewer_id=2147483647)
+            response = self.client.get(reverse('staff_source_detail', args=[claim.pk]))
+            self.assertContains(response, 'حساب بازبین در دسترس نیست')
+            self.assertNotContains(response, self.reason)
+            self.assertEqual(response.context['review_form'].initial['expected_review'], event.pk)
+            self.assertEqual(response.context['reviews'][0].claim_comparison, 'unknown')
+        finally:
+            SourceClaimReview.objects.filter(pk=event.pk).update(reviewer_id=self.reviewer.pk)
+
+    def test_detail_comparison_can_be_stale_after_claim_read(self):
+        claim, _ = self.make()
+        self.client.force_login(self.viewer)
+        from . import staff_views
+        original = staff_views.recent_reviews_with_reviewers
+        changed = {**claim_data(claim), 'owner': 'تغییر همزمان ساختگی'}
+        def change_after_claim_read(queryset):
+            SourceClaim.objects.filter(pk=claim.pk).update(owner=changed['owner'], payload_sha256=fingerprint(changed))
+            return original(queryset)
+        path = reverse('staff_source_detail', args=[claim.pk])
+        with patch.object(staff_views, 'recent_reviews_with_reviewers', side_effect=change_after_claim_read):
+            response = self.client.get(path)
+        self.assertContains(response, 'اثر انگشت و شناسه ثبت‌کننده با وضعیت فعلی برابرند')
+        self.assertContains(self.client.get(path), 'اثر انگشت یا شناسه ثبت‌کننده با وضعیت فعلی متفاوت است')
+
     @override_settings(STAFF_PORTAL_ENABLED=False, SECURE_SSL_REDIRECT=False)
     def test_disabled_portal(self):
         self.client.force_login(self.viewer)

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — source detail review comparisons
+
+**Changes:** Source detail checks up to 25 displayed review snapshots and reports limited comparisons to the observed claim, suppressing review details if the current claim or historical review is inconsistent, or the reviewer account is missing. The latest-review token and write-side behavior remain unchanged. Tests exercise a selected stale-read race and successful fresh review after a corrupt historical row.
+
+**Limits:** Separate reads are not a snapshot and coherent alteration may pass. Raw current claim data remains visible to authorized staff. No source rights, authenticity, reviewer qualification, chronological cause or history completeness is established; see ADR 0068.
+
 ## 2026-11-23 — source review snapshot inspection
 
 **Changes:** Authorized development staff can scan up to 50 source-review records per section for structural and payload consistency without displaying snapshot content, reasons, accounts, or hashes. Filters operate within the scanned section and malformed inputs receive private non-reflecting recovery. Synthetic database and Chromium checks cover permissions, bounded pagination, keyboard access, and non-snapshot behavior.

@@ -545,6 +545,8 @@ async function run() {
       await page.goto(base + `/staff/sources/${ids.claim}/`);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی منبع ساختگی برای مرورگر'}).innerText(), /بازبینی منبع ساختگی برای مرورگر/);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      assert.match(await page.locator('.staff-review-item').innerText(), /اثر انگشت و شناسه ثبت‌کننده با وضعیت فعلی برابرند؛ این راستی‌آزمایی نیست/);
+      assert.match(await page.locator('.staff-review-block .staff-panel-note').innerText(), /خوانش‌های جداگانه‌اند، زمان تغییر را ثابت نمی‌کنند/);
       await checkLayout(page, `source review history ${width}`);
       if (width === 390) await auditAccessibility(page, 'source review history');
       await page.getByRole('link', {name: 'بازرسی فنی تاریخچه بازبینی‌ها ←'}).click();

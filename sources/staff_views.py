@@ -14,7 +14,8 @@ from daroobank.scan_responses import invalid_scan_response
 from .date_inspection import DATE_CATEGORIES, MAX_PK, inspect_dates
 from .forms import SourceClaimForm, SourceReviewForm
 from .models import SourceClaim, SourceClaimReview
-from .review_inspection import (CATEGORIES as REVIEW_CATEGORIES, ReviewInspectionNotFound, inspect_reviews)
+from .review_inspection import (CATEGORIES as REVIEW_CATEGORIES, ReviewInspectionNotFound, classify_review,
+                                inspect_reviews)
 from .services import (ADD, FIELDS, REVIEW, VIEW, ClaimConflict, ClaimError, ReviewConflict,
                        date_label, record_claim, require_staff, review_claim)
 
@@ -129,6 +130,14 @@ def detail_response(request, claim, *, form=None, status=200):
     reviews = recent_reviews_with_reviewers(claim.reviews.all())
     claim.display_recorder = current_accounts([claim.recorded_by_id], using=claim._state.db).get(claim.recorded_by_id)
     current_status = date_label(claim)
+    for item in reviews:
+        item.technical_status, item.claim_comparison = classify_review(item, claim, current_status != 'invalid')
+        if current_status == 'invalid':
+            item.technical_status = 'unavailable'
+            item.claim_comparison = 'unknown'
+        elif item.display_reviewer is None:
+            item.technical_status = 'missing_reviewer'
+            item.claim_comparison = 'unknown'
     can_review = (request.user.has_perm(REVIEW) and claim.display_recorder is not None
                   and claim.recorded_by_id != request.user.pk and current_status != 'invalid')
     if can_review and form is None:

@@ -232,3 +232,22 @@ class ClinicalLatestReviewLockTests(TransactionTestCase):
                 finally:
                     resume.set()
                 self.assertTrue(future.result(timeout=10))
+
+    def test_prior_update_waits_but_same_id_does_not_validate_history(self):
+        from .services import _lock_latest_review
+        waiting, pids = Event(), Queue()
+        def signal(draft):
+            waiting.set()
+            return _lock_latest_review(draft)
+        with patch('clinical.services._lock_latest_review', side_effect=signal):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                with transaction.atomic():
+                    ClinicalDraftReview.objects.filter(pk=self.latest.pk).update(reason='تغییر قبلی ساختگی')
+                    future = pool.submit(self.review, pids)
+                    self.assertTrue(waiting.wait(8))
+                    assert_blocked_by_current_transaction(self, pids.get(timeout=5))
+                    self.assertFalse(future.done())
+                event = future.result(timeout=10)
+        self.assertNotEqual(event.pk, self.latest.pk)
+        self.latest.refresh_from_db()
+        self.assertEqual(self.latest.reason, 'تغییر قبلی ساختگی')

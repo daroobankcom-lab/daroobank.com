@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — selected source latest-review lock
+
+**Changes:** Source triage locks its latest existing review while comparing the prior ID. Synthetic PostgreSQL tests cover selected competing writers, transaction boundaries and deferred insertion, and the private detail page describes history limitations. A clinical test also checks a preceding update with unchanged ID.
+
+**Limits:** Only the latest existing row and its ID are involved; prior content is not checked, deferred insertion and later bypass remain possible, and lock waits/deadlocks are possible. No retry, legal approval or source access is added; see ADR 0050.
+
 ## 2026-11-23 — selected clinical latest-review lock
 
 **Changes:** Clinical triage locks the latest existing review row while checking its prior-ID token. Synthetic PostgreSQL tests cover competing updates/deletions, an earlier deletion, outer transaction lifetime and selected non-guarantees; the private page clarifies that this is not full history validation.

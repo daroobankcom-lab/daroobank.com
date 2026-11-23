@@ -8,6 +8,7 @@ from datetime import date
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
+from django.db.transaction import TransactionManagementError
 from django.utils import timezone
 
 from catalog.normalization import normalize_search
@@ -96,6 +97,15 @@ def record_claim(*, actor, data):
                                                   defaults={**data, 'recorded_by': actor})
 
 
+def _lock_latest_review(claim):
+    """Lock the latest existing review ID; absent and future rows remain unlocked."""
+    using = claim._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest-review locking requires an atomic writer transaction.')
+    return (SourceClaimReview.objects.using(using).filter(claim_id=claim.pk)
+            .order_by('-pk').select_for_update().only('pk').first())
+
+
 def review_claim(*, actor, claim_id, decision, reason, expected_review, expected_hash):
     require_staff(actor, VIEW, REVIEW)
     if (type(claim_id) is not int or not 1 <= claim_id <= MAX_PK
@@ -110,7 +120,7 @@ def review_claim(*, actor, claim_id, decision, reason, expected_review, expected
         if (not valid_claim(claim) or claim.payload_sha256 != expected_hash
                 or not current_account_exists(claim.recorded_by_id, using=claim._state.db)):
             raise ReviewConflict('اطلاعات منبع یا ثبت‌کننده در دسترس نیست یا تغییر کرده است؛ بازبینی متوقف شد.')
-        latest = claim.reviews.order_by('-pk').first()
+        latest = _lock_latest_review(claim)
         if (latest.pk if latest else 0) != expected_review:
             raise ReviewConflict('بازبینی جدیدی ثبت شده است؛ صفحه را تازه کنید.')
         return SourceClaimReview.objects.create(

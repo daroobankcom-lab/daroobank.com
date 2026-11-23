@@ -84,10 +84,13 @@ class TriageInputBoundaryTests(TestCase):
                     self.assertContains(response, f'href="{reverse(detail, args=[pk])}"', status_code=400)
                     self.assertContains(response, 'role="alert"', status_code=400)
                     self.assertFalse(model.objects.exists())
+            detail_name = 'staff_source_detail' if domain == 'source' else 'staff_clinical_detail'
+            detail_response = self.client.get(reverse(detail_name, args=[pk]))
+            self.assertContains(detail_response, 'فقط شناسه آخرین بازبینی موجود بررسی می‌شود')
             if domain == 'clinical':
-                detail_response = self.client.get(reverse('staff_clinical_detail', args=[pk]))
                 self.assertContains(detail_response, 'تغییر هم‌زمان یا بعدی ارجاع‌ها')
-                self.assertContains(detail_response, 'فقط شناسه آخرین بازبینی موجود بررسی می‌شود')
+            else:
+                self.assertContains(detail_response, 'تغییر هم‌زمان یا بعدی تاریخچه همچنان ممکن است')
             # Max bigint is syntactically valid but stale; zero is valid for no review.
             stale = self.client.post(reverse(route, args=[pk]), {**form, 'expected_review': MAX_PK})
             self.assertEqual(stale.status_code, 409)

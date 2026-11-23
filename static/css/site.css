@@ -163,6 +163,7 @@ svg {
   padding: 10px 17px;
   border: 1px solid #d8ebe4;
   border-radius: 10px;
+  background: #fff;
   color: var(--brand-dark);
   font-size: 13px;
   font-weight: 700;

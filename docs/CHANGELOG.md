@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — selected header action accessibility checks
+
+**Changes:** The header search action has an opaque background. Chromium checks its label and decorative arrow against the selected background at rest and on hover in four widths, rejects selected low-contrast/compositing mutations, and follows the accessible link using a real keyboard sequence.
+
+**Limits:** These are computed-style and selected keyboard checks, not pixel rendering, a screen-reader test or an accessibility certification. Axe still reports the decorative arrow as inconclusive; manual review remains necessary.
+
 ## 2026-11-23 — selected triage write conflict handling
 
 **Changes:** The four preliminary review writers translate selected PostgreSQL lock/deadlock/serialization errors into their existing conflict responses after transaction/savepoint rollback; synthetic tests cover rollback and private HTTP 409 responses, with real lock-timeout races across all four domains.

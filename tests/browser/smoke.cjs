@@ -368,8 +368,44 @@ async function run() {
       await checkSkipLink(page, `skip home ${width}`, '#drug-search');
       await checkKeyboardFocus(page, '#drug-search', `search ${width}`, '.search-form');
       await checkHeroContrast(page);
+      // The header action now has an opaque surface for selected contrast checks.
+      // Check text and decorative arrow in both normal and pointer-hover states;
+      // this is a computed-style check, not a rendered-pixel audit.
+      for (const state of ['rest', 'hover']) {
+        if (state === 'hover') await page.locator('.header-cta').hover();
+        await checkTextContrast(page, '.header-cta > span:first-child', '.header-cta', `header label ${state} ${width}`);
+        await checkTextContrast(page, '.header-cta > span[aria-hidden="true"]', '.header-cta', `header arrow ${state} ${width}`);
+      }
       if (width === 390) {
         await auditAccessibility(page, 'home');
+        for (const [css, error] of [
+          ['.header-cta { background-image: linear-gradient(white, black) !important; }', /background images/],
+          ['.header-cta { opacity: 0.5 !important; }', /opacity, filter or blending/],
+          ['.header-cta { color: white !important; }', /text contrast below 4.5/],
+        ]) {
+          const mutation = await page.addStyleTag({content: css});
+          try {
+            await assert.rejects(checkTextContrast(page, '.header-cta > span:first-child', '.header-cta', 'mutated header'), error);
+          } finally {
+            await mutation.evaluate(el => el.remove());
+          }
+        }
+        const headerKeyboard = await context.newPage();
+        await headerKeyboard.goto(base + '/');
+        const headerAction = headerKeyboard.getByRole('link', {name: 'جست‌وجوی دارو', exact: true}).and(headerKeyboard.locator('.header-cta'));
+        assert.equal(await headerAction.count(), 1, 'header action accessible name');
+        assert.equal(await headerAction.getAttribute('href'), '/search/');
+        // Start at the browser document and reach the real link by Tab, rather
+        // than synthesizing focus or skipping over navigation.
+        let reachedHeader = false;
+        for (let i = 0; i < 8; i++) {
+          await headerKeyboard.keyboard.press('Tab');
+          if (await headerAction.evaluate(el => el === document.activeElement)) { reachedHeader = true; break; }
+        }
+        assert(reachedHeader, 'header action must be reachable by keyboard');
+        await checkKeyboardFocus(headerKeyboard, '.header-cta', 'header action', '.header-cta');
+        await Promise.all([headerKeyboard.waitForURL('**/search/'), headerKeyboard.keyboard.press('Enter')]);
+        await headerKeyboard.close();
         for (const [css, error] of [
           ['.hero-copy { opacity: 0.5 !important; }', /Contrast needs review/],
           ['.hero-lead { background-image: linear-gradient(white, black) !important; }', /Contrast needs review/],

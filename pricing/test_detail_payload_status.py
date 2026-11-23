@@ -79,6 +79,21 @@ class PriceDetailPayloadStatusTests(TestCase):
         self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
         self.assertFalse(PriceCandidateReview.objects.exists())
 
+    def test_in_flight_read_is_not_a_snapshot_or_review_authorization(self):
+        def change_after_candidate_fetch(fields):
+            PriceCandidate.objects.filter(pk=self.candidate.pk).update(amount_rial=101)
+            return suggest_product(fields)
+        with patch('pricing.staff_views.suggest_product', side_effect=change_after_candidate_fetch):
+            stale = self.client.get(self.url)
+        self.assertContains(stale, 'نام پیشنهاد ساختگی')
+        self.assertContains(stale, 'name="decision"')
+        self.assertNotContains(stale, 'اطلاعات این رکورد ناسازگار است')
+        # A later read and the write-side check observe the changed value.
+        fresh = self.client.get(self.url)
+        self.assertContains(fresh, 'اطلاعات این رکورد ناسازگار است')
+        self.assertNotContains(fresh, 'name="decision"')
+        self.assertFalse(PriceCandidateReview.objects.exists())
+
     def test_consistent_candidate_keeps_fresh_suggestion_and_review_form(self):
         response = self.client.get(self.url)
         self.assertContains(response, 'نام پیشنهاد ساختگی')

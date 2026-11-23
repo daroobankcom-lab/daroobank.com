@@ -52,9 +52,10 @@ class PublicReadPrivacyHeadersMiddleware:
     """Apply privacy headers to resolved public reads, including CSRF/405 errors.
 
     Runs outside CommonMiddleware and CsrfViewMiddleware so their responses for
-    these resolved views receive the same policy. Known slashless search/product
-    paths receive the policy too, including CommonMiddleware's redirect. Other
-    unresolved requests and responses generated upstream are outside scope.
+    these resolved views receive the same policy. Known public path shapes
+    receive the policy even when unresolved, including slashless redirects and
+    oversized numeric IDs. Other unresolved paths and upstream responses remain
+    outside scope.
     """
 
     view_names = frozenset({
@@ -67,11 +68,10 @@ class PublicReadPrivacyHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         match = getattr(request, 'resolver_match', None)
-        # CommonMiddleware resolves slash-appended routes without setting
-        # request.resolver_match on the original request. Match only the known
-        # slashless public reads; do not apply this to unrelated URLs.
-        slashless = not request.path_info.endswith('/') and _is_public_read_path(request.path_info)
-        if (match is not None and match.url_name in self.view_names) or slashless:
+        # CommonMiddleware may redirect before resolving the request. An
+        # oversized numeric product ID can also fail the converter before a
+        # resolver_match exists. Match only our known public path shapes.
+        if (match is not None and match.url_name in self.view_names) or _is_public_read_path(request.path_info):
             _public_headers(response)
         return response
 

@@ -19,6 +19,17 @@ class EarlyRedirectPrivacyTests(SimpleTestCase):
                     self.assertEqual(response['X-Robots-Tag'], 'noindex, follow')
                     self.assertNotIn(b'synthetic-canary', response.content)
 
+    def test_large_numeric_product_paths_keep_redirect_policy(self):
+        for prefix in ('/products/', '/api/v1/products/'):
+            for suffix in ('', '/'):
+                with self.subTest(prefix=prefix, suffix=suffix):
+                    response = self.client.get(prefix + '9' * 5000 + suffix, {'q': 'synthetic-canary'})
+                    self.assertEqual(response.status_code, 301)
+                    self.assertEqual(response['Cache-Control'], 'no-store')
+                    self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+                    self.assertEqual(response['X-Robots-Tag'], 'noindex, follow')
+                    self.assertNotIn(b'synthetic-canary', response.content)
+
     def test_staff_https_redirect_stays_before_disabled_gate_but_is_private(self):
         client = Client(enforce_csrf_checks=True)
         for path in ('/staff', '/staff/', '/staff/login/', '/staff/unknown/'):

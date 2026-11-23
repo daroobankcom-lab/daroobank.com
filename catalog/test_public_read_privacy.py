@@ -72,6 +72,19 @@ class PublicReadPrivacyTests(TestCase):
                 self.assertEqual(response.status_code, 404)
                 self.assert_privacy_headers(response)
 
+    def test_unresolvable_large_product_ids_keep_known_path_policy(self):
+        # Python's integer conversion rejects very long IDs before resolver_match
+        # exists, even though the URL has the public product path shape.
+        for prefix in ('/products/', '/api/v1/products/'):
+            for suffix in ('', '/'):
+                path = prefix + '9' * 5000 + suffix
+                for method in (self.client.get, self.client.head):
+                    with self.subTest(prefix=prefix, suffix=suffix, method=method.__name__), self.assertNumQueries(0):
+                        response = method(path, {'q': 'synthetic-canary'})
+                        self.assertEqual(response.status_code, 404)
+                        self.assert_privacy_headers(response)
+                        self.assertNotIn(b'synthetic-canary', response.content)
+
     def test_slashless_lookalikes_do_not_acquire_public_policy(self):
         for path in ('/searches', '/api/v1/search-other', '/products/123extra',
                      '/products/-1', '/products/123/extra', '/staff/products/123'):

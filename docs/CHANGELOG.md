@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — oversized public product paths
+
+**Changes:** Known public product URL shapes retain privacy headers when an extremely long numeric ID fails URL resolution, including HTTPS redirects. A synthetic test reproduced the previously missing headers before the fix.
+
+**Limits:** This does not redact URLs from logs or govern unrelated or upstream-generated responses. See ADR 0044.
+
 ## 2026-11-23 — malformed signed cursor timestamps
 
 **Changes:** The shared cursor decoder now maps Django's `IndexError` and `OverflowError` for validly signed empty or extreme timestamps to generic invalid-cursor errors. A synthetic test reproduced the previous public HTTP failure before the fix and now covers all four cursor decoders.

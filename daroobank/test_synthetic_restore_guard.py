@@ -79,6 +79,25 @@ class RestoreDrillGuardTests(SimpleTestCase):
         self.assertNotEqual(name1, name2)
         self.assertEqual(base_settings.DATABASES['default'].get('TEST'), original)
 
+    def test_cross_domain_fixture_guards_run_before_writes(self):
+        from . import synthetic_restore_fixture as fixture
+        actor = Mock()
+        for vendor, name, debug in [('sqlite', 'test_daroobank_restore_' + 'a' * 32, True),
+                                    ('postgresql', 'valuable_database', True),
+                                    ('postgresql', 'test_daroobank_restore_' + 'a' * 32, False)]:
+            with self.subTest(vendor=vendor, name=name, debug=debug), override_settings(DEBUG=debug):
+                db = Mock(vendor=vendor, settings_dict={'NAME': name})
+                with patch.object(fixture, 'connection', db), self.assertRaises(RuntimeError):
+                    fixture.build_cross_domain_fixture(actor, actor)
+                actor.user_permissions.add.assert_not_called()
+                db.cursor.assert_not_called()
+        with override_settings(DEBUG=True, DAROOBANK_RESTORE_ISOLATED=False):
+            db = Mock(vendor='postgresql', settings_dict={'NAME': 'test_daroobank_restore_' + 'a' * 32})
+            with patch.object(fixture, 'connection', db), self.assertRaises(RuntimeError):
+                fixture.build_cross_domain_fixture(actor, actor)
+            actor.user_permissions.add.assert_not_called()
+            db.cursor.assert_not_called()
+
     @override_settings(DAROOBANK_RESTORE_ISOLATED=False)
     def test_unmarked_settings_fail_before_database_access(self):
         db = Mock()

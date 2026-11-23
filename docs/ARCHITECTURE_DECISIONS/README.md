@@ -87,6 +87,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0076: PostgreSQL readiness retry window](0076-postgresql-readiness-window.md) — development-only implementation, 23 November 2026.
 
+- [0077: cross-domain synthetic restore drill](0077-cross-domain-restore-drill.md) — development-only implementation, 23 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

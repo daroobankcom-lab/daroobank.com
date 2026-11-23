@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — cross-domain synthetic restore drill
+
+**Changes:** The opt-in PostgreSQL restore drill now also restores and verifies selected synthetic source, product, price, receipt and clinical records and relationships, and runs the read-only catalog inspector on the restored database. A corruption probe checks that altered manifest and evidence snapshots are detected; additional fixture guards run before writes.
+
+**Limits:** This sample does not prove complete restoration, provenance, encrypted/off-host backups, recovery time or production safety; see ADR 0077.
+
 ## 2026-11-23 — PostgreSQL readiness retry window
 
 **Changes:** The development startup helper no longer starts a new readiness attempt after its monotonic retry window ends; it still performs one initial attempt even for a zero window. Deterministic clock tests and actual synthetic PostgreSQL success/absence tests cover the selected behavior.

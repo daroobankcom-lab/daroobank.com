@@ -12,7 +12,7 @@ from uuid import uuid4
 import psycopg
 from django.conf import settings
 from django.db import connection
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, override_settings
 
 from catalog.identity import digest, package_snapshot, review_package
 from catalog.models import IdentityPackageDraft, IdentityPackageReview
@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 @skipUnless(os.environ.get('DAROOBANK_RESTORE_TESTS') == '1', 'Optional synthetic PostgreSQL restore drill is disabled')
+@override_settings(DEBUG=True)
 class SyntheticRestoreDrill(TransactionTestCase):
     """Source and target are new, dedicated databases, never an existing database."""
 
@@ -42,6 +43,9 @@ class SyntheticRestoreDrill(TransactionTestCase):
             reason='دلیل ساختگی برای تمرین بازگردانی', expected_review=0, expected_graph_hash=graph_hash)
         self.assertEqual(IdentityPackageDraft.objects.count(), 1)
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
+        from .synthetic_restore_fixture import build_cross_domain_fixture, verify_cross_domain_fixture
+        build_cross_domain_fixture(author, reviewer)
+        verify_cross_domain_fixture()
 
         target = f'test_daroobank_restore_target_{uuid4().hex}'
         self.assertRegex(target, r'^test_daroobank_restore_target_[0-9a-f]{32}$')
@@ -111,7 +115,7 @@ class SyntheticRestoreDrill(TransactionTestCase):
                 restored_env = {**child, 'POSTGRES_DB': target, 'PGDATABASE': target,
                                 'SYNTHETIC_PACKAGE_ID': str(package.pk), 'SYNTHETIC_REVIEW_ID': str(event.pk),
                                 'SYNTHETIC_GRAPH_HASH': graph_hash}
-                for args in (['check'], ['migrate', '--check']):
+                for args in (['check'], ['migrate', '--check'], ['inspect_postgresql_schema']):
                     check = run([sys.executable, 'manage.py', *args], restored_env)
                     self.assertEqual(check.returncode, 0, f'Restored synthetic database check failed: {args[0]}')
                 script = (
@@ -123,7 +127,8 @@ class SyntheticRestoreDrill(TransactionTestCase):
                     "assert digest(package_snapshot(p))==os.environ['SYNTHETIC_GRAPH_HASH']; "
                     "assert r.package_id==p.pk and r.graph_sha256==os.environ['SYNTHETIC_GRAPH_HASH']; "
                     "assert review_is_consistent(r,p.pk) and r.reviewer.username=='synthetic-restore-reviewer'; "
-                    "assert p.recorded_by.username=='synthetic-restore-author'"
+                    "assert p.recorded_by.username=='synthetic-restore-author'; "
+                    "from daroobank.synthetic_restore_fixture import verify_cross_domain_fixture; verify_cross_domain_fixture()"
                 )
                 check = run([sys.executable, 'manage.py', 'shell', '-c', script], restored_env)
                 self.assertEqual(check.returncode, 0, 'Restored synthetic ORM graph verification failed')
@@ -132,6 +137,28 @@ class SyntheticRestoreDrill(TransactionTestCase):
             if created:
                 with connection.cursor() as cursor:
                     cursor.execute(f'DROP DATABASE {connection.ops.quote_name(target)}')
+
+    def test_cross_domain_verifier_detects_selected_corruption(self):
+        from copy import deepcopy
+        from ingestion.models import ImportReceiptItem
+        from clinical.models import ClinicalDraftReview
+        from .synthetic_restore_fixture import build_cross_domain_fixture, verify_cross_domain_fixture
+
+        author = user('synthetic-restore-author', *ALL)
+        reviewer = user('synthetic-restore-reviewer', *ALL)
+        build_cross_domain_fixture(author, reviewer)
+        verify_cross_domain_fixture()
+        review = ClinicalDraftReview.objects.get()
+        old = deepcopy(review.review_snapshot)
+        ClinicalDraftReview.objects.filter(pk=review.pk).update(
+            review_snapshot={**old, 'evidence_fingerprint': '0' * 64})
+        with self.assertRaises(AssertionError):
+            verify_cross_domain_fixture()
+        ClinicalDraftReview.objects.filter(pk=review.pk).update(review_snapshot=old)
+        item = ImportReceiptItem.objects.first()
+        ImportReceiptItem.objects.filter(pk=item.pk).update(payload_sha256='0' * 64)
+        with self.assertRaises(AssertionError):
+            verify_cross_domain_fixture()
 
     def test_created_target_is_removed_when_dump_fails(self):
         from types import SimpleNamespace

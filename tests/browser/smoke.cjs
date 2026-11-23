@@ -637,6 +637,7 @@ async function run() {
       assert.equal(response.status(), 200);
       assert.match(await page.locator('main').innerText(), /نمایش و بازرسی پیوندها آن را کنترل نمی‌کنند/);
       assert.match(await page.locator('main').innerText(), /وجود فعلی حساب بازبین، هویت تاریخی یا صلاحیت او را اثبات نمی‌کند/);
+      assert.match(await page.locator('main').innerText(), /فرمولاسیون و مواد با این کنترل قفل نمی‌شوند/);
       await checkLayout(page, `identity package detail ${width}`);
       if (width === 390) await auditAccessibility(page, 'identity package detail');
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);

@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_accounts
@@ -274,6 +275,19 @@ def _require_creator_accounts(ids, *, using):
         raise IdentityConflict('حساب ثبت‌کننده زنجیره در دسترس نیست؛ عملیات متوقف شد.')
 
 
+def _lock_package_product(package):
+    """Re-read and lock the immediate product after locking a package in a writer."""
+    using = package._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Identity product locking requires an atomic writer transaction.')
+    product = IdentityProductDraft.objects.using(using).select_for_update().filter(pk=package.product_id).first()
+    if product is None:
+        raise IdentityConflict('فرآورده زنجیره در دسترس نیست.')
+    # Replace any cached pre-lock relationship with the locked current row.
+    package.product = product
+    return product
+
+
 def _revision_payload(parent_id, child_id, recorded_by_id, change_reason, parent_graph_sha256, child_graph_sha256):
     return {'parent_id': parent_id, 'child_id': child_id, 'recorded_by_id': recorded_by_id,
             'change_reason': change_reason, 'parent_graph_sha256': parent_graph_sha256,
@@ -289,9 +303,9 @@ def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash
         raise IdentityConflict('اطلاعات نسخه جدید معتبر نیست.')
     change_reason = change_reason.strip()
     with transaction.atomic():
-        parent = (IdentityPackageDraft.objects.select_for_update(of=('self',))
-                  .select_related('product__formulation').filter(pk=parent_id).first())
+        parent = IdentityPackageDraft.objects.select_for_update().filter(pk=parent_id).first()
         if parent is None: raise IdentityConflict('بسته پیشین در دسترس نیست.')
+        _lock_package_product(parent)
         parent_graph = safe_snapshot(parent, package_snapshot)
         if not parent_graph or digest(parent_graph) != expected_graph_hash:
             raise IdentityConflict('بسته پیشین یا وابستگی آن تغییر کرده یا ناسازگار است.')
@@ -433,13 +447,14 @@ def valid_identity_revision(kind, link, child_id):
 
 def review_package(*, actor, package_id, decision, reason, expected_review, expected_graph_hash):
     require_staff(actor, VIEW, REVIEW)
-    if (not _valid_id(package_id) or decision not in dict(IdentityPackageReview.DECISIONS)
+    if (not _valid_id(package_id) or not isinstance(decision, str) or decision not in dict(IdentityPackageReview.DECISIONS)
             or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_ID
             or not _is_hash(expected_graph_hash)):
         raise IdentityConflict('اطلاعات بازبینی معتبر نیست.')
     with transaction.atomic():
-        package = IdentityPackageDraft.objects.select_for_update(of=('self',)).select_related('product__formulation').filter(pk=package_id).first()
+        package = IdentityPackageDraft.objects.select_for_update().filter(pk=package_id).first()
         if not package: raise IdentityConflict('بسته در دسترس نیست.')
+        _lock_package_product(package)
         graph = safe_snapshot(package, package_snapshot)
         if not graph or digest(graph) != expected_graph_hash: raise IdentityConflict('اطلاعات زنجیره تغییر کرده یا ناسازگار است.')
         if actor.pk in graph_authors(graph): raise PermissionDenied

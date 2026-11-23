@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — identity package immediate-product lock
+
+**Changes:** Package review and correction lock the package then re-read and lock its immediate product before evaluating the graph. Missing products conflict, and direct non-string review decisions now conflict rather than raising an unhashable-input type error. Synthetic PostgreSQL tests exercise both lock directions, cached reads, outer transactions, missing products, validation and an unlocked formulation mutation; Chromium checks the new scope notice.
+
+**Limits:** This is not whole-graph isolation: formulation, ingredients, components and exclusive account locks are outside this change. More locks can wait or deadlock; no retries, clinical approval or production guarantee. See ADR 0038.
+
 ## 2026-11-22 — identity graph creator presence in writes
 
 **Changes:** Selected identity dependent creation, package review and correction writers now reject a missing current creator anywhere in their validated current graph, with one bounded bulk account read per check. Tests cover every graph position with temporary deferred-FK account deletion, independent permissions and self-review, conflicts and rollback, inactive accounts, maximum graph size and selected unlocked/bypass behavior.

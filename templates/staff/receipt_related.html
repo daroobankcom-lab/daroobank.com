@@ -1,5 +1,5 @@
 <section class="staff-panel staff-review-block"><h2>رسیدهای مرتبط با این نامزد</h2>
-  <p class="staff-panel-note">فقط سرنخ‌های مرتبط با ثبت‌های جدید وب نمایش داده می‌شوند؛ این فهرست کامل، راستی‌آزمایی‌شده یا اثبات منشأ و مجوز نیست. صحت جزئیات هر رسید را جداگانه بررسی کنید.</p>
+  <p class="staff-panel-note">فقط سرنخ‌های مرتبط با ثبت‌های جدید وب نمایش داده می‌شوند؛ این فهرست کامل، راستی‌آزمایی‌شده یا اثبات منشأ و مجوز نیست. صحت جزئیات هر رسید را جداگانه بررسی کنید. حساب ثبت‌کننده رسید در این فهرست بررسی نمی‌شود.</p>
   {% for receipt in receipt_refs.items %}<article class="staff-review-item"><strong><a class="staff-detail-link" href="{% url 'staff_import_receipt_detail' receipt.pk %}">رسید {{ receipt.pk }} ←</a></strong><p>{{ receipt.created_at|date:'Y-m-d H:i' }} (میلادی، تهران)</p></article>{% empty %}<p>رسید مرتبطی پیدا نشد؛ این به معنی نبود ورود قبلی نیست.</p>{% endfor %}
   {% if receipt_refs.limited %}<p>بیش از پنج رسید مرتبط وجود دارد؛ فقط پنج رسید اخیر نمایش داده می‌شود.</p>{% endif %}
 </section>

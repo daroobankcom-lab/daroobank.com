@@ -195,3 +195,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Missing product and price stager accounts
 
 `daroobank/test_missing_stagers.py` exercises synthetic deferred-FK corruption for both review services and HTTP pages, all decisions, nullable price stagers, normal/inactive accounts, permission and self-review checks, comparison and receipt inspection boundaries, same-transaction bypasses, and selected unlocked-account update races. Browser smoke checks comparison and inspection warnings at four widths. The race does not establish concurrent deletion behavior or every schedule. See [ADR 0034](ARCHITECTURE_DECISIONS/0034-missing-product-and-price-stagers.md).
+
+## Missing receipt actor accounts
+
+`ingestion/test_missing_receipt_actors.py` uses restored, synthetic deferred-FK corruption to test product/price receipt visibility, privacy, permissions, legacy manifests, diagnostic boundaries, escaping, inactive accounts, page-local lookup and a selected stale-read bypass. Chromium exercises ordinary receipt pages and warnings at four widths. These checks do not establish receipt authenticity, concurrent deletion behavior or production readiness; see [ADR 0035](ARCHITECTURE_DECISIONS/0035-missing-receipt-actors.md).

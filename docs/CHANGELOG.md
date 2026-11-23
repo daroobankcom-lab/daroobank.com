@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — missing receipt actor accounts
+
+**Changes:** Permission-scoped receipt lists and details retain receipts with a missing current actor and show a notice, with one page-local account lookup rather than an inner join. Related-receipt and manifest-inspection pages state that they do not check receipt actors. Synthetic tests cover orphaned product/price receipts, privacy and domain permissions, legacy data, pagination/query counts and stale reads; Chromium exercises ordinary pages at four widths.
+
+**Limits:** An account name is not historical identity or authorization, and separate reads are not a snapshot. Receipt actor changes, other relationships, authenticity and production use are not guaranteed; see ADR 0035.
+
 ## 2026-11-22 — missing product and price stager accounts
 
 **Changes:** Product and price review now conflict if the current stager account is missing. Orphaned products remain visible, both details show a notice and disable review, and nullable price stagers retain their separate handling. Comparisons and receipt inspections explicitly describe their narrower checks. Synthetic tests exercise service and HTTP paths, all decisions, nullable and inactive accounts, diagnostic boundaries and selected bypass/race limitations.

@@ -172,7 +172,11 @@ class MissingStagerTests(TestCase):
                     self.assertEqual(report['rows'], [{'ordinal': 1, 'status': 'consistent'}])
                     for view in ('staff_import_receipt_detail', 'staff_import_manifest_inspection'):
                         response = self.client.get(reverse(view, args=[receipt.pk]))
-                        self.assertContains(response, 'وجود حساب ثبت‌کننده نامزدها در این بررسی سنجیده نمی‌شود')
+                        self.assertContains(response, 'وجود حساب ثبت‌کننده نامزدها')
+                        if view == 'staff_import_receipt_detail':
+                            self.assertContains(response, 'در این بررسی سنجیده نمی‌شود')
+                        else:
+                            self.assertContains(response, 'حساب ثبت‌کننده رسید در این بازرسی بررسی نمی‌شود')
         finally:
             ProductCandidate.objects.filter(pk=self.candidate.pk).update(staged_by_id=self.author.pk)
             PriceCandidate.objects.filter(pk=self.price.pk).update(staged_by_id=self.author.pk)

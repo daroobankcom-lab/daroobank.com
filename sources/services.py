@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_account_exists
-from daroobank.review_write_boundary import review_write_boundary
+from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import SourceClaim, SourceClaimReview
 
@@ -114,7 +114,7 @@ def review_claim(*, actor, claim_id, decision, reason, expected_review, expected
             or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
-    with review_write_boundary(ReviewConflict):
+    with write_conflict_boundary(ReviewConflict):
         claim = SourceClaim.objects.select_for_update().get(pk=claim_id)
         if claim.recorded_by_id == actor.pk:
             raise PermissionDenied

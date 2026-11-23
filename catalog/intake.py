@@ -11,7 +11,7 @@ from django.db import transaction
 from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
-from daroobank.review_write_boundary import review_write_boundary
+from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from ingestion.locks import lock_source_stage
 
@@ -144,7 +144,7 @@ def review_product(*, candidate_id, actor, decision, reason, expected_review, ex
             or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
-    with review_write_boundary(ReviewConflict):
+    with write_conflict_boundary(ReviewConflict):
         candidate = ProductCandidate.objects.select_for_update().get(pk=candidate_id)
         if candidate.staged_by_id == actor.pk:
             raise PermissionDenied

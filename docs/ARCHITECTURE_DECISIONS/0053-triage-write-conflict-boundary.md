@@ -1,12 +1,12 @@
 # ADR 0053: translate selected triage write conflicts after rollback
 
-Status: development-only, 23 November 2026. This changes error reporting, not the locking or review guarantees in ADRs 0049–0052.
+Status: development-only, 23 November 2026. This changes error reporting, not the locking or review guarantees in ADRs 0049–0052. The boundary was subsequently extended to selected clinical draft/reference writes and renamed in [ADR 0054](0054-clinical-draft-write-conflicts.md).
 
 ## Decision
 
 Wrap the product-candidate, price, source and clinical preliminary review writers in a shared atomic boundary. After rollback of the writer's transaction or nested savepoint, translate PostgreSQL SQLSTATE `55P03` (lock not available/timeout), `40P01` (deadlock) and `40001` (serialization failure) into each domain's existing review conflict with a generic retry message. Existing web handlers render a private 409 without the database message. The original exception remains chained for diagnostic code, which must not be exposed to users. Unselected database errors and non-database exceptions are re-raised.
 
-This boundary does not set a lock timeout, retry a write, guarantee eventual success or change permissions. It covers only these four review writers and only errors raised inside their own atomic boundary. If a caller encloses a successful writer in an outer transaction, a failure at its later commit is outside the boundary. Other services, connection acquisition, rendering, middleware and database/proxy failures are also outside it. Do not treat a conflict as approval or evidence of a valid history.
+This boundary does not set a lock timeout, retry a write, guarantee eventual success or change permissions. At this decision it covered these four review writers and only errors raised inside their own atomic boundary; ADR 0054 extends it to selected clinical draft/reference writes. If a caller encloses a successful writer in an outer transaction, a failure at its later commit is outside the boundary. Other services, connection acquisition, rendering, middleware and database/proxy failures are also outside it. Do not treat a conflict as approval or evidence of a valid history.
 
 ## Evidence and limits
 

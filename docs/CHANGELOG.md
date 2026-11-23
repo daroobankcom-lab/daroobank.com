@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — clinical draft and reference write conflict handling
+
+**Changes:** Clinical draft creation/revision and supplementary-reference creation translate selected PostgreSQL concurrency failures after rollback; initial draft creation now also returns a private generic 409. Synthetic tests cover actual lock timeouts for revision/reference and simulated errors, rollback and HTTP responses for all three forms.
+
+**Limits:** No timeout or retry is configured; enclosing-transaction commit, pre-write reads and unrelated errors remain outside scope. Deadlock and serialization tests for these writers are simulated; see ADR 0054.
+
 ## 2026-11-23 — selected header action accessibility checks
 
 **Changes:** The header search action has an opaque background. Chromium checks its label and decorative arrow against the selected background at rest and on hover in four widths, rejects selected low-contrast/compositing mutations, and follows the accessible link using a real keyboard sequence.

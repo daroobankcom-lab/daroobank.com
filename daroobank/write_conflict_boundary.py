@@ -1,11 +1,11 @@
-"""Translate selected PostgreSQL review-writer conflicts after rollback."""
+"""Translate selected PostgreSQL writer conflicts after rollback."""
 from contextlib import contextmanager
 
 from django.db import DatabaseError, transaction
 
 
 @contextmanager
-def review_write_boundary(conflict_type):
+def write_conflict_boundary(conflict_type):
     """Do not retry; failures at a surrounding transaction's commit are outside scope."""
     try:
         with transaction.atomic():

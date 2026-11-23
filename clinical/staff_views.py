@@ -74,16 +74,19 @@ def inspection(request):
 def create(request):
     require_staff(request.user, VIEW, ADD)
     form = DraftForm(request.POST or None)
+    status = 200
     if request.method == 'POST' and form.is_valid():
         try:
             draft = create_draft(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS})
             return redirect('staff_clinical_detail', pk=draft.pk)
         except DraftError as exc:
             form.add_error(None, str(exc))
+        except DraftConflict as exc:
+            form.add_error(None, str(exc)); status = 409
     return render(request, 'staff/clinical_form.html', {
         'page_title': 'ثبت پیش‌نویس | داروبانک', 'description': 'ثبت پیش‌نویس ساختگی.',
         'noindex': True, 'private_staff': True, 'form': form, 'parent': None,
-    })
+    }, status=status)
 
 
 @login_required(login_url='staff_login')

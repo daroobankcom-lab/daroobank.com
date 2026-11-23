@@ -4,8 +4,9 @@ import json
 from datetime import date
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.db.models import Prefetch, prefetch_related_objects
+
+from daroobank.write_conflict_boundary import write_conflict_boundary
 
 from .models import ClinicalDraft, ClinicalReferenceAssertion
 from .services import (ADD, HASH, REFERENCE_FIELDS, VIEW, DraftConflict, DraftError, require_staff,
@@ -126,7 +127,7 @@ def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_eviden
             or not isinstance(expected_draft_hash, str) or not HASH.fullmatch(expected_draft_hash)
             or not isinstance(expected_evidence_hash, str) or not HASH.fullmatch(expected_evidence_hash)):
         raise DraftError('شناسه پیش‌نویس یا فهرست ارجاع معتبر نیست.')
-    with transaction.atomic():
+    with write_conflict_boundary(DraftConflict):
         try:
             draft = ClinicalDraft.objects.select_for_update(of=('self',)).get(pk=draft_id)
         except ClinicalDraft.DoesNotExist as exc:

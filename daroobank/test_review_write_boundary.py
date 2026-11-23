@@ -20,7 +20,7 @@ from pricing.reviews import record_preliminary_review
 from pricing.test_workflow import csv_bytes
 from sources.models import SourceClaimReview
 from sources.services import record_claim, review_claim
-from .review_write_boundary import review_write_boundary
+from .write_conflict_boundary import write_conflict_boundary
 
 
 class DriverFailure(Exception):
@@ -111,13 +111,13 @@ class ReviewWriteBoundaryTests(TestCase):
     def test_unselected_database_errors_and_non_database_errors_are_not_masked(self):
         for code in ('23505', None):
             with self.subTest(code=code), self.assertRaises(OperationalError):
-                with review_write_boundary(ValueError):
+                with write_conflict_boundary(ValueError):
                     fail_with(code)
         with self.assertRaisesRegex(RuntimeError, 'unrelated'):
-            with review_write_boundary(ValueError):
+            with write_conflict_boundary(ValueError):
                 raise RuntimeError('unrelated')
         with self.assertRaises(ValueError) as caught:
-            with review_write_boundary(ValueError):
+            with write_conflict_boundary(ValueError):
                 fail_with('55P03', 'pgcode')
         self.assertIsInstance(caught.exception.__cause__, DatabaseError)
         self.assertFalse(transaction.get_connection().needs_rollback)

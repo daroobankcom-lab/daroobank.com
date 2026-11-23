@@ -53,6 +53,14 @@ def inspect_schema(table_names, foreign_keys=()):
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', src)) AS src_oid, col,
                        pg_catalog.to_regclass(pg_catalog.format('%%I', dst)) AS dst_oid, dst_col
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS f(src text, col text, dst text, dst_col text)
+            ), matching_fk AS (
+                SELECT DISTINCT c.oid, c.condeferrable, c.condeferred, c.confupdtype, c.confdeltype
+                FROM expected_fk f JOIN pg_catalog.pg_constraint c
+                    ON c.contype = 'f' AND c.conrelid = f.src_oid AND c.confrelid = f.dst_oid
+                JOIN pg_catalog.pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+                JOIN pg_catalog.pg_attribute b ON b.attrelid = c.confrelid AND b.attnum = c.confkey[1]
+                WHERE pg_catalog.cardinality(c.conkey) = 1 AND pg_catalog.cardinality(c.confkey) = 1
+                  AND a.attname = f.col AND b.attname = f.dst_col
             )
             SELECT
                 (SELECT COUNT(*) FROM names),
@@ -71,13 +79,17 @@ def inspect_schema(table_names, foreign_keys=()):
                     JOIN pg_catalog.pg_attribute b ON b.attrelid = c.confrelid AND b.attnum = c.confkey[1]
                     WHERE c.contype = 'f' AND c.conrelid = f.src_oid AND c.confrelid = f.dst_oid
                       AND pg_catalog.cardinality(c.conkey) = 1 AND pg_catalog.cardinality(c.confkey) = 1
-                      AND a.attname = f.col AND b.attname = f.dst_col))
+                      AND a.attname = f.col AND b.attname = f.dst_col)),
+                (SELECT COUNT(*) FROM matching_fk WHERE NOT condeferrable OR NOT condeferred),
+                (SELECT COUNT(*) FROM matching_fk WHERE confupdtype <> 'a' OR confdeltype <> 'a')
         ''', [table_names, json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys])])
         values = cursor.fetchone()
     keys = ('expected_tables', 'unresolved_tables', 'non_table_relations', 'unvalidated_constraints',
-            'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys')
+            'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',
+            'nondeferred_foreign_keys', 'nondefault_action_foreign_keys')
     result = dict(zip(keys, values))
     result['status'] = ('attention' if any(result[key] for key in (
         'unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes',
-        'disabled_triggers', 'missing_foreign_keys')) else 'no_selected_issues')
+        'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
+        'nondefault_action_foreign_keys')) else 'no_selected_issues')
     return result

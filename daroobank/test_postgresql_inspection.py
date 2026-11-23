@@ -22,7 +22,8 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertEqual(report['expected_tables'], len(expected_tables()))
         self.assertEqual(report['expected_foreign_keys'], len(expected_foreign_keys()))
         self.assertGreater(report['expected_foreign_keys'], 0)
-        for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers', 'missing_foreign_keys'):
+        for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
+                    'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys'):
             self.assertEqual(report[key], 0, key)
         self.assertEqual(set(connection.introspection.table_names()), before)
         self.assertIn('sources_sourceclaim', expected_tables())
@@ -105,7 +106,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['unvalidated_constraints'], 1)
             transaction.set_rollback(True)
 
-    def test_foreign_key_deferrability_is_deliberately_not_compared(self):
+    def test_foreign_key_deferrability_mismatch_is_reported(self):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute('''SELECT c.conname FROM pg_catalog.pg_constraint c
@@ -117,7 +118,28 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                 cursor.execute('ALTER TABLE sources_sourceclaimreview ADD CONSTRAINT synthetic_fk_immediate FOREIGN KEY (reviewer_id) REFERENCES auth_user(id) NOT DEFERRABLE')
             report = inspect_schema(expected_tables(), expected_foreign_keys())
             self.assertEqual(report['missing_foreign_keys'], 0)
-            self.assertEqual(report['status'], 'no_selected_issues')
+            self.assertEqual(report['nondeferred_foreign_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_extra_immediate_constraint_is_reported_despite_deferred_match(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaimreview ADD CONSTRAINT synthetic_duplicate_fk FOREIGN KEY (reviewer_id) REFERENCES auth_user(id) NOT DEFERRABLE')
+            report = inspect_schema(expected_tables(), expected_foreign_keys())
+            self.assertEqual(report['missing_foreign_keys'], 0)
+            self.assertEqual(report['nondeferred_foreign_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_unexpected_foreign_key_database_action_is_reported(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaimreview ADD CONSTRAINT synthetic_cascade_fk FOREIGN KEY (reviewer_id) REFERENCES auth_user(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED')
+            report = inspect_schema(expected_tables(), expected_foreign_keys())
+            self.assertEqual(report['missing_foreign_keys'], 0)
+            self.assertEqual(report['nondefault_action_foreign_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
     def test_out_of_scope_catalog_issues_are_not_reported(self):

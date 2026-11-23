@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — PostgreSQL foreign-key behavior clues
+
+**Changes:** The read-only catalog inspection now also counts matching expected foreign keys that depart from the current Django/PostgreSQL deferred and `NO ACTION` conventions, including unexpected duplicate immediate or cascading constraints. Selected PostgreSQL DDL tests verify these cases with rolled-back synthetic data.
+
+**Limits:** This compares current model-declared pairs and observed catalog attributes, not complete migrations or ORM deletion behavior. It does not repair or certify the database; see ADR 0072.
+
 ## 2026-11-23 — isolated general PostgreSQL test databases
 
 **Changes:** Opt-in general synthetic test settings assign a fresh random test database per invocation and reject reuse and Django parallel mode; CI uses them for the ordinary suite. A local two-process probe verified distinct databases and passing PostgreSQL catalog tests.

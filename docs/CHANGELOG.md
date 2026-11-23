@@ -4,7 +4,7 @@ Entries describe the state at each change; later entries can supersede earlier l
 
 ## 2026-11-23 — isolated synthetic restore drill
 
-**Changes:** An opt-in PostgreSQL test creates separate random synthetic source and target databases, verifies archive creation, one failed truncated restore, a full restore, migration state and a synthetic identity graph. CI runs it with matching PostgreSQL 16 client commands in a container; guarded settings refuse reuse and parallel tests.
+**Changes:** An opt-in PostgreSQL test creates separate random synthetic source and target databases, verifies archive creation, one failed truncated restore, a full restore, migration state and a synthetic identity graph. CI runs it with matching PostgreSQL 16 client commands in a container; the designated test runner refuses parsed reuse and parallel options for restore and browser exercises, including abbreviations. Explicit runner overrides bypass that guard.
 
 **Limits:** This is not an encrypted/off-host backup, production recovery policy, complete-data verification or clinical assurance. Use a disposable cluster only; see ADR 0043.
 

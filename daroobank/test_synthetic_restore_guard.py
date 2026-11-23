@@ -1,6 +1,9 @@
 """Safety guards for the opt-in, synthetic-only restore drill."""
+import os
 import runpy
+import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from django.core.exceptions import ImproperlyConfigured
@@ -11,11 +14,38 @@ from . import test_synthetic_restore as restore
 
 
 class RestoreDrillGuardTests(SimpleTestCase):
-    def test_restore_settings_reject_reuse_and_parallel(self):
-        for args in (['manage.py', 'test', '--keepdb'], ['manage.py', 'test', '--parallel'],
-                     ['manage.py', 'test', '--parallel=2']):
-            with self.subTest(args=args), patch.object(sys, 'argv', args), self.assertRaises(ImproperlyConfigured):
-                runpy.run_module('daroobank.restore_test_settings')
+    def test_isolated_runner_rejects_parsed_reuse_and_parallel_options(self):
+        from django.core.management import call_command
+        from .isolated_test_runner import IsolatedTestRunner
+
+        IsolatedTestRunner()
+        for options in ({'keepdb': True}, {'parallel': 1}, {'parallel': 2}):
+            with self.subTest(options=options), self.assertRaises(ImproperlyConfigured):
+                IsolatedTestRunner(**options)
+            with self.subTest(call_command=options), override_settings(TEST_RUNNER='daroobank.isolated_test_runner.IsolatedTestRunner'):
+                with self.assertRaises(ImproperlyConfigured):
+                    call_command('test', 'daroobank.test_synthetic_restore_guard', **options)
+
+    def test_both_settings_use_isolated_runner_and_leave_base_database_unmodified(self):
+        original = base_settings.DATABASES['default'].get('TEST')
+        for module in ('daroobank.restore_test_settings', 'daroobank.browser_test_settings'):
+            with self.subTest(module=module):
+                config = runpy.run_module(module)
+                self.assertEqual(config['TEST_RUNNER'], 'daroobank.isolated_test_runner.IsolatedTestRunner')
+                self.assertEqual(base_settings.DATABASES['default'].get('TEST'), original)
+
+    def test_cli_abbreviations_are_rejected_before_test_database_setup(self):
+        root = Path(__file__).resolve().parent.parent
+        for module in ('daroobank.restore_test_settings', 'daroobank.browser_test_settings'):
+            for flag in ('--keepdb', '--keep', '--parallel', '--para=2', '--parallel=1'):
+                with self.subTest(module=module, flag=flag):
+                    result = subprocess.run(
+                        [sys.executable, 'manage.py', 'test', '--settings=' + module, flag, '--noinput'],
+                        cwd=root, env=os.environ.copy(), capture_output=True, text=True, timeout=20,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('Isolated exercises require a fresh, non-parallel database.', result.stderr)
+                    self.assertNotIn('Creating test database', result.stderr)
 
     def test_restore_settings_make_new_scoped_names(self):
         original = base_settings.DATABASES['default'].get('TEST')

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — future-dated cursor rejection
+
+**Changes:** Public search, catalog IRC inspection, identity lineage and clinical lineage now reject correctly signed cursors dated after the verifying host's clock, in addition to their existing maximum-age checks. Controlled-clock and synthetic HTTP tests cover the four consumers.
+
+**Limits:** Clock skew or rollback can reject legitimate cursors; monitoring and synchronization are not implemented. Tokens remain signed, not encrypted. See ADR 0047.
+
 ## 2026-11-23 — current-field public search recheck
 
 **Changes:** Before displaying a SQL search candidate, recheck that its fetched current normalized fields still contain the query. Synthetic tests cover stale positives and negatives, unchanged valid matches, Persian normalization and continuation after 150 stale hits.

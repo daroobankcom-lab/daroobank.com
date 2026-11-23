@@ -8,6 +8,8 @@ import re
 from django.core import signing
 from django.utils.crypto import constant_time_compare, salted_hmac
 
+from daroobank.signed_cursors import loads_nonfuture
+
 from .identity import (MAX_ID, VIEW, digest, require_staff, safe_snapshot, ingredient_snapshot,
                        formulation_snapshot, product_snapshot, package_snapshot,
                        valid_identity_revision, valid_package_revision)
@@ -55,7 +57,7 @@ def _decode(token, kind, anchor_id, anchor_hash):
     if not isinstance(token, str) or not token or len(token) > MAX_CURSOR_LENGTH or token.startswith('.'):
         raise InvalidLineageCursor
     try:
-        data = signing.loads(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
+        data = loads_nonfuture(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
         if (not isinstance(data, dict) or set(data) != {'kind', 'anchor', 'anchor_graph', 'current', 'current_graph', 'depth'}
                 or data['kind'] != kind or type(data['anchor']) is not int or data['anchor'] != anchor_id
                 or not _id(data['current']) or data['current'] >= anchor_id

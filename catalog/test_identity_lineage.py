@@ -140,6 +140,15 @@ class IdentityLineageTests(TestCase):
             expired = signing.dumps(data, salt=CURSOR_SALT)
         with self.assertRaises(InvalidLineageCursor):
             inspect_lineage(actor=self.viewer, kind='ingredient', anchor_id=anchor.pk, cursor=expired)
+        with patch('django.core.signing.time.time', return_value=time.time() + 60):
+            future = signing.dumps(data, salt=CURSOR_SALT)
+        with self.assertRaises(InvalidLineageCursor):
+            inspect_lineage(actor=self.viewer, kind='ingredient', anchor_id=anchor.pk, cursor=future)
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse('staff_identity_lineage', args=['ingredient', anchor.pk]), {'cursor': future})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertNotContains(response, future, status_code=400)
         payload = {**INGREDIENT, 'name_fa': 'نام تغییر یافته ساختگی', 'recorded_by_id': self.editor.pk}
         IngredientDraft.objects.filter(pk=anchor.pk).update(name_fa=payload['name_fa'], payload_sha256=digest(payload))
         anchor.refresh_from_db()

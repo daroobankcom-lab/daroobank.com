@@ -118,7 +118,7 @@ When the isolated synthetic browser subprocess exits unsuccessfully under GitHub
 
 ## Invalid search cursor recovery
 
-`catalog/test_pagination.py` checks malformed Unicode, NUL and overlong cursors on GET and HEAD: the request is rejected before database access, the cursor is not reflected, privacy headers remain set, and the HTML restart form retains a valid query but does not submit a cursor. Synthetic Chromium follows this recovery using Enter at four widths and runs axe on the error page at 390. These selected cases do not prove all malformed tokens safe, prevent access-log disclosure, or establish comprehensive accessibility. Cursors are signed, not encrypted, and pagination is not a snapshot. See [API design](API_DESIGN.md#development-endpoint-example).
+`catalog/test_pagination.py` checks malformed Unicode, NUL and overlong cursors on GET and HEAD: the request is rejected before database access, the cursor is not reflected, privacy headers remain set, and the HTML restart form retains a valid query but does not submit a cursor. Synthetic Chromium follows this recovery using Enter at four widths and runs axe on the error page at 390. `daroobank/test_signed_cursors.py` exercises expiry and future timestamps across four signed cursor decoders, while synthetic private HTTP tests cover their generic error handling; clock skew may invalidate otherwise legitimate cursors. These selected cases do not prove all malformed tokens safe, prevent access-log disclosure, or establish comprehensive accessibility. Cursors are signed, not encrypted, and pagination is not a snapshot. See [API design](API_DESIGN.md#development-endpoint-example).
 
 ## Invalid public search queries
 

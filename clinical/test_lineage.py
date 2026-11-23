@@ -178,7 +178,9 @@ class ClinicalLineageTests(TestCase):
         data = signing.loads(token, salt=CURSOR_SALT)
         with patch('django.core.signing.time.time', return_value=time.time() - CURSOR_MAX_AGE - 5):
             expired = signing.dumps(data, salt=CURSOR_SALT)
-        invalid = ['canary<script>', token + 'x', '.' + token, 'a' * (MAX_CURSOR_LENGTH + 1), expired]
+        with patch('django.core.signing.time.time', return_value=time.time() + 60):
+            future = signing.dumps(data, salt=CURSOR_SALT)
+        invalid = ['canary<script>', token + 'x', '.' + token, 'a' * (MAX_CURSOR_LENGTH + 1), expired, future]
         for change in [dict(depth=True), dict(depth=19), dict(depth=100000), dict(anchor=True),
                        dict(current=leaf.pk), dict(current_hash='a' * 63), dict(extra=1)]:
             invalid.append(signing.dumps({**data, **change}, salt=CURSOR_SALT))
@@ -189,6 +191,10 @@ class ClinicalLineageTests(TestCase):
             self.inspect(nodes[-2], token)
         self.client.force_login(self.viewer)
         path = reverse('staff_clinical_lineage', args=[leaf.pk])
+        response = self.client.get(path, {'cursor': future})
+        self.assertEqual(response.status_code, 400)
+        self.assert_private(response)
+        self.assertNotContains(response, future, status_code=400)
         response = self.client.get(path, {'cursor': 'canary<script>'})
         self.assertEqual(response.status_code, 400)
         self.assertNotContains(response, 'canary', status_code=400)

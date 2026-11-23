@@ -4,6 +4,8 @@ import re
 from django.core import signing
 from django.utils.crypto import constant_time_compare, salted_hmac
 
+from daroobank.signed_cursors import loads_nonfuture
+
 from .models import ClinicalDraft
 from .services import VIEW, require_staff, valid_draft, valid_payload
 
@@ -42,7 +44,7 @@ def _decode(token, anchor):
     if not isinstance(token, str) or not token or len(token) > MAX_CURSOR_LENGTH or token.startswith('.'):
         raise InvalidLineageCursor
     try:
-        data = signing.loads(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
+        data = loads_nonfuture(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
         if (not isinstance(data, dict) or set(data) != {'anchor', 'anchor_hash', 'current', 'current_hash', 'depth'}
                 or type(data['anchor']) is not int or data['anchor'] != anchor.pk
                 or not _id(data['current']) or data['current'] >= anchor.pk

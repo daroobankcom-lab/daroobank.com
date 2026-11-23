@@ -27,6 +27,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0046: current-field search recheck](0046-current-field-search-recheck.md) — development implementation, 23 November 2026.
 
+- [0047: reject future-dated signed cursors](0047-reject-future-signed-cursors.md) — development implementation, 23 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

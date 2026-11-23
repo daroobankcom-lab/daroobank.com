@@ -193,6 +193,13 @@ class CatalogIRCInspectionTests(TestCase):
             ProductPresentation.objects.filter(pk=self.anchor.pk).update(irc='001', irc_normalized='001')
         with patch('django.core.signing.time.time', return_value=4601):
             with self.assertRaises(InvalidIRCCursor): inspect_irc(anchor_id=self.anchor.pk, cursor=token)
+        self.client.force_login(self.viewer)
+        with patch('django.core.signing.time.time', return_value=999):
+            with self.assertRaises(InvalidIRCCursor): inspect_irc(anchor_id=self.anchor.pk, cursor=token)
+            response = self.client.get(self.url(), {'cursor': token})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('no-store', response['Cache-Control'])
+            self.assertNotContains(response, token, status_code=400)
 
     def test_deleted_continuation_row_and_missing_anchor(self):
         self.add_indexed(50)

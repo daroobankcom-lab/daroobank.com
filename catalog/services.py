@@ -9,6 +9,8 @@ from django.db.models import Q
 from django.http import Http404
 from django.utils.crypto import constant_time_compare, salted_hmac
 
+from daroobank.signed_cursors import loads_nonfuture
+
 from .models import PRESENTATION_SEARCH_FIELDS, ProductPresentation
 from .normalization import normalize_search
 
@@ -46,7 +48,7 @@ def _decode_cursor(token, query, candidates):
     if len(token) > MAX_CURSOR_LENGTH or token.startswith('.') or not query:
         raise InvalidSearchCursor
     try:
-        data = signing.loads(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
+        data = loads_nonfuture(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
         if (not isinstance(data, dict) or set(data) != {'query', 'pk', 'name'}
                 or type(data['pk']) is not int or not 1 <= data['pk'] <= 9_223_372_036_854_775_807
                 or not isinstance(data['query'], str) or not isinstance(data['name'], str)

@@ -15,6 +15,19 @@ class BrowserFailureAnnotationTests(SimpleTestCase):
         self.assertNotIn('secret-query', annotation)
         self.assertNotIn('/home/runner', annotation)
 
+    def test_stack_summary_includes_bounded_caller_lines_not_paths(self):
+        stderr = ('AssertionError: private-label\n'
+                  '    at checkKeyboardFocus (/private/smoke.cjs:71:3)\n'
+                  '    at login (/private/smoke.cjs:149:3)\n'
+                  '    at run (/private/smoke.cjs:269:7)\n'
+                  '    at extra (/private/smoke.cjs:999:1)\n')
+        annotation = browser_failure_annotation(1, stderr)
+        self.assertIn('smoke.cjs,line=71::', annotation)
+        self.assertIn('Caller lines: 149, 269.', annotation)
+        self.assertNotIn('999', annotation)
+        self.assertNotIn('private', annotation)
+        self.assertNotIn('login', annotation)
+
     def test_no_untrusted_output_in_annotation_and_unknown_failures(self):
         stderr = '::error file=evil::SECRET\nunknown failure on https://example.org/private?q=SECRET\n'
         annotation = browser_failure_annotation(-11, stderr)

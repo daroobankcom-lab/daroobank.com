@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — browser failure call-site diagnostics
+
+**Changes:** Include up to two additional JavaScript call-site line numbers in browser-failure annotations, without copying arbitrary stack text or paths. A synthetic multi-frame test checks both the bound and redaction.
+
+**Limits:** CI for the public-read header change failed at a focus-outline assertion; the failing control and root cause could not be determined from the available annotation, and the full job log was inaccessible. The additional lines can help diagnose a future failure but do not fix or explain this one.
+
 ## 2026-11-22 — public-read error privacy headers
 
 **Changes:** A narrowly scoped response middleware applies `no-store`, `no-referrer` and `noindex` to resolved search, presentation detail and OpenAPI views, including Django's 405 and CSRF 403 responses. Existing view-level headers and allowed methods remain unchanged. PostgreSQL-backed tests cover GET/HEAD, selected 400/404/500 errors, unsafe methods with and without CSRF, method `Allow`, and unrelated staff/public policy isolation.

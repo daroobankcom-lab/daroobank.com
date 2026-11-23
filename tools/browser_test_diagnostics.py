@@ -5,6 +5,7 @@ subprocess output, URLs, environment variables or assertion values into the
 annotation, which is visible separately from the log.
 """
 import re
+from itertools import islice
 
 _STACK_LINE = re.compile(r'(?m)^\s*at [^\n]*[/\\]smoke\.cjs:(\d{1,6}):\d{1,6}\)?\s*$')
 
@@ -23,10 +24,10 @@ def browser_failure_annotation(returncode, stderr):
         kind = 'browser closed'
     else:
         kind = 'other or unknown'
-    match = _STACK_LINE.search(stderr)
-    location = ''
-    if match and int(match.group(1)) > 0:
-        location = f',line={int(match.group(1))}'
+    lines = list(islice((int(match.group(1)) for match in _STACK_LINE.finditer(stderr)
+                         if int(match.group(1)) > 0), 3))
+    location = f',line={lines[0]}' if lines else ''
+    callers = f' Caller lines: {", ".join(map(str, lines[1:]))}.' if len(lines) > 1 else ''
     return (f'::error file=tests/browser/smoke.cjs{location}::'
-            f'Isolated synthetic browser test {outcome}; category: {kind}. '
+            f'Isolated synthetic browser test {outcome}; category: {kind}.{callers} '
             'See the job log for details.')

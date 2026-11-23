@@ -16,6 +16,7 @@ from catalog.identity import digest, ingredient_snapshot, revise_identity
 from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresentation
 from catalog.test_identity import ALL, INGREDIENT, build, user
 from sources.services import record_claim
+from tools.browser_test_diagnostics import browser_failure_annotation
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,8 +56,15 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         env.update(BROWSER_BASE_URL=self.live_server_url, BROWSER_AUTHOR='browser-author', BROWSER_REVIEWER='browser-reviewer',
                    BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk))
-        result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
-                                capture_output=True, text=True, timeout=180)
+        try:
+            result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
+                                    capture_output=True, text=True, timeout=180)
+        except subprocess.TimeoutExpired:
+            if os.environ.get('GITHUB_ACTIONS') == 'true':
+                print(browser_failure_annotation(None, ''), flush=True)
+            raise
+        if result.returncode and os.environ.get('GITHUB_ACTIONS') == 'true':
+            print(browser_failure_annotation(result.returncode, result.stderr), flush=True)
         self.assertEqual(result.returncode, 0, f'Chromium test failed:\n{result.stdout}\n{result.stderr}')
         self.assertEqual(IngredientDraft.objects.filter(name_fa='csrf-canary').count(), 0)
         self.assertEqual(IngredientDraft.objects.filter(name_fa='ماده تازه ساختگی مرورگر').count(), 1)

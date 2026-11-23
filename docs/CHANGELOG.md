@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — synthetic browser CI diagnostics
+
+**Changes:** Failed isolated Chromium subprocesses in GitHub Actions now add a compact error annotation with an exit outcome, fixed heuristic category and optional smoke-test source line; timeouts are also noted. Offline tests check the summary and exclusion of arbitrary sample error text. Existing failure output and failure status are unchanged; no automatic retry is added.
+
+**Limits:** The annotation does not explain every failure or replace full logs, and ordinary test logs can still contain synthetic values. A previous browser CI failure remained unexplained because its job log was inaccessible and rerun permission was denied; this diagnostic is for future failures, not a claim about that cause.
+
 ## 2026-11-22 — public-search cursor recovery coverage
 
 **Changes:** Added server and synthetic Chromium regression tests for the existing invalid-cursor recovery: valid query retained, invalid cursor not echoed or resubmitted, and restart by Enter. Tests cover selected malformed Unicode, NUL and overlong cursors, GET/HEAD and privacy headers, plus layout at four widths and axe at 390. No search behavior or medical data changed.

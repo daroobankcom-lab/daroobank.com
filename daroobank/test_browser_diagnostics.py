@@ -98,8 +98,10 @@ class BrowserFailureAnnotationTests(SimpleTestCase):
                                   ({'display': 'none'}, 'hidden style'),
                                   ({'opacity': 0}, 'transparent'),
                                   ({'width': 0}, 'empty bounds'),
-                                  ({'right': 391}, 'outside viewport'),
-                                  ({'top': -2, 'focusVisible': False}, 'focus indicator, outside viewport')]:
+                                  ({'right': 390.25}, 'outside viewport: right <1px'),
+                                  ({'right': 391}, 'outside viewport: right 1–8px'),
+                                  ({'top': -2, 'focusVisible': False}, 'focus indicator, outside viewport: top 1–8px'),
+                                  ({'bottom': 910, 'left': -0.5}, 'outside viewport: bottom >8px, left <1px')]:
             with self.subTest(changes=changes):
                 payload = json.dumps({**state, **changes}, separators=(',', ':'))
                 message = f'AssertionError [ERR_ASSERTION]: skip forced-home 390: visible focus {payload}\n'

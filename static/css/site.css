@@ -1330,8 +1330,8 @@ svg {
   *,
   *::before,
   *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
   }
 }
 /* Readable informational text; decorative artwork uses its own muted colors. */

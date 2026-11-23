@@ -78,8 +78,17 @@ def _skip_visibility_failure(message):
     if state['visibility'] != 'visible' or state['display'] == 'none': reasons.append('hidden style')
     if state['opacity'] <= 0: reasons.append('transparent')
     if state['width'] <= 0 or state['height'] <= 0: reasons.append('empty bounds')
-    if (state['top'] < 0 or state['bottom'] > state['viewportHeight'] or state['left'] < 0
-            or state['right'] > state['viewportWidth']): reasons.append('outside viewport')
+    # Report only a fixed side and coarse distance, never raw geometry. This
+    # distinguishes tiny rounding from a displaced element in CI annotations.
+    overflows = (('top', -state['top']), ('bottom', state['bottom'] - state['viewportHeight']),
+                 ('left', -state['left']), ('right', state['right'] - state['viewportWidth']))
+    outside = []
+    for side, distance in overflows:
+        if distance > 0:
+            bucket = '<1px' if distance < 1 else '1–8px' if distance <= 8 else '>8px'
+            outside.append(f'{side} {bucket}')
+    if outside:
+        reasons.append('outside viewport: ' + ', '.join(outside))
     return (known[0], known[1], 'visible focus: ' + ', '.join(reasons)) if reasons else None
 
 

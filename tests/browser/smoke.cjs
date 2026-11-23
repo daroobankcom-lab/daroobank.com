@@ -934,6 +934,18 @@ async function run() {
     assert(await accessiblePage.evaluate(() => matchMedia('(forced-colors: active)').matches &&
       matchMedia('(prefers-reduced-motion: reduce)').matches));
     assert.equal(await accessiblePage.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior), 'auto');
+    const checkReducedTiming = async selector => {
+      const timing = await accessiblePage.locator(selector).first().evaluate(el => ({
+        transition: getComputedStyle(el).transitionDuration, animation: getComputedStyle(el).animationDuration,
+      }));
+      assert.deepEqual(timing, {transition: '0s', animation: '0s'}, `${selector}: reduced motion timing`);
+    };
+    await checkReducedTiming('.skip-link');
+    await checkReducedTiming('.service-card');
+    const brokenTiming = await accessiblePage.addStyleTag({content:
+      '.skip-link { transition-duration: 1ms !important; animation-duration: 1ms !important; }'});
+    await assert.rejects(checkReducedTiming('.skip-link'), /reduced motion timing/);
+    await brokenTiming.evaluate(el => el.remove());
     await checkSkipLink(accessiblePage, 'skip forced-home 390', '#drug-search');
     await checkKeyboardFocus(accessiblePage, '#drug-search', 'forced-colors search', '.search-form');
     await accessiblePage.locator('#drug-search').fill('Browser Synthetic Product');

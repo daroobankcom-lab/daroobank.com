@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — skip-link viewport failure diagnostics
+
+**Changes:** A failed skip-link visibility assertion's allowlisted CI annotation now identifies affected viewport sides and coarse overflow distances, without copying geometry or arbitrary diagnostic text. Reduced-motion CSS now uses zero transition/animation duration instead of inadvertently introducing a 0.01ms transition even on the previously non-transitioning skip link. Chromium checks the computed timings and rejects a nonzero-duration mutation.
+
+**Limits:** CI run 45263717417 failed forced-colors home visibility with an element outside the viewport; its log download returned EOF and GitHub rejected the rerun. The failure's side and cause remain unknown; this CSS correction and diagnostic are not proven to resolve it or to establish accessibility.
+
 ## 2026-11-23 — bounded CSV short-read handling
 
 **Changes:** Both synthetic CSV parsers now join ordinary short reads up to EOF or one byte beyond the existing size cap before validating any rows. A reproduced prefix-acceptance bug could otherwise stage a partial file; tests check valid and invalid tails, no partial receipt, byte and call limits, HTTP and CLI read failures.

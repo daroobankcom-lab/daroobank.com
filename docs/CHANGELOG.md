@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — selected identity write concurrency errors
+
+**Changes:** After rollback, selected private identity writer boundaries convert PostgreSQL lock-not-available, deadlock and serialization SQLSTATEs to a generic conflict; private HTTP writers return 409. Actual synthetic PostgreSQL timeout, deadlock and serialization tests cover selected schedules.
+
+**Limits:** No timeout or automatic retry is configured; errors at a later outermost commit remain the caller's responsibility. The whole enclosing transaction must be abandoned/retried as appropriate after deadlock or serialization failure. See ADR 0042.
+
 ## 2026-11-23 — latest identity package review lock
 
 **Changes:** Package review and correction now lock the latest existing review before their existing optimistic-token checks; correction still validates that row structurally. Synthetic PostgreSQL tests cover selected update, delete, outer-transaction, older-row and concurrent insertion cases.

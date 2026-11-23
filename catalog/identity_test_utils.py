@@ -11,15 +11,20 @@ def publish_backend_pid(cursor, pid_queue):
         pid_queue.put(cursor.fetchone()[0])
 
 
-def assert_blocked_by_current_transaction(testcase, worker_pid):
+def assert_blocked_by_backend(testcase, worker_pid, blocker_pid):
     """Observe PostgreSQL's blocker relation, rather than inferring a wait from scheduling."""
     with connection.cursor() as cursor:
-        cursor.execute('SELECT pg_backend_pid()')
-        blocker_pid = cursor.fetchone()[0]
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
             cursor.execute('SELECT %s = ANY(pg_blocking_pids(%s))', [blocker_pid, worker_pid])
             if cursor.fetchone()[0]:
                 return
             Event().wait(0.01)
-    testcase.fail('Expected PostgreSQL to report the writer blocked by the current transaction')
+    testcase.fail('Expected PostgreSQL to report the specified blocking relationship')
+
+
+def assert_blocked_by_current_transaction(testcase, worker_pid):
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_backend_pid()')
+        blocker_pid = cursor.fetchone()[0]
+    assert_blocked_by_backend(testcase, worker_pid, blocker_pid)

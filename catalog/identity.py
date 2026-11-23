@@ -3,10 +3,11 @@ import hashlib
 import json
 import re
 import unicodedata
+from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
@@ -41,6 +42,24 @@ class IdentityError(ValueError):
 
 class IdentityConflict(ValueError):
     pass
+
+
+@contextmanager
+def _identity_atomic():
+    """Translate selected PostgreSQL concurrency failures after atomic rollback.
+
+    No timeout is set and no retry is attempted. When nested, a later failure
+    at the outermost commit is outside this boundary.
+    """
+    try:
+        with transaction.atomic():
+            yield
+    except DatabaseError as exc:
+        cause = exc.__cause__
+        code = getattr(cause, 'sqlstate', None) or getattr(cause, 'pgcode', None)
+        if code in {'55P03', '40P01', '40001'}:
+            raise IdentityConflict('ثبت به دلیل تداخل هم‌زمان انجام نشد؛ دوباره تلاش کنید.') from exc
+        raise
 
 
 def require_staff(actor, *permissions):
@@ -203,7 +222,7 @@ def create_formulation(*, actor, data, components):
     for row in components: validate_data(row, COMPONENT_FIELDS)
     ids = [row['ingredient_id'] for row in components]
     if len(set(ids)) != len(ids): raise IdentityError('هر ماده فقط یک بار مجاز است.')
-    with transaction.atomic():
+    with _identity_atomic():
         ingredients = {item.pk: item for item in IngredientDraft.objects.select_for_update().filter(pk__in=ids).order_by('pk')}
         if set(ids) != set(ingredients): raise IdentityConflict('ماده انتخاب‌شده در دسترس نیست.')
         try:
@@ -225,7 +244,7 @@ def create_product(*, actor, data, formulation_id):
     require_staff(actor, VIEW, ADD)
     validate_data(data, PRODUCT_FIELDS)
     if not _valid_id(formulation_id): raise IdentityError('شناسه فرمولاسیون معتبر نیست.')
-    with transaction.atomic():
+    with _identity_atomic():
         form = FormulationDraft.objects.select_for_update().filter(pk=formulation_id).first()
         if not form: raise IdentityConflict('فرمولاسیون در دسترس یا سازگار نیست.')
         _lock_formulation_components(form)
@@ -241,7 +260,7 @@ def create_package(*, actor, data, product_id):
     require_staff(actor, VIEW, ADD)
     validate_data(data, PACKAGE_FIELDS)
     if not _valid_id(product_id): raise IdentityError('شناسه فرآورده معتبر نیست.')
-    with transaction.atomic():
+    with _identity_atomic():
         product = IdentityProductDraft.objects.select_for_update().filter(pk=product_id).first()
         if not product: raise IdentityConflict('فرآورده در دسترس یا سازگار نیست.')
         formulation = _lock_product_formulation(product)
@@ -350,7 +369,7 @@ def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash
             not _is_hash(expected_graph_hash) or type(expected_review) is not int or not 0 <= expected_review <= MAX_ID):
         raise IdentityConflict('اطلاعات نسخه جدید معتبر نیست.')
     change_reason = change_reason.strip()
-    with transaction.atomic():
+    with _identity_atomic():
         parent = IdentityPackageDraft.objects.select_for_update().filter(pk=parent_id).first()
         if parent is None: raise IdentityConflict('بسته پیشین در دسترس نیست.')
         product = _lock_package_product(parent)
@@ -426,7 +445,7 @@ def revise_identity(*, actor, kind, parent_id, data, change_reason, expected_gra
     elif components is not None:
         raise IdentityError('اجزا برای این نوع رکورد مجاز نیست.')
     change_reason = change_reason.strip()
-    with transaction.atomic():
+    with _identity_atomic():
         parents = model.objects.select_for_update(of=('self',))
         parent = parents.filter(pk=parent_id).first()
         if parent is None: raise IdentityConflict('رکورد پیشین در دسترس نیست.')
@@ -505,7 +524,7 @@ def review_package(*, actor, package_id, decision, reason, expected_review, expe
             or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_ID
             or not _is_hash(expected_graph_hash)):
         raise IdentityConflict('اطلاعات بازبینی معتبر نیست.')
-    with transaction.atomic():
+    with _identity_atomic():
         package = IdentityPackageDraft.objects.select_for_update().filter(pk=package_id).first()
         if not package: raise IdentityConflict('بسته در دسترس نیست.')
         product = _lock_package_product(package)

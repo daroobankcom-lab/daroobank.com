@@ -391,3 +391,7 @@ Package review/correction, dependent product/package creation and formulation/pr
 ### Latest identity package review lock
 
 Package review and correction also lock the latest existing review after the graph row locks, through the outer transaction. Correction validates it; new review creation checks its ID only. No older or absent review row is locked, and display reads are unchanged. Deferred concurrent inserts, later writes and same-transaction bypasses can change history; waiting and deadlocks remain possible without retry. See [ADR 0041](ARCHITECTURE_DECISIONS/0041-identity-latest-review-lock.md).
+
+### Selected identity concurrency errors
+
+The selected identity graph writer atomic boundary converts PostgreSQL SQLSTATE 55P03, 40P01 and 40001 to `IdentityConflict` only after rollback of that boundary; existing private HTTP flows return 409. Unrelated errors are re-raised. This sets no timeout and does not retry. A failure at a later outer commit is outside the boundary; after deadlock or serialization failure abandon/retry the entire enclosing transaction as appropriate, not just the inner operation. See [ADR 0042](ARCHITECTURE_DECISIONS/0042-identity-write-concurrency-errors.md).

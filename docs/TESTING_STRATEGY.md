@@ -223,3 +223,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Identity latest-review concurrency
 
 `catalog/test_identity_latest_review_lock.py` covers selected PostgreSQL latest-row update/delete contention, rereads, outer transactions, ordered bounded SQL, older-row mutation, same-transaction bypass, and immediate versus deferred foreign-key insertion. These scenarios are not a proof of gap locking, history isolation, deadlock freedom or reviewer authenticity. See [ADR 0041](ARCHITECTURE_DECISIONS/0041-identity-latest-review-lock.md).
+
+## Identity write error translation
+
+`catalog/test_identity_write_conflicts.py` covers selected actual PostgreSQL lock timeouts across eight direct and private HTTP writers, one arranged deadlock, a serialization failure with a rolled-back outer transaction, a nested savepoint timeout, injected SQLSTATE mappings and unrelated errors. These are selected schedules; tests do not set application lock timeouts or establish retry, throughput or freedom from other database failures. See [ADR 0042](ARCHITECTURE_DECISIONS/0042-identity-write-concurrency-errors.md).

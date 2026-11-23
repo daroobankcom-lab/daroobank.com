@@ -1,6 +1,6 @@
 # ADR 0021: bounded request-local IRC candidate indexes
 
-Status: development-only implementation, 22 November 2026; extends [ADR 0020](0020-price-staging-match-cache.md) and the matching rules in [ADR 0004](0004-intake-row-manifest.md).
+Status: development-only implementation, 22 November 2026; extends [ADR 0020](0020-price-staging-match-cache.md) and the matching rules in [ADR 0004](0004-intake-row-manifest.md). Matching is narrowed by [ADR 0064](0064-price-matching-unsafe-presentation.md).
 
 ## Decision
 

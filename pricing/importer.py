@@ -163,12 +163,21 @@ def _load_irc_index(irc, *, lock=False):
         return None
     index = {}
     for product in possibilities:
+        fields = {field: getattr(product, field) for field in IDENTITY_FIELDS}
+        # A malformed value cannot be assigned safely to one identity. Treat the
+        # entire indexed IRC group as uncertain rather than manufacture uniqueness.
+        if any(not isinstance(value, str) for value in fields.values()):
+            return None
         # A stale stored projection must not become a match.
-        if normalize_search(product.irc) != irc:
+        if normalize_search(fields['irc']) != irc:
             continue
-        identity = (irc, *(normalize_search(getattr(product, field)) for field in IDENTITY_FIELDS[1:]))
-        # A second identical match makes that identity ambiguous, even if more follow.
-        if identity in index:
+        identity = tuple(normalize_search(fields[field]) for field in IDENTITY_FIELDS)
+        name = product.name_fa
+        safe_name = (isinstance(name, str) and bool(normalize_search(name))
+                     and not any(unicodedata.category(c) in ('Cc', 'Cs') for c in name))
+        # An unsafe presentation is still a potential match, not evidence of a
+        # unique valid row. Poison only its normalized identity, when knowable.
+        if not match_fields_valid(fields) or not safe_name or identity in index:
             index[identity] = None
         else:
             index[identity] = product

@@ -61,6 +61,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0063: projection repair conflict boundary](0063-projection-repair-conflict-boundary.md) — development-only implementation, 23 November 2026.
 
+- [0064: unsafe presentation price matching](0064-price-matching-unsafe-presentation.md) — development-only implementation, 23 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

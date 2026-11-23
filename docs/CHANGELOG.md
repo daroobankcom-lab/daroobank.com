@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — unsafe presentation text in price matching
+
+**Changes:** Price matching marks an identity ambiguous when a matching presentation has invalid matching text or an unsafe displayed Persian name, rather than ignoring it or suggesting it. An unassignable non-string matching field makes its IRC group ambiguous. Staging, fresh suggestions and acceptance use the shared check; stored history is unchanged. Synthetic tests cover all fields, duplicate conservatism, receipts and acceptance.
+
+**Limits:** This is a narrow text check, not product verification, spoofing protection or uniqueness under concurrent writes. Unpublished rows may still be suggested; see ADR 0064.
+
 ## 2026-11-23 — projection repair conflict handling
 
 **Changes:** The default-database synthetic projection writer now translates three selected PostgreSQL concurrency failures after rollback into its existing domain error; the CLI reports its generic failure. Tests exercise a real lock timeout at service and command boundaries and simulated selected failures after an update.

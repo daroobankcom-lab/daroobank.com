@@ -21,6 +21,8 @@ All relevant tests pass in CI and staging; no critical unresolved security issue
 
 ## Local CSV staging tests
 
+`pricing/test_corrupt_presentation_matching.py` exercises direct-update controls in the five price-match fields and displayed name, conservative ambiguous outcomes and duplicate handling, cached receipt outcomes, Persian joiners and preliminary acceptance rejection. This does not prove uniqueness, authenticity or safety; see [ADR 0064](ARCHITECTURE_DECISIONS/0064-price-matching-unsafe-presentation.md).
+
 `pricing/tests.py` covers synthetic dry run and permission-assertion gating, exact identity suggestions, ambiguous/unmatched packages, stale IRC projections and changed catalog records, whole-file rejection, source URL secrets, exact Rial/Toman conversion and unrepresentable values, idempotent replay, revised assertions, no public price exposure, bounded local listing and IRC migration backfill. `pricing/test_list_candidates_integrity.py` covers reduced output and no matching for inconsistent payloads, original-status filtering, limits and a coherent alteration that still passes; see [ADR 0062](ARCHITECTURE_DECISIONS/0062-price-cli-payload-check.md). Tests do not establish confidentiality, source rights, clinical validity, production performance or database immutability.
 
 ## Development-only staff tests

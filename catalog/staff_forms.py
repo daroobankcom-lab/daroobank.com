@@ -1,7 +1,7 @@
 import re
 from django import forms
 
-from .intake import MAX_FILE_BYTES
+from .intake import MAX_FILE_BYTES, MAX_PK
 from .models import ProductCandidateReview
 
 
@@ -33,7 +33,7 @@ class ProductReviewForm(forms.Form):
         (ProductCandidateReview.DEFER, 'نیاز به بررسی بیشتر'),
     ])
     reason = forms.CharField(label='توضیح و دلیل', min_length=12, max_length=1000, widget=forms.Textarea(attrs={'rows': 4}))
-    expected_review = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
+    expected_review = forms.IntegerField(min_value=0, max_value=MAX_PK, widget=forms.HiddenInput)
     expected_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
 
     def clean_expected_hash(self):

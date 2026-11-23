@@ -17,6 +17,7 @@ from .normalization import normalize_search
 
 MAX_FILE_BYTES = 1024 * 1024
 MAX_ROWS = 1000
+MAX_PK = 9_223_372_036_854_775_807
 FIELDS = ('source_record_id', 'name_fa', 'name_en', 'manufacturer', 'strength', 'dosage_form', 'package_description', 'irc')
 LIMITS = {'source_record_id': 160, 'name_fa': 200, 'name_en': 200, 'manufacturer': 200,
           'strength': 100, 'dosage_form': 100, 'package_description': 200, 'irc': 80}
@@ -123,8 +124,12 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
 
 
 def review_product(*, candidate_id, actor, decision, reason, expected_review, expected_hash):
+    if actor is None:
+        raise PermissionDenied
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.review_productcandidate')
-    if (decision not in dict(ProductCandidateReview.DECISIONS) or not valid_review_reason(reason) or type(expected_review) is not int or expected_review < 0
+    if (type(candidate_id) is not int or not 1 <= candidate_id <= MAX_PK
+            or not isinstance(decision, str) or decision not in dict(ProductCandidateReview.DECISIONS)
+            or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
     with transaction.atomic():

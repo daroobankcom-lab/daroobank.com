@@ -40,8 +40,11 @@ def inspect_manifest(*, actor, receipt_id, after=0, category=''):
     batch = list(receipt.items.select_related(field).filter(ordinal__gt=after).order_by('ordinal')[:BATCH_SIZE + 1])
     scanned = batch[:BATCH_SIZE]
     rows = []
+    # All candidates were materialized by the same bounded join. Cache only
+    # candidate validation, not the distinct row-to-candidate comparisons.
+    candidate_cache = {}
     for item in scanned:
-        item_status = 'consistent' if manifest_item_safe(receipt, item) else 'inconsistent'
+        item_status = 'consistent' if manifest_item_safe(receipt, item, _candidate_cache=candidate_cache) else 'inconsistent'
         if not category or category == item_status:
             rows.append({'ordinal': item.ordinal, 'status': item_status})
     report.update(scanned=len(scanned), rows=rows,

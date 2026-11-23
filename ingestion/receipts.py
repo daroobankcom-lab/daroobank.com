@@ -98,19 +98,28 @@ def manifest_structure(receipt):
     return 'available' if valid else 'invalid'
 
 
-def manifest_item_safe(receipt, item):
-    """Compare one outcome with its current candidate without revealing bad fields."""
+def manifest_item_safe(receipt, item, *, _candidate_cache=None):
+    """Compare each item; cache only pure candidate checks within one joined read."""
     if receipt.kind not in (ImportReceipt.PRODUCT, ImportReceipt.PRICE):
         return False
     candidate_field = 'product_candidate' if receipt.kind == ImportReceipt.PRODUCT else 'price_candidate'
     try:
         candidate = getattr(item, candidate_field)
-        return bool(candidate and candidate.source_name == receipt.source_name
-            and candidate.source_url == receipt.source_url and candidate.source_record_id == item.source_record_id
-            and candidate.payload_sha256 == item.payload_sha256
-            and (valid_product(candidate) if receipt.kind == ImportReceipt.PRODUCT else valid_price(candidate)))
+        if not (candidate and candidate.pk and candidate.source_name == receipt.source_name
+                and candidate.source_url == receipt.source_url and candidate.source_record_id == item.source_record_id
+                and candidate.payload_sha256 == item.payload_sha256):
+            return False
     except (ValueError, TypeError, AttributeError, OverflowError, ObjectDoesNotExist):
         return False
+    if _candidate_cache is not None and candidate.pk in _candidate_cache:
+        return _candidate_cache[candidate.pk]
+    try:
+        valid = bool(valid_product(candidate) if receipt.kind == ImportReceipt.PRODUCT else valid_price(candidate))
+    except (ValueError, TypeError, AttributeError, OverflowError, ObjectDoesNotExist):
+        valid = False
+    if _candidate_cache is not None:
+        _candidate_cache[candidate.pk] = valid
+    return valid
 
 
 def manifest_context(receipt, page_number):
@@ -120,8 +129,11 @@ def manifest_context(receipt, page_number):
         return {'status': status}
     candidate_field = 'product_candidate' if receipt.kind == ImportReceipt.PRODUCT else 'price_candidate'
     page = Paginator(receipt.items.select_related(candidate_field).order_by('ordinal'), PAGE_SIZE).get_page(page_number)
+    # All candidates came from the same joined SELECT. Never share this cache
+    # across pages or requests, and always compare each item's own fields.
+    candidate_cache = {}
     for item in page.object_list:
-        item.safe = manifest_item_safe(receipt, item)
+        item.safe = manifest_item_safe(receipt, item, _candidate_cache=candidate_cache)
     return {'status': 'available', 'page': page}
 
 

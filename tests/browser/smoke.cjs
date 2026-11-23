@@ -586,6 +586,7 @@ async function run() {
       assert.equal(response.status(), 200);
       assert.match(response.headers()['cache-control'], /no-store/);
       assert.match(await pricePage.locator('main').innerText(), /ردیف داده 1/);
+      assert.match(await pricePage.locator('main').innerText(), /ردیف داده 2/);
       assert(!(await pricePage.locator('main').innerText()).includes('browser-detail'));
       await checkLayout(pricePage, `receipt inspection ${width}`);
       if (width === 390) await auditAccessibility(pricePage, 'receipt inspection');

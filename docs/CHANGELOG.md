@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — receipt validation reuse and product triage checks
+
+**Changes:** Receipt detail and inspection reuse pure candidate integrity results within a single joined page/batch while checking each manifest row independently; tests cover duplicate and distinct candidates, corruption, page boundaries, operation and query counts, and a duplicate receipt in Chromium. Product review IDs are bounded in the form and direct service; PostgreSQL tests exercise selected simultaneous reviewers and candidate updates.
+
+**Limits:** This is not an optimization of staging writes, a benchmark, a database snapshot or proof of provenance/identity. Privileged writers can bypass review protocols; no retry, audit or production guarantee is added. See ADR 0026.
+
 ## 2026-11-22 — bounded receipt-row consistency inspection
 
 **Changes:** Added a private, permission-scoped, read-only inspection of one receipt at a time, scanning up to 50 current candidate comparisons plus lookahead and filtering only within that batch. Shared the structural and per-row checks with receipt detail. Tests cover both domains, legacy and corrupt manifests, permissions, private errors, query counts, selected non-snapshot behavior and synthetic Chromium access at four widths.

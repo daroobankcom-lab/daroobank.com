@@ -81,12 +81,12 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
             manufacturer='سازنده فرضی', strength='1 mg', dosage_form='قرص', package_description='10 عدد',
             irc='001', source_name='منبع ساختگی', source_url='https://example.org/public',
             verified_at=timezone.now(), published=True)
-        price_csv = csv_bytes([dict(source_record_id='browser-detail', irc='001', manufacturer='سازنده فرضی',
+        price_row = dict(source_record_id='browser-detail', irc='001', manufacturer='سازنده فرضی',
             strength='1 mg', dosage_form='قرص', package_description='10 عدد', amount='100', currency='RIAL',
-            category='retail', unit='package', effective_date='', source_published_date='')])
-        stage_csv(io.BytesIO(price_csv), 'منبع ساختگی مرورگر', 'https://example.org/browser-detail',
+            category='retail', unit='package', effective_date='', source_published_date='')
+        stage_csv(io.BytesIO(csv_bytes([price_row])), 'منبع ساختگی مرورگر', 'https://example.org/browser-detail',
                   staged_by=price_stager, commit=True, rights_attested=True)
-        _, browser_receipt = stage_price_with_receipt(io.BytesIO(price_csv), 'منبع ساختگی مرورگر',
+        _, browser_receipt = stage_price_with_receipt(io.BytesIO(csv_bytes([price_row, price_row])), 'منبع ساختگی مرورگر',
             'https://example.org/browser-detail', actor=price_stager, rights_attested=True)
         browser_price = PriceCandidate.objects.get(source_record_id='browser-detail')
         # The subprocess receives only what it needs; database credentials are not propagated.
@@ -111,5 +111,6 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
         self.assertEqual(PriceCandidate.objects.count(), 1)
         self.assertEqual(ImportReceipt.objects.count(), 1)
+        self.assertEqual(browser_receipt.items.count(), 2)
         self.assertIn('browser checks passed', result.stdout)
         print(result.stdout.strip())

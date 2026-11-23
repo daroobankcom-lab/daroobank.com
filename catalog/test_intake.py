@@ -9,7 +9,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from .intake import FIELDS, MAX_FILE_BYTES, MAX_ROWS, IntakeError, parse_product_csv, stage_products
+from .intake import (FIELDS, MAX_FILE_BYTES, MAX_PK, MAX_ROWS, IntakeError, ReviewConflict,
+                     parse_product_csv, review_product, stage_products)
 from .models import ProductCandidate, ProductCandidateReview, ProductPresentation
 
 
@@ -197,6 +198,26 @@ class ProductIntakeTests(TestCase):
             event.save()
         with self.assertRaises(ValidationError):
             event.delete()
+
+    def test_review_ids_and_decisions_are_bounded_at_form_and_service(self):
+        candidate = self.stage_one()
+        self.client.force_login(self.reviewer)
+        for value in (-1, MAX_PK + 1):
+            with self.subTest(value=value):
+                response = self.review(candidate, self.review_data(candidate, expected_review=value))
+                self.assertEqual(response.status_code, 400)
+                self.assert_private(response)
+        args = dict(candidate_id=candidate.pk, actor=self.reviewer, decision='defer',
+                    reason='این نتیجه صرفاً یک بررسی آزمایشی است.', expected_review=0,
+                    expected_hash=candidate.payload_sha256)
+        for field, value in [('candidate_id', True), ('candidate_id', 0), ('candidate_id', MAX_PK + 1),
+                             ('expected_review', True), ('expected_review', -1), ('expected_review', MAX_PK + 1),
+                             ('decision', []), ('expected_hash', None)]:
+            with self.subTest(field=field, value=value), self.assertRaises(ReviewConflict):
+                review_product(**(args | {field: value}))
+        with self.assertRaises(PermissionDenied):
+            review_product(**(args | {'actor': None}))
+        self.assertFalse(ProductCandidateReview.objects.exists())
 
     def test_queue_filter_uses_latest_review_not_a_public_approval(self):
         candidate = self.stage_one()

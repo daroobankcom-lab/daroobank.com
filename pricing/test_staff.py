@@ -177,6 +177,59 @@ class StaffPriceAccessTests(TestCase):
                 result = client.get(reverse('staff_prices'), secure=secure)
                 self.assertEqual(result.status_code, 200 if expected == 302 else 302)
 
+    @override_settings(STAFF_PORTAL_ENABLED=True)
+    def test_staff_login_rejects_nonstaff_without_creating_authenticated_session(self):
+        login = reverse('staff_login')
+        password = 'test-only-strong-passphrase'
+        # A nonstaff user remains ineligible even when granted a view permission.
+        for username, supplied in (('regular', password), ('inactive', password),
+                                   ('viewer', 'wrong-password'), ('missing-synthetic-user', password)):
+            with self.subTest(username=username):
+                client = Client(enforce_csrf_checks=True)
+                token = client.get(login).cookies['csrftoken'].value
+                response = client.post(login, {'username': username, 'password': supplied,
+                                               'csrfmiddlewaretoken': token, 'next': reverse('staff_prices')})
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'نام کاربری یا گذرواژه صحیح نیست')
+                self.assert_private(response)
+                self.assertNotIn(supplied.encode(), response.content)
+                self.assertNotIn('_auth_user_id', client.session)
+                self.assertEqual(client.get(reverse('staff_prices')).status_code, 302)
+
+    def test_rejected_nonstaff_form_does_not_expose_user_as_authenticated(self):
+        from daroobank.forms import StaffAuthenticationForm
+        form = StaffAuthenticationForm(data={'username': 'regular', 'password': 'test-only-strong-passphrase'})
+        self.assertFalse(form.is_valid())
+        self.assertIsNone(form.get_user())
+
+    @override_settings(STAFF_PORTAL_ENABLED=True)
+    def test_invalid_login_does_not_replace_existing_session(self):
+        self.client.force_login(self.viewer)
+        response = self.client.post(reverse('staff_login'), {
+            'username': 'regular', 'password': 'test-only-strong-passphrase',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'نام کاربری یا گذرواژه صحیح نیست')
+        self.assertEqual(str(self.client.session['_auth_user_id']), str(self.viewer.pk))
+        self.assertEqual(self.client.get(reverse('staff_prices')).status_code, 200)
+
+    @override_settings(STAFF_PORTAL_ENABLED=True)
+    def test_staff_without_domain_permission_can_login_but_not_read_domain(self):
+        login = reverse('staff_login')
+        client = Client(enforce_csrf_checks=True)
+        token = client.get(login).cookies['csrftoken'].value
+        response = client.post(login, {'username': 'staff-no-perm', 'password': 'test-only-strong-passphrase',
+                                       'csrfmiddlewaretoken': token})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('staff_workspace'))
+        self.assertEqual(client.get(reverse('staff_workspace')).status_code, 200)
+        self.assertEqual(client.get(reverse('staff_prices')).status_code, 403)
+        # A later demotion is checked at the destination on the next request.
+        self.staff_no_permission.is_staff = False
+        self.staff_no_permission.save(update_fields=['is_staff'])
+        self.assertEqual(client.get(reverse('staff_workspace')).status_code, 403)
+        self.assertEqual(client.get(reverse('staff_prices')).status_code, 403)
+
     def test_wrong_password_and_staff_pages_not_indexed(self):
         response = self.client.post(reverse('staff_login'), {'username': 'viewer', 'password': 'incorrect'})
         self.assertEqual(response.status_code, 200)

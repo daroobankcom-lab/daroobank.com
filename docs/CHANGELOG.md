@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — development staff login policy
+
+**Changes:** The development staff login form rejects authenticated nonstaff accounts using the same visible error as invalid credentials, without creating a new authenticated session. Staff with no domain permission can still sign in but are denied domain access; tests cover subsequent demotion and an existing session.
+
+**Limits:** This only affects the staff form, not other authentication mechanisms or existing sessions. It does not add MFA, rate limiting, audit or production readiness. See ADR 0048.
+
 ## 2026-11-23 — stronger hero contrast test boundaries
 
 **Changes:** Selected hero text and search-placeholder contrast checks run at four viewport widths and fail closed on selected opacity, filter, blend and background layers. Deliberate compositing and low-contrast mutations verify the checks.

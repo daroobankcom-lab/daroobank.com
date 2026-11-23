@@ -279,7 +279,7 @@ class ClinicalReferenceLockingTests(TransactionTestCase):
         self.assertNotEqual(new_state['fingerprint'], self.current)
         self.assertEqual(len(new_state['items']), 2)
 
-    def test_parent_draft_is_not_locked_by_reference_lock(self):
+    def test_review_locks_immediate_parent_but_later_bypass_can_change_it(self):
         child = create_draft(actor=self.author, data=self.data, parent_id=self.draft.pk,
             expected_parent_hash=self.draft.payload_sha256, change_reason='اصلاح ساختگی برای بررسی بیشتر')
         child_evidence = evidence_state(child)['fingerprint']
@@ -303,10 +303,12 @@ class ClinicalReferenceLockingTests(TransactionTestCase):
                 future = pool.submit(self.worker, review)
                 try:
                     self.assertTrue(ready.wait(8))
-                    self.assertEqual(pool.submit(self.worker, change_parent, '300ms').result(timeout=10), 1)
+                    with self.assertRaises(OperationalError):
+                        pool.submit(self.worker, change_parent, '300ms').result(timeout=10)
                 finally:
                     resume.set()
                 event = ClinicalDraftReview.objects.get(pk=future.result(timeout=10))
+                self.assertEqual(pool.submit(self.worker, change_parent, '300ms').result(timeout=10), 1)
         self.assertEqual(event.draft_id, child.pk)
         fresh = ClinicalDraft.objects.select_related('parent').get(pk=child.pk)
         self.assertFalse(valid_draft(fresh))

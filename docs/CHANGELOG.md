@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — immediate-parent locks for clinical writes
+
+**Changes:** Review, supplementary reference addition and revision creation now lock and re-read the immediate parent of the already locked draft before their local consistency check. Selected PostgreSQL tests cover both directions of parent updates, stale preloaded objects, sibling contention, rollback, missing parents and outer transaction lifetime.
+
+**Limits:** Only one parent is checked; a grandparent can change during review. Later bypass writes and deferred reference inserts can still stale observations. More locks can increase waits or deadlocks and no retry is provided. This is not provenance, clinical approval, whole-lineage validation or production hardening. See ADR 0030.
+
 ## 2026-11-22 — limited clinical reference row locking
 
 **Changes:** Review and reference addition lock the bounded existing assertion rows after the draft lock, before validation, while read-only inspection stays non-locking. PostgreSQL tests exercise waiting updates, stale conflicts, rollback, outer transaction lifetime and the 11-row sentinel. The specific concurrent existing-reference update from ADR 0028 is blocked while the write transaction holds the lock.

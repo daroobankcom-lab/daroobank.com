@@ -1,6 +1,6 @@
 # ADR 0029: lock existing clinical reference rows during writes
 
-Status: development-only, 22 November 2026. Narrows the specific bypass race observed in [ADR 0028](0028-source-clinical-triage-boundaries.md); it does not establish snapshot isolation or clinical approval.
+Status: development-only, 22 November 2026. Parent-lock limitations below describe the historical state; [ADR 0030](0030-clinical-immediate-parent-locks.md) supersedes that specific race. Narrows the specific bypass race observed in [ADR 0028](0028-source-clinical-triage-boundaries.md); it does not establish snapshot isolation or clinical approval.
 
 ## Decision
 

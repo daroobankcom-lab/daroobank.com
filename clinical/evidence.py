@@ -9,7 +9,7 @@ from django.db.models import Prefetch, prefetch_related_objects
 
 from .models import ClinicalDraft, ClinicalReferenceAssertion
 from .services import (ADD, HASH, REFERENCE_FIELDS, VIEW, DraftConflict, DraftError, require_staff,
-                       valid_draft, validate_reference_data)
+                       _valid_draft_for_update, validate_reference_data)
 
 ASSERTION_FIELDS = REFERENCE_FIELDS + ('relation',)
 MAX_REFERENCES = 10
@@ -128,10 +128,10 @@ def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_eviden
         raise DraftError('شناسه پیش‌نویس یا فهرست ارجاع معتبر نیست.')
     with transaction.atomic():
         try:
-            draft = ClinicalDraft.objects.select_for_update(of=('self',)).select_related('parent').get(pk=draft_id)
+            draft = ClinicalDraft.objects.select_for_update(of=('self',)).get(pk=draft_id)
         except ClinicalDraft.DoesNotExist as exc:
             raise DraftConflict('پیش‌نویس در دسترس نیست.') from exc
-        if not valid_draft(draft) or draft.payload_sha256 != expected_draft_hash:
+        if not _valid_draft_for_update(draft) or draft.payload_sha256 != expected_draft_hash:
             raise DraftConflict('پیش‌نویس تغییر کرده یا ناسازگار است.')
         state = evidence_state(draft, lock=True)
         if state['status'] != 'available' or state['fingerprint'] != expected_evidence_hash:

@@ -7,6 +7,7 @@ from datetime import date
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
 from daroobank.validation import valid_private_source_url, valid_review_reason
@@ -113,6 +114,25 @@ def valid_draft(draft):
         return False
 
 
+def _valid_draft_for_update(draft):
+    """Re-read and lock only the immediate parent of a locked draft, then validate.
+
+    Call only inside the writer's transaction after locking the draft. A joined
+    parent read before obtaining the row lock would be a potentially stale copy.
+    """
+    if not transaction.get_connection(draft._state.db).in_atomic_block:
+        raise TransactionManagementError('Immediate-parent locking requires an atomic writer transaction.')
+    if not valid_payload(draft):
+        return False
+    if draft.parent_id:
+        try:
+            parent = ClinicalDraft.objects.using(draft._state.db).select_for_update().get(pk=draft.parent_id)
+        except ClinicalDraft.DoesNotExist:
+            return False
+        draft.parent = parent
+    return valid_draft(draft)
+
+
 def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change_reason=''):
     require_staff(actor, VIEW, ADD)
     validate_data(data)
@@ -127,10 +147,10 @@ def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change
         parent = None
         if parent_id is not None:
             try:
-                parent = ClinicalDraft.objects.select_for_update(of=('self',)).select_related('parent').get(pk=parent_id)
+                parent = ClinicalDraft.objects.select_for_update(of=('self',)).get(pk=parent_id)
             except ClinicalDraft.DoesNotExist as exc:
                 raise DraftConflict('نسخه پیشین در دسترس نیست.') from exc
-            if not valid_draft(parent) or parent.payload_sha256 != expected_parent_hash:
+            if not _valid_draft_for_update(parent) or parent.payload_sha256 != expected_parent_hash:
                 raise DraftConflict('نسخه پیشین تغییر کرده یا ناسازگار است؛ عملیات متوقف شد.')
             if data['subject'] != parent.subject or data['audience'] != parent.audience:
                 raise DraftError('برای موضوع یا مخاطب متفاوت پیش‌نویس جدید بسازید.')
@@ -149,10 +169,10 @@ def review_draft(*, actor, draft_id, decision, reason, expected_review, expected
                 or not HASH.fullmatch(expected_evidence_hash)))):
         raise DraftConflict('اطلاعات بازبینی معتبر نیست.')
     with transaction.atomic():
-        draft = ClinicalDraft.objects.select_for_update(of=('self',)).select_related('parent').get(pk=draft_id)
+        draft = ClinicalDraft.objects.select_for_update(of=('self',)).get(pk=draft_id)
         if draft.author_id == actor.pk:
             raise PermissionDenied
-        if not valid_draft(draft) or draft.payload_sha256 != expected_hash:
+        if not _valid_draft_for_update(draft) or draft.payload_sha256 != expected_hash:
             raise DraftConflict('پیش‌نویس یا نسخه پیشین تغییر کرده یا ناسازگار است.')
         from .evidence import evidence_state
         evidence = evidence_state(draft, lock=True)

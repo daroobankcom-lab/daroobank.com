@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — PostgreSQL readiness retry window
+
+**Changes:** The development startup helper no longer starts a new readiness attempt after its monotonic retry window ends; it still performs one initial attempt even for a zero window. Deterministic clock tests and actual synthetic PostgreSQL success/absence tests cover the selected behavior.
+
+**Limits:** This is not a hard wall-clock timeout or query cancellation; a connection, query or DNS operation already in progress can overrun it. See ADR 0076.
+
 ## 2026-11-23 — PostgreSQL managed-column clues
 
 **Changes:** The development catalog inspection counts missing managed-model columns and differences in PostgreSQL nullability versus current model metadata. Synthetic rolled-back DDL tests cover a missing column and changes in both nullability directions.

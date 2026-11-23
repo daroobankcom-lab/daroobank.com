@@ -1,5 +1,6 @@
 """Bounded identity package graph row-lock tests on synthetic PostgreSQL data."""
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from decimal import Decimal
 from threading import Barrier, Event
 from unittest.mock import patch
@@ -27,6 +28,16 @@ class IdentityComponentLockTests(TransactionTestCase):
         self.ingredient, self.part, self.form, self.product, self.package = build(self.author)
         self.component = FormulationComponent.objects.get(formulation=self.form)
         self.graph_hash = digest(package_snapshot(self.package))
+
+    @contextmanager
+    def assert_lock_timeout(self):
+        with self.assertRaises(DatabaseError) as caught:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                yield
+        cause = caught.exception.__cause__
+        self.assertEqual(getattr(cause, 'sqlstate', None) or getattr(cause, 'pgcode', None), '55P03')
 
     def run_writer(self, kind):
         close_old_connections()
@@ -60,9 +71,7 @@ class IdentityComponentLockTests(TransactionTestCase):
                             future = pool.submit(self.run_writer, kind)
                             try:
                                 self.assertTrue(ready.wait(8))
-                                with self.assertRaises(DatabaseError), transaction.atomic():
-                                    with connection.cursor() as cursor:
-                                        cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                                with self.assert_lock_timeout():
                                     model.objects.filter(pk=pk).update(**change)
                             finally:
                                 resume.set()
@@ -134,9 +143,7 @@ class IdentityComponentLockTests(TransactionTestCase):
                             future = pool.submit(self.dependent_writer, kind)
                             try:
                                 self.assertTrue(ready.wait(8))
-                                with self.assertRaises(DatabaseError), transaction.atomic():
-                                    with connection.cursor() as cursor:
-                                        cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                                with self.assert_lock_timeout():
                                     model.objects.filter(pk=pk).update(**change)
                             finally:
                                 resume.set()
@@ -159,9 +166,7 @@ class IdentityComponentLockTests(TransactionTestCase):
                         future = pool.submit(self.dependent_writer, kind)
                         try:
                             self.assertTrue(ready.wait(8))
-                            with self.assertRaises(DatabaseError), transaction.atomic():
-                                with connection.cursor() as cursor:
-                                    cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                            with self.assert_lock_timeout():
                                 FormulationDraft.objects.filter(pk=self.form.pk).update(name='فرمول ساختگی تازه')
                         finally:
                             resume.set()
@@ -227,9 +232,7 @@ class IdentityComponentLockTests(TransactionTestCase):
                 self.assertTrue(ready.wait(8))
                 for model, pk, change in [(FormulationComponent, self.component.pk, {'numerator': Decimal('4')}),
                                           (IngredientDraft, self.ingredient.pk, {'name_fa': 'تغییر ساختگی'})]:
-                    with self.assertRaises(DatabaseError), transaction.atomic():
-                        with connection.cursor() as cursor:
-                            cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                    with self.assert_lock_timeout():
                         model.objects.filter(pk=pk).update(**change)
             finally:
                 resume.set()
@@ -349,9 +352,8 @@ class IdentityComponentLockTests(TransactionTestCase):
                 writer = pool.submit(self.run_writer, 'review')
                 try:
                     self.assertTrue(checked.wait(8))
-                    with self.assertRaises(DatabaseError), transaction.atomic():
+                    with self.assert_lock_timeout():
                         with connection.cursor() as cursor:
-                            cursor.execute("SET LOCAL lock_timeout = '300ms'")
                             cursor.execute('SET CONSTRAINTS ALL IMMEDIATE')
                         FormulationComponent.objects.create(formulation_id=self.form.pk, ingredient_id=other.pk,
                             ingredient_sha256=other.payload_sha256, ordinal=2, numerator=Decimal('2'), numerator_unit='mg',

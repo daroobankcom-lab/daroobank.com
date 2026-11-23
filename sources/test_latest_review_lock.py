@@ -11,8 +11,8 @@ from django.db.transaction import TransactionManagementError
 from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 
-from catalog.identity_test_utils import assert_blocked_by_current_transaction, publish_backend_pid
-from .models import SourceClaimReview
+from catalog.identity_test_utils import assert_blocked_by_backend, assert_blocked_by_current_transaction, publish_backend_pid
+from .models import SourceClaim, SourceClaimReview
 from .services import ReviewConflict, record_claim, review_claim
 
 REASON = 'دلیل ساختگی برای بازبینی منبع'
@@ -267,3 +267,79 @@ class SourceLatestReviewLockTests(TransactionTestCase):
                 connection.close()
         with ThreadPoolExecutor(max_workers=1) as pool:
             self.assertEqual(pool.submit(update).result(timeout=10), 1)
+
+    def test_actual_deadlock_with_review_lock_is_translated(self):
+        # The uncooperative writer locks in reverse order; the service waits first.
+        from .services import _lock_latest_review
+        row_locked, waiting, start_cycle = Event(), Event(), Event()
+        manual_pid, service_pid = Queue(), Queue()
+        def manual():
+            close_old_connections()
+            try:
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET LOCAL lock_timeout = '5s'")
+                        cursor.execute("SET LOCAL statement_timeout = '8s'")
+                        publish_backend_pid(cursor, manual_pid)
+                    SourceClaimReview.objects.select_for_update().get(pk=self.latest.pk)
+                    row_locked.set()
+                    if not start_cycle.wait(6):
+                        raise TimeoutError('Cycle not started')
+                    SourceClaim.objects.select_for_update().get(pk=self.claim.pk)
+            finally:
+                connection.close()
+        def signal(claim):
+            waiting.set()
+            return _lock_latest_review(claim)
+        with patch('sources.services._lock_latest_review', side_effect=signal):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                other = pool.submit(manual)
+                try:
+                    self.assertTrue(row_locked.wait(5))
+                    service = pool.submit(self.review, service_pid)
+                    self.assertTrue(waiting.wait(5))
+                    assert_blocked_by_backend(self, service_pid.get(timeout=5), manual_pid.get(timeout=5))
+                    start_cycle.set()
+                    with self.assertRaises(ReviewConflict) as caught:
+                        service.result(timeout=10)
+                    driver = caught.exception.__cause__.__cause__
+                    self.assertEqual(getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None), '40P01')
+                    other.result(timeout=10)
+                finally:
+                    start_cycle.set()
+        self.assertEqual(SourceClaimReview.objects.filter(claim=self.claim).count(), 1)
+
+    def test_actual_serialization_failure_in_writer_is_translated(self):
+        ready, resume = Event(), Event()
+        def writer():
+            close_old_connections()
+            try:
+                actor = get_user_model().objects.get(pk=self.reviewer.pk)
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')
+                        cursor.execute("SET LOCAL statement_timeout = '8s'")
+                    SourceClaim.objects.get(pk=self.claim.pk)
+                    ready.set()
+                    if not resume.wait(6):
+                        raise TimeoutError('Serialization test did not resume')
+                    try:
+                        review_claim(actor=actor, claim_id=self.claim.pk, decision='defer', reason=REASON,
+                                     expected_review=self.latest.pk, expected_hash=self.claim.payload_sha256)
+                    except ReviewConflict as exc:
+                        driver = exc.__cause__.__cause__
+                        code = getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None)
+                        transaction.set_rollback(True)  # An outer serializable transaction must restart.
+                        return code
+                    raise AssertionError('Expected serialization conflict')
+            finally:
+                connection.close()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(writer)
+            try:
+                self.assertTrue(ready.wait(5))
+                SourceClaim.objects.filter(pk=self.claim.pk).update(owner='مالک ساختگی تغییر یافته')
+            finally:
+                resume.set()
+            self.assertEqual(future.result(timeout=10), '40001')
+        self.assertEqual(SourceClaimReview.objects.filter(claim=self.claim).count(), 1)

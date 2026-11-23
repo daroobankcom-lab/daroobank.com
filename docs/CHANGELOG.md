@@ -6,7 +6,7 @@ Entries describe the state at each change; later entries can supersede earlier l
 
 **Changes:** The four preliminary review writers translate selected PostgreSQL lock/deadlock/serialization errors into their existing conflict responses after transaction/savepoint rollback; synthetic tests cover rollback and private HTTP 409 responses, with real lock-timeout races across all four domains.
 
-**Limits:** No timeout or retry is configured; a failure at an enclosing transaction's later commit and other services/errors remain outside the boundary. Deadlock and serialization tests in these four writers are simulated; see ADR 0053.
+**Limits:** No timeout or retry is configured; a failure at an enclosing transaction's later commit and other services/errors remain outside the boundary. Deadlock and serialization are exercised on PostgreSQL for the source writer and simulated for the other three; see ADR 0053.
 
 ## 2026-11-23 — selected product-candidate latest-review lock
 

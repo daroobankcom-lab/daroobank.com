@@ -111,6 +111,12 @@ class ClinicalInspectionTests(TestCase):
         self.assertEqual(report['scanned'], 50)
         self.assertEqual(len(captured), 4)  # batch + authors + assertions + distinct recorders
         self.assertTrue(all(query['sql'].lstrip().upper().startswith('SELECT') for query in captured))
+        for index in (1, 3):
+            select = captured[index]['sql'].upper().split(' FROM ', 1)[0]
+            self.assertIn('"ID"', select)
+            self.assertNotIn('PASSWORD', select)
+            self.assertNotIn('USERNAME', select)
+            self.assertNotIn('EMAIL', select)
         self.assertIn('ROW_NUMBER()', captured[2]['sql'].upper())
         self.assertIn('PARTITION BY', captured[2]['sql'].upper())
         self.assertIn('<= 11', captured[2]['sql'])
@@ -131,7 +137,8 @@ class ClinicalInspectionTests(TestCase):
         expected = {draft.pk: evidence_state(draft)['status'] for draft in drafts}
         self.assertEqual(expected, {empty.pk: 'available', good.pk: 'available', invalid.pk: 'invalid', over.pk: 'over_limit'})
         self.assertEqual(inspection_evidence_statuses(drafts), expected)
-        with patch('clinical.evidence.get_user_model') as model:
+        with patch('clinical.evidence.current_account_ids', return_value=set()), \
+             patch('clinical.evidence.get_user_model') as model:
             model.return_value.objects.in_bulk.return_value = {}
             self.assertEqual(inspection_evidence_statuses(drafts),
                              {empty.pk: 'available', good.pk: 'invalid', invalid.pk: 'invalid', over.pk: 'over_limit'})
@@ -142,7 +149,8 @@ class ClinicalInspectionTests(TestCase):
         self.add_ref(first)
         ref = self.add_ref(second)
         ClinicalReferenceAssertion.objects.filter(pk=ref.pk).update(recorded_by=self.viewer)
-        with patch('clinical.evidence.get_user_model') as model:
+        with patch('clinical.evidence.current_account_ids', return_value={self.author.pk}), \
+             patch('clinical.evidence.get_user_model') as model:
             model.return_value.objects.in_bulk.return_value = {self.author.pk: self.author}
             statuses = inspection_evidence_statuses([first, second, empty])
             self.assertEqual(statuses, {first.pk: 'available', second.pk: 'invalid', empty.pk: 'available'})

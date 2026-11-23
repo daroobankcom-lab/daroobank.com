@@ -219,6 +219,12 @@ class MissingRecorderTests(TestCase):
         with CaptureQueriesContext(connection) as many:
             response = self.client.get(path)
         self.assertEqual(len(one), len(many))
+        account_reads = [q for q in many if '"auth_user"' in q['sql'].lower() and ' in ' in q['sql'].lower()]
+        self.assertEqual(len(account_reads), 1)
+        selected = account_reads[0]['sql'].upper().split(' FROM ', 1)[0]
+        self.assertIn('"ID"', selected)
+        for field in ('PASSWORD', 'USERNAME', 'EMAIL'):
+            self.assertNotIn(field, selected, account_reads[0]['sql'])
         self.assertEqual(len(response.context['page'].object_list), 20)
         self.assertTrue(all(item.is_valid for item in response.context['page'].object_list))
 

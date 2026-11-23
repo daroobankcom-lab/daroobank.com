@@ -1,5 +1,5 @@
 """Bounded technical clues for synthetic drafts, not evidence verification."""
-from daroobank.account_checks import current_accounts
+from daroobank.account_checks import current_account_ids
 
 from .evidence import MAX_INSPECTION_DRAFTS, inspection_evidence_statuses
 from .models import ClinicalDraft
@@ -24,7 +24,7 @@ def inspect_drafts(*, after=0, category=''):
     valid = [draft for draft in batch if valid_draft(draft)]
     # Existence is a separate current observation, not identity or qualification.
     # Invalid drafts take precedence; no related rows are scanned for them.
-    authors = current_accounts([draft.author_id for draft in valid], using=drafts[0]._state.db) if valid else {}
+    authors = current_account_ids([draft.author_id for draft in valid], using=valid[0]._state.db) if valid else set()
     valid_ids = {draft.pk for draft in valid}
     with_author = [draft for draft in valid if draft.author_id in authors]
     statuses = inspection_evidence_statuses(with_author) if with_author else {}

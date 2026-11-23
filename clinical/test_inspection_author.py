@@ -60,7 +60,7 @@ class ClinicalInspectionAuthorTests(TestCase):
         draft = self.draft()
         try:
             ClinicalDraft.objects.filter(pk=draft.pk).update(author_id=self.missing, title='تغییر ناسازگار')
-            with patch('clinical.inspection.current_accounts') as accounts, patch('clinical.inspection.inspection_evidence_statuses') as evidence:
+            with patch('clinical.inspection.current_account_ids') as accounts, patch('clinical.inspection.inspection_evidence_statuses') as evidence:
                 self.assertEqual(inspect_drafts()['rows'], [{'id': draft.pk, 'status': 'draft_invalid'}])
                 accounts.assert_not_called()
                 evidence.assert_not_called()
@@ -86,7 +86,7 @@ class ClinicalInspectionAuthorTests(TestCase):
 
     def test_current_author_lookup_is_not_a_lock_or_a_snapshot(self):
         draft = self.draft()
-        with patch('clinical.inspection.current_accounts', return_value={}) as accounts:
+        with patch('clinical.inspection.current_account_ids', return_value={}) as accounts:
             self.assertEqual(inspect_drafts()['rows'], [{'id': draft.pk, 'status': 'author_missing'}])
             accounts.assert_called_once()
         self.assertEqual(inspect_drafts()['rows'], [{'id': draft.pk, 'status': 'available'}])

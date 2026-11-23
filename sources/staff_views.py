@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
-from daroobank.account_checks import current_accounts
+from daroobank.account_checks import current_account_ids, current_accounts
 from daroobank.review_history import recent_reviews_with_reviewers
 from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
@@ -42,8 +42,8 @@ def claims(request):
     today = timezone.localdate()
     date_counts = dict.fromkeys(('expired', 'future', 'within_dates', 'unknown', 'invalid'), 0)
     page_claims = list(page.object_list)
-    recorders = (current_accounts([claim.recorded_by_id for claim in page_claims], using=page_claims[0]._state.db)
-                 if page_claims else {})
+    recorders = (current_account_ids([claim.recorded_by_id for claim in page_claims], using=page_claims[0]._state.db)
+                 if page_claims else set())
     for claim in page_claims:
         claim.recorder_missing = claim.recorded_by_id not in recorders
         claim.date_status = date_label(claim, today=today)

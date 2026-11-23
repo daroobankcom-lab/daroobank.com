@@ -59,8 +59,8 @@ class SourceQueueRecorderTests(TestCase):
             record_claim(actor=self.author, data={**self.data, 'source_url': f'https://example.org/{i + 1}'})
         self.client.force_login(self.viewer)
         path = reverse('staff_sources')
-        with patch('sources.staff_views.current_accounts', wraps=__import__(
-                'daroobank.account_checks', fromlist=['current_accounts']).current_accounts) as lookup:
+        with patch('sources.staff_views.current_account_ids', wraps=__import__(
+                'daroobank.account_checks', fromlist=['current_account_ids']).current_account_ids) as lookup:
             with CaptureQueriesContext(connection) as captured:
                 response = self.client.get(path)
         self.assertEqual(len(response.context['page'].object_list), 20)
@@ -68,20 +68,25 @@ class SourceQueueRecorderTests(TestCase):
         self.assertEqual(len(lookup.call_args.args[0]), 20)
         account_reads = [q for q in captured if '"auth_user"' in q['sql'].lower() and ' in ' in q['sql'].lower()]
         self.assertEqual(len(account_reads), 1)
-        with patch('sources.staff_views.current_accounts', wraps=lookup._mock_wraps) as next_lookup:
+        select = account_reads[0]['sql'].upper().split(' FROM ', 1)[0]
+        self.assertIn('"ID"', select)
+        self.assertNotIn('PASSWORD', select)
+        self.assertNotIn('USERNAME', select)
+        self.assertNotIn('EMAIL', select)
+        with patch('sources.staff_views.current_account_ids', wraps=lookup._mock_wraps) as next_lookup:
             second = self.client.get(path, {'page': 2})
             self.assertEqual(len(second.context['page'].object_list), 6)
             self.assertEqual(len(next_lookup.call_args.args[0]), 6)
 
     def test_empty_filtered_page_skips_account_lookup(self):
         self.client.force_login(self.viewer)
-        with patch('sources.staff_views.current_accounts') as lookup:
+        with patch('sources.staff_views.current_account_ids') as lookup:
             response = self.client.get(reverse('staff_sources'), {'status': 'reject'})
         self.assertEqual(len(response.context['page'].object_list), 0)
         lookup.assert_not_called()
 
     def test_reads_are_separate_not_a_snapshot(self):
         self.client.force_login(self.viewer)
-        with patch('sources.staff_views.current_accounts', return_value={}):
+        with patch('sources.staff_views.current_account_ids', return_value={}):
             self.assertContains(self.client.get(reverse('staff_sources')), 'حساب ثبت‌کننده در دسترس نیست')
         self.assertNotContains(self.client.get(reverse('staff_sources')), 'حساب ثبت‌کننده در دسترس نیست')

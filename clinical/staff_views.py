@@ -6,7 +6,7 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
-from daroobank.account_checks import current_account_exists, current_accounts
+from daroobank.account_checks import current_account_exists, current_account_ids, current_accounts
 from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
 from daroobank.review_history import recent_reviews_with_reviewers
@@ -39,7 +39,7 @@ def drafts(request):
     elif status: rows = rows.filter(latest_decision=status)
     if audience: rows = rows.filter(audience=audience)
     page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
-    authors = current_accounts([item.author_id for item in page.object_list], using=rows.db)
+    authors = current_account_ids([item.author_id for item in page.object_list], using=rows.db)
     for item in page.object_list:
         item.is_valid = item.author_id in authors and valid_draft(item)
     return render(request, 'staff/clinical_drafts.html', {

@@ -6,6 +6,7 @@ from datetime import date
 from django.contrib.auth import get_user_model
 from django.db.models import Prefetch, prefetch_related_objects
 
+from daroobank.account_checks import current_account_ids
 from daroobank.write_conflict_boundary import write_conflict_boundary
 
 from .models import ClinicalDraft, ClinicalReferenceAssertion
@@ -115,7 +116,7 @@ def inspection_evidence_statuses(drafts):
         status, recorder_ids = _check_assertions(draft, draft._inspection_references)
         results[draft.pk] = (status, recorder_ids)
         needed.update(recorder_ids)
-    recorders = get_user_model().objects.in_bulk(needed) if needed else {}
+    recorders = current_account_ids(needed, using=drafts[0]._state.db)
     return {pk: ('invalid' if status == 'available' and not ids.issubset(recorders) else status)
             for pk, (status, ids) in results.items()}
 

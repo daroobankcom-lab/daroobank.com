@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — ID-only account existence reads
+
+**Changes:** Source and clinical queue presence checks and both account checks in the clinical technical scan now select only account IDs, rather than full account objects. Tests cover invalid/duplicate IDs, inactive users, alias forwarding, query columns and the existing bounds.
+
+**Limits:** This applies only to selected existence reads; authentication, display and other workflows may still fetch account attributes, and IDs may be logged. Existence is not identity, qualification or authorization, and the separate reads are not a snapshot; see ADR 0058.
+
 ## 2026-11-23 — source queue recorder-presence clue
 
 **Changes:** The source queue now uses a single page-local account lookup and flags currently missing recorders while retaining the claim and independent date status. Synthetic tests cover privacy, inactive accounts, page bounds, the empty result and separate reads; Chromium exercises the explanatory text.

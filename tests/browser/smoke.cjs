@@ -535,6 +535,12 @@ async function run() {
         await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical scan status');
       }
       await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
+      const clinicalDetail = page.locator('main');
+      assert.match(await clinicalDetail.innerText(), /اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند/);
+      assert.match(await clinicalDetail.innerText(), /شناسه ارجاع‌های ثبت‌شده با فهرست فعلی برابر است/);
+      assert.match(await clinicalDetail.innerText(), /خوانش‌های جداگانه‌اند، زمان تغییر را ثابت نمی‌کنند/);
+      await checkLayout(page, `clinical review detail ${width}`);
+      if (width === 390) await auditAccessibility(page, 'clinical review detail');
       await page.getByRole('link', {name: 'بازرسی فنی تاریخچه بازبینی‌ها ←'}).click();
       const reviewInspection = `/staff/clinical/${ids.clinical_leaf}/reviews/inspection/`;
       assert.equal(new URL(page.url()).pathname, reviewInspection);

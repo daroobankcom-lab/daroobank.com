@@ -179,3 +179,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Limited clinical reference row locks
 
 `clinical/test_concurrency.py`, `clinical/test_reference_locking.py` and `clinical/test_parent_locking.py` exercise selected reference and immediate-parent interleavings, lock waits, rollback and outer transactions, sibling contention, a stale preloaded parent, an 11-row sentinel, non-locking reads, a deferred insert and an unprotected grandparent update. These tests do not establish predicate or whole-lineage locks, universal concurrency, provenance, clinical safety or production readiness. See [ADR 0029](ARCHITECTURE_DECISIONS/0029-clinical-reference-row-locks.md) and [ADR 0030](ARCHITECTURE_DECISIONS/0030-clinical-immediate-parent-locks.md).
+
+## Clinical review detail comparisons
+
+`clinical/test_evidence.py` checks independent draft/author and reference comparisons, supported missing evidence without an age claim, invalid record and contributor conflicts, unknown current states, a missing reviewer with a preserved expected-review ID, selected non-snapshot and ABA behavior, 25 displayed reviews and no per-review SQL in selected requests. A bounded reviewer lookup adds one query when reviews exist. Synthetic Chromium checks the normal detail text and layout at four widths. These checks do not establish chronology, actor qualifications, authenticity or accessibility across browsers. See [ADR 0031](ARCHITECTURE_DECISIONS/0031-clinical-detail-review-comparisons.md).

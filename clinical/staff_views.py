@@ -1,4 +1,5 @@
 """Private development-only editorial triage; never publish."""
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
@@ -11,7 +12,7 @@ from daroobank.scan_responses import invalid_scan_response
 from sources.services import related_claims
 from .inspection import CATEGORIES, MAX_PK, inspect_drafts
 from .lineage import InvalidLineageCursor, LineageNotFound, inspect_lineage
-from .review_inspection import CATEGORIES as REVIEW_CATEGORIES, ReviewInspectionNotFound, inspect_reviews
+from .review_inspection import CATEGORIES as REVIEW_CATEGORIES, ReviewInspectionNotFound, classify_review, inspect_reviews
 from .forms import DraftForm, ReferenceForm, RevisionForm, ReviewForm
 from .evidence import ASSERTION_FIELDS, add_reference, evidence_state, reviewed_evidence
 from .models import ClinicalDraft, ClinicalDraftReview
@@ -111,7 +112,9 @@ def revise(request, pk):
 
 def detail_response(request, draft, *, form=None, status=200):
     valid = valid_draft(draft)
-    reviews = list(draft.reviews.select_related('reviewer').order_by('-pk')[:25])
+    # Keep a review row visible even if a corrupt foreign key has no reviewer.
+    reviews = list(draft.reviews.order_by('-pk')[:25])
+    reviewers = get_user_model().objects.in_bulk({review.reviewer_id for review in reviews}) if reviews else {}
     evidence = evidence_state(draft) if valid else {'status': 'invalid'}
     contributor = evidence['status'] == 'available' and any(item.recorded_by_id == request.user.pk for item in evidence['items'])
     can_review = (valid and evidence['status'] == 'available' and request.user.has_perm(REVIEW)
@@ -120,18 +123,30 @@ def detail_response(request, draft, *, form=None, status=200):
         form = ReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0, 'expected_hash': draft.payload_sha256,
                                    'expected_evidence_hash': evidence['fingerprint']})
     for review in reviews:
-        historical = reviewed_evidence(review) if valid else {'status': 'unavailable'}
-        review.evidence_history = historical
-        if historical['status'] == 'legacy':
-            review.evidence_status = 'legacy'
-        elif historical['status'] == 'invalid':
-            review.evidence_status = 'invalid'
-        elif evidence['status'] != 'available':
-            review.evidence_status = 'unknown'
-        elif historical['fingerprint'] == evidence['fingerprint']:
-            review.evidence_status = 'same'
+        review.display_reviewer = reviewers.get(review.reviewer_id)
+        if review.display_reviewer is None:
+            review.technical_status, review.draft_comparison = 'missing_reviewer', 'unknown'
+        elif valid:
+            review.technical_status, review.draft_comparison = classify_review(review, draft, True)
         else:
-            review.evidence_status = 'changed'
+            review.technical_status, review.draft_comparison = 'unavailable', 'unknown'
+        # Expose historical assertions only after the complete supported record
+        # and reviewer/contributor separation pass the bounded technical check.
+        review.evidence_history = {'status': 'unavailable'}
+        if review.technical_status == 'consistent':
+            review.evidence_history = reviewed_evidence(review)
+            if evidence['status'] != 'available':
+                review.evidence_status = 'unknown'
+            elif review.evidence_history['fingerprint'] == evidence['fingerprint']:
+                review.evidence_status = 'same'
+            else:
+                review.evidence_status = 'different'
+        elif review.technical_status == 'legacy':
+            review.evidence_status = 'legacy'
+        elif review.technical_status == 'invalid_evidence':
+            review.evidence_status = 'invalid'
+        else:
+            review.evidence_status = 'unknown'
     children = list(draft.revisions.select_related('parent').order_by('-pk')[:11]) if valid else []
     for child in children[:10]: child.is_valid = valid_draft(child)
     return render(request, 'staff/clinical_detail.html', {

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — clinical review detail comparison boundaries
+
+**Changes:** The private detail distinguishes the reviewed draft/author comparison from the reference-set comparison, uses the existing technical classifier before displaying historical assertions, and treats missing evidence without claiming age. Invalid record decisions and reasons are suppressed, and a missing reviewer no longer hides the row or resets the expected-review ID. Tests cover corruption, contributor conflicts, separate-read and ABA behavior, the 25-row cap, query counts and synthetic Chromium at four widths.
+
+**Limits:** Readings are non-snapshot; a match does not prove absence of intervening changes, actor qualifications, source rights or clinical correctness. A corrupted missing draft author can still hide the draft in the existing detail join. No historic data is rewritten or authenticated; see ADR 0031.
+
 ## 2026-11-22 — immediate-parent locks for clinical writes
 
 **Changes:** Review, supplementary reference addition and revision creation now lock and re-read the immediate parent of the already locked draft before their local consistency check. Selected PostgreSQL tests cover both directions of parent updates, stale preloaded objects, sibling contention, rollback, missing parents and outer transaction lifetime.

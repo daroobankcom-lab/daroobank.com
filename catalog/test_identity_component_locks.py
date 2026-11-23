@@ -314,6 +314,53 @@ class IdentityComponentLockTests(TransactionTestCase):
         self.assertFalse(IdentityPackageReview.objects.exists())
         self.assertFalse(IdentityPackageRevision.objects.exists())
 
+    def test_deleting_only_component_before_lock_makes_selected_writers_conflict(self):
+        from .identity import _lock_formulation_components
+        for kind in ('review', 'revision', 'create_product', 'create_package', 'revise_formulation', 'revise_product'):
+            with self.subTest(kind=kind):
+                waiting = Event()
+                def signal(form):
+                    waiting.set()
+                    return _lock_formulation_components(form)
+                with patch('catalog.identity._lock_formulation_components', side_effect=signal):
+                    with ThreadPoolExecutor(max_workers=1) as pool:
+                        with transaction.atomic():
+                            FormulationComponent.objects.filter(pk=self.component.pk).delete()
+                            target = self.run_writer if kind in ('review', 'revision') else self.dependent_writer
+                            future = pool.submit(target, kind)
+                            self.assertTrue(waiting.wait(8))
+                            self.assertFalse(future.done())
+                        with self.assertRaises(IdentityConflict):
+                            future.result(timeout=10)
+                self.assertFalse(IdentityPackageReview.objects.exists())
+                self.assertFalse(IdentityPackageRevision.objects.exists())
+                FormulationComponent.objects.bulk_create([self.component])
+
+    def test_immediate_concurrent_component_insert_waits_for_formulation(self):
+        from .identity import _require_creator_accounts
+        other = create_ingredient(actor=self.author, data={**INGREDIENT, 'name_fa': 'ماده دیگر ساختگی'})
+        checked, resume = Event(), Event()
+        def pause(ids, *, using):
+            _require_creator_accounts(ids, using=using)
+            checked.set()
+            if not resume.wait(8): raise TimeoutError('Review did not resume')
+        with patch('catalog.identity._require_creator_accounts', side_effect=pause):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                writer = pool.submit(self.run_writer, 'review')
+                try:
+                    self.assertTrue(checked.wait(8))
+                    with self.assertRaises(DatabaseError), transaction.atomic():
+                        with connection.cursor() as cursor:
+                            cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                            cursor.execute('SET CONSTRAINTS ALL IMMEDIATE')
+                        FormulationComponent.objects.create(formulation_id=self.form.pk, ingredient_id=other.pk,
+                            ingredient_sha256=other.payload_sha256, ordinal=2, numerator=Decimal('2'), numerator_unit='mg',
+                            denominator=Decimal('1'), denominator_unit='tablet')
+                finally:
+                    resume.set()
+                self.assertIsNotNone(writer.result(timeout=10))
+        self.assertEqual(FormulationComponent.objects.filter(formulation=self.form).count(), 1)
+
     def test_deferred_concurrent_component_insert_can_commit_after_review(self):
         from .identity import _require_creator_accounts
         other = create_ingredient(actor=self.author, data={**INGREDIENT, 'name_fa': 'ماده دیگر ساختگی'})

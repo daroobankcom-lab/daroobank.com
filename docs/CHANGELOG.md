@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — synthetic stream and time-window regression coverage
+
+**Changes:** CSV tests compare fragmented reads and replay manifest membership across multiple chunk sizes and invalid tails. A seeded, independent UTC-window enumeration checks returned plans across ten time zones and selected transition dates; a larger 50,000-sample local probe found no returned-plan mismatch.
+
+**Limits:** These sampled synthetic tests do not prove complete timezone coverage, inspect cases the implementation rejects, establish source rights or operate a scheduler; local tzdata determines the rules tested.
+
 ## 2026-11-23 — skip-link viewport failure diagnostics
 
 **Changes:** A failed skip-link visibility assertion's allowlisted CI annotation now identifies affected viewport sides and coarse overflow distances, without copying geometry or arbitrary diagnostic text. Reduced-motion CSS now uses zero transition/animation duration instead of inadvertently introducing a 0.01ms transition even on the previously non-transitioning skip link. Chromium checks the computed timings and rejects a nonzero-duration mutation.

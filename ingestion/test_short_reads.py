@@ -33,6 +33,15 @@ class ShortReader:
         return self.source.read(min(size, self.chunk))
 
 
+class FixedChunkReader(io.BytesIO):
+    def __init__(self, data, chunk_size):
+        super().__init__(data)
+        self.chunk_size = chunk_size
+
+    def read(self, size=-1):
+        return super().read(min(size, self.chunk_size))
+
+
 class ShortReadIntakeTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -132,3 +141,45 @@ class ShortReadIntakeTests(TestCase):
                              source_name='نمونه', source_url='https://example.org/feed', stdout=output)
         self.assertNotIn('DRY RUN', output.getvalue())
         self.assertNotIn('synthetic canary', output.getvalue())
+
+    def test_fragmented_utf8_produces_identical_parser_results(self):
+        for parser, data in [(parse_product_csv, PRODUCT), (parse_csv, PRICE)]:
+            expected = parser(io.BytesIO(data))
+            for chunk in (1, 2, 3, 7, 31, 128, 65536):
+                with self.subTest(parser=parser.__name__, chunk=chunk):
+                    stream = FixedChunkReader(data, chunk)
+                    self.assertEqual(parser(stream), expected)
+                    self.assertFalse(stream.closed)  # caller owns the stream
+
+    def test_fragmented_replay_matches_candidate_and_manifest_membership(self):
+        for service, data, field in [
+            (stage_product_with_receipt, PRODUCT, 'product_candidate_id'),
+            (stage_price_with_receipt, PRICE, 'price_candidate_id'),
+        ]:
+            with self.subTest(service=service.__name__):
+                first, initial = service(io.BytesIO(data), 'منبع ساختگی', 'https://example.org/feed',
+                                         actor=self.actor, rights_attested=True)
+                second, replay = service(FixedChunkReader(data, 3), 'منبع ساختگی', 'https://example.org/feed',
+                                         actor=self.actor, rights_attested=True)
+                self.assertEqual((first['created'], first['duplicates'], second['created'], second['duplicates']),
+                                 (2, 0, 0, 2))
+                fields = ('ordinal', 'source_record_id', 'payload_sha256', field)
+                self.assertEqual(list(initial.items.order_by('ordinal').values_list(*fields)),
+                                 list(replay.items.order_by('ordinal').values_list(*fields)))
+                self.assertTrue(all(initial.items.values_list('was_created', flat=True)))
+                self.assertFalse(any(replay.items.values_list('was_created', flat=True)))
+
+    def test_different_bad_tails_cannot_commit_a_valid_prefix(self):
+        for service, error, data, model in [
+            (stage_product_with_receipt, IntakeError, PRODUCT, ProductCandidate),
+            (stage_price_with_receipt, ImportValidationError, PRICE, PriceCandidate),
+        ]:
+            prefix = b''.join(data.splitlines(keepends=True)[:2])
+            for tail in (b'bad,columns\n', b'"unclosed', b'\xff'):
+                with self.subTest(service=service.__name__, tail=repr(tail)):
+                    with self.assertRaises(error):
+                        service(FixedChunkReader(prefix + tail, 11), 'منبع ساختگی', 'https://example.org/feed',
+                                actor=self.actor, rights_attested=True)
+                    self.assertEqual(model.objects.count(), 0)
+                    self.assertEqual(ImportReceipt.objects.count(), 0)
+                    self.assertEqual(ImportReceiptItem.objects.count(), 0)

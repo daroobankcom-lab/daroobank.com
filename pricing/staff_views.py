@@ -12,6 +12,7 @@ from django.views.decorators.http import require_http_methods, require_POST, req
 
 from sources.services import related_claims
 from ingestion.receipts import related_receipts, stage_price_with_receipt
+from daroobank.forms import StaffAuthenticationForm
 
 from .comparisons import price_revision_context
 from .forms import PriceReviewForm, PriceUploadForm
@@ -32,6 +33,7 @@ DECISION_LABELS = {'accept_suggestion': 'پذیرش اولیه پیشنهاد ت
 
 
 class StaffLoginView(LoginView):
+    authentication_form = StaffAuthenticationForm
     template_name = 'staff/login.html'
     extra_context = {'page_title': 'ورود همکاران | داروبانک', 'description': 'ورود به بخش داخلی داروبانک.', 'noindex': True, 'private_staff': True}
 

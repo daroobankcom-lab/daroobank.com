@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — skip navigation and contrast checks
+
+**Changes:** The staff login form no longer forces focus to username. Real-keyboard browser coverage now checks skip navigation on home, about and login, invalid-login recovery and selected forced-color states, with negative mutation tests and bounded diagnostic annotations. The test waits for the fragment before Tab and keeps axe outside the keyboard sequence. Darkened a home eyebrow and decorative captions after axe reported low contrast; selected opaque-background contrast checks were added.
+
+**Limits:** CI run 45135591434 failed on the old home skip assertion; its full log was unavailable and rerun failed. The cause and width remain unknown, and later passes do not prove the historical failure fixed. Some axe results remain inconclusive; manual contrast, screen-reader, other-browser and device review remain necessary. See ADR 0027.
+
 ## 2026-11-22 — receipt validation reuse and product triage checks
 
 **Changes:** Receipt detail and inspection reuse pure candidate integrity results within a single joined page/batch while checking each manifest row independently; tests cover duplicate and distinct candidates, corruption, page boundaries, operation and query counts, and a duplicate receipt in Chromium. Product review IDs are bounded in the form and direct service; PostgreSQL tests exercise selected simultaneous reviewers and candidate updates.

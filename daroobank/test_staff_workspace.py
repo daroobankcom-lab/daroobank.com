@@ -1,6 +1,7 @@
 """Permission-scoped navigation tests with synthetic accounts and no business data."""
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.contrib.auth.forms import AuthenticationForm
 from django.db import connection
 from django.test import Client, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -111,6 +112,20 @@ class StaffWorkspaceTests(TestCase):
                     if other_route != route:
                         self.assertNotContains(workspace, f'href="{reverse(other_route)}?{other_query}"')
                         self.assertEqual(self.client.get(reverse(other_route) + '?' + other_query).status_code, 403)
+
+    def test_login_does_not_steal_initial_focus_even_after_invalid_post(self):
+        login = reverse('staff_login')
+        for response in (self.client.get(login), self.client.post(login, {
+                'username': 'workspace-staff', 'password': 'incorrect-synthetic-password'})):
+            with self.subTest(method=response.wsgi_request.method):
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn('autofocus', response.context['form'].fields['username'].widget.attrs)
+                self.assertNotContains(response, 'autofocus')
+                self.assertContains(response, 'href="#main"')
+                self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                self.assertContains(response, 'name="csrfmiddlewaretoken"')
+        # The portal customizes only its own form instance, not Django's base form.
+        self.assertTrue(AuthenticationForm().fields['username'].widget.attrs['autofocus'])
 
     def test_default_login_landing_and_safe_next(self):
         # Even an active staff account with no view permission gets the empty workspace.

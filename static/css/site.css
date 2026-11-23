@@ -197,6 +197,7 @@ svg {
   font-weight: 700;
 }
 .eyebrow {
+  color: #116c5d;
   display: inline-flex;
   padding: 6px 12px;
   background: #e3f4eb;
@@ -408,7 +409,7 @@ svg {
 }
 .art-card-top small {
   display: block;
-  color: #9aada5;
+  color: #526e68;
   font-size: 9px;
 }
 .art-badge {
@@ -534,7 +535,7 @@ svg {
 }
 .float-label small {
   display: block;
-  color: #96aaa2;
+  color: #526e68;
   font-size: 9px;
 }
 .label-one {

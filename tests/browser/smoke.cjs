@@ -140,6 +140,33 @@ async function checkStaffScanError(page, label, width) {
   assert.equal(await page.locator('#after').inputValue(), '0');
 }
 
+// Exercise actual keyboard and same-document fragment navigation, not .focus().
+// Audit tools must not run between the keypresses; they may themselves move focus.
+async function checkSkipLink(page, label, selector, timeout = 5000) {
+  await page.keyboard.press('Tab');
+  assert(await page.locator('.skip-link').evaluate(el => el === document.activeElement), `${label}: initial focus`);
+  assert.equal(await page.locator('.skip-link').getAttribute('href'), '#main', `${label}: target`);
+  assert(await page.locator('.skip-link').evaluate(el => {
+    const rect = el.getBoundingClientRect(), css = getComputedStyle(el);
+    return el.matches(':focus-visible') && css.visibility === 'visible' && css.display !== 'none' &&
+      Number(css.opacity) > 0 && rect.width > 0 && rect.height > 0 && rect.top >= 0 &&
+      rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth;
+  }), `${label}: visible focus`);
+  await checkKeyboardFocus(page, '.skip-link', label, '.skip-link');
+  const pathname = new URL(page.url()).pathname;
+  try {
+    // Waiting for the fragment avoids racing a following Tab against navigation.
+    await Promise.all([page.waitForURL(url => url.pathname === pathname && url.hash === '#main', {timeout}),
+                       page.keyboard.press('Enter')]);
+  } catch (error) {
+    if (error.name === 'TimeoutError') assert.fail(`${label}: fragment navigation`);
+    throw error;
+  }
+  await page.keyboard.press('Tab');
+  assert(await page.locator(selector).evaluate(el => el === document.activeElement && !!el.closest('main#main')),
+         `${label}: next focus`);
+}
+
 async function checkKeyboardFocus(page, selector, label, container) {
   const state = await page.locator(selector).evaluate((element, container) => {
     const style = getComputedStyle(element);
@@ -284,13 +311,48 @@ async function run() {
       let response = await page.goto(base + '/');
       assert.equal(response.status(), 200);
       await checkLayout(page, `home ${width}`);
-      await page.keyboard.press('Tab');
-      assert.equal(await page.evaluate(() => document.activeElement.className), 'skip-link');
-      if (width === 390) { await auditAccessibility(page, 'home'); await checkHeroContrast(page); }
-      await page.keyboard.press('Enter');
-      await page.keyboard.press('Tab');
-      assert.equal(await page.evaluate(() => document.activeElement.id), 'drug-search', 'skip link must bypass navigation');
+      await checkSkipLink(page, `skip home ${width}`, '#drug-search');
       await checkKeyboardFocus(page, '#drug-search', `search ${width}`, '.search-form');
+      if (width === 390) {
+        await auditAccessibility(page, 'home'); await checkHeroContrast(page);
+        await checkTextContrast(page, '.eyebrow', '.eyebrow', 'hero eyebrow');
+        await checkTextContrast(page, '.art-card-top small', '.art-card', 'art card caption');
+        await checkTextContrast(page, '.label-one small', '.float-label', 'first art label caption');
+        await checkTextContrast(page, '.label-two small', '.float-label', 'second art label caption');
+        const lowContrast = await page.addStyleTag({content: '.eyebrow { color: #e3f4eb !important; }'});
+        await assert.rejects(checkTextContrast(page, '.eyebrow', '.eyebrow', 'mutated eyebrow'), /contrast below/);
+        await lowContrast.evaluate(el => el.remove());
+        const broken = await context.newPage();
+        await broken.goto(base + '/');
+        await broken.locator('.skip-link').evaluate(el => el.setAttribute('href', '#wrong'));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: target/);
+        await broken.goto(base + '/');
+        await broken.locator('.skip-link').evaluate(el => el.setAttribute('tabindex', '-1'));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: initial focus/);
+        await broken.goto(base + '/');
+        await broken.addStyleTag({content: '.skip-link:focus { transform: translateY(-200%) !important; }'});
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: visible focus/);
+        await broken.goto(base + '/');
+        await broken.locator('#drug-search').evaluate(el => el.setAttribute('tabindex', '-1'));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: next focus/);
+        await broken.goto(base + '/');
+        await broken.locator('.skip-link').evaluate(el => el.addEventListener('click', e => e.preventDefault()));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search', 250), /skip home 390: fragment navigation/);
+        await broken.close();
+        const invalidLogin = await context.newPage();
+        await invalidLogin.goto(base + '/staff/login/');
+        await invalidLogin.locator('#id_username').fill('synthetic-invalid-user');
+        await invalidLogin.locator('#id_password').fill('synthetic-invalid-password');
+        const [invalidLoginResponse] = await Promise.all([
+          invalidLogin.waitForNavigation({waitUntil: 'load'}),
+          invalidLogin.locator('.staff-login-form button[type=submit]').click(),
+        ]);
+        assert.equal(invalidLoginResponse.status(), 200);
+        assert.match(invalidLoginResponse.headers()['cache-control'], /no-store/);
+        assert.equal(await invalidLogin.locator('.staff-alert-error').count(), 1);
+        await checkSkipLink(invalidLogin, 'skip login 390', '#id_username');
+        await invalidLogin.close();
+      }
       await page.locator('#drug-search').fill('Browser Synthetic Product');
       await Promise.all([page.waitForURL('**/search/?q=Browser*'), page.keyboard.press('Enter')]);
       assert.equal(page.url().includes('/search/'), true);
@@ -340,11 +402,13 @@ async function run() {
       response = await page.goto(base + '/about/');
       assert.equal(response.status(), 200);
       await checkLayout(page, `about ${width}`);
+      await checkSkipLink(page, `skip about ${width}`, 'main .breadcrumbs a');
       if (width === 390) await auditAccessibility(page, 'about');
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);
       assert.equal(response.status(), 200);
       assert(page.url().includes('/staff/login/'));
       assert.match(response.headers()['cache-control'], /no-store/);
+      await checkSkipLink(page, `skip login ${width}`, '#id_username');
       if (width === 390) await auditAccessibility(page, 'login');
       await login(page, author);
       assert.equal(new URL(page.url()).pathname, '/staff/');
@@ -680,14 +744,14 @@ async function run() {
     assert(await accessiblePage.evaluate(() => matchMedia('(forced-colors: active)').matches &&
       matchMedia('(prefers-reduced-motion: reduce)').matches));
     assert.equal(await accessiblePage.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior), 'auto');
-    await accessiblePage.keyboard.press('Tab');
-    await accessiblePage.keyboard.press('Enter');
-    await accessiblePage.keyboard.press('Tab');
+    await checkSkipLink(accessiblePage, 'skip forced-home 390', '#drug-search');
     await checkKeyboardFocus(accessiblePage, '#drug-search', 'forced-colors search', '.search-form');
     await accessiblePage.locator('#drug-search').fill('Browser Synthetic Product');
     await Promise.all([accessiblePage.waitForURL('**/search/?q=Browser*'), accessiblePage.keyboard.press('Enter')]);
     assert.equal(await accessiblePage.locator('.result-card').count(), 1);
     await checkLayout(accessiblePage, 'forced-colors search results');
+    await accessiblePage.goto(base + '/staff/login/');
+    await checkSkipLink(accessiblePage, 'skip forced-login 390', '#id_username');
     await login(accessiblePage, author);
     await accessiblePage.goto(base + '/staff/sources/dates/');
     await accessiblePage.getByRole('link', {name: 'فهرست ادعاهای منبع ←'}).focus();

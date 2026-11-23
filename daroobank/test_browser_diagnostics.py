@@ -49,6 +49,8 @@ class BrowserFailureAnnotationTests(SimpleTestCase):
             ('quality submit 1440', 'outline contrast below 3:1 against container', 'outline contrast below 3:1'),
             ('forced-colors acknowledgment', 'missing focus outline', 'outline missing'),
             ('login password', 'missing focus outline', 'outline missing'),
+            ('skip forced-home 390', 'not keyboard-focused', 'not keyboard-focused'),
+            ('skip login 320', 'missing focus outline', 'outline missing'),
         ]:
             with self.subTest(label=label, detail=detail):
                 stderr = f'AssertionError [ERR_ASSERTION]: {label}: {detail}\n    at run (/tmp/smoke.cjs:71:3)\n'
@@ -66,6 +68,20 @@ class BrowserFailureAnnotationTests(SimpleTestCase):
                 self.assertNotIn('Focus check:', annotation)
                 self.assertNotIn('SECRET', annotation)
                 self.assertNotIn('391', annotation)
+
+    def test_skip_summary_accepts_only_fixed_page_width_and_phase(self):
+        for page in ('home', 'about', 'login', 'forced-home', 'forced-login'):
+            for width in (320, 390, 768, 1440):
+                for phase in ('initial focus', 'target', 'visible focus', 'fragment navigation', 'next focus'):
+                    message = f'skip {page} {width}: {phase}'
+                    annotation = browser_failure_annotation(1, f'AssertionError [ERR_ASSERTION]: {message}\n')
+                    self.assertIn(f'Skip link: {page} {width} ({phase}).', annotation)
+        for message in ('skip home 391: target', 'skip home 390: target SECRET',
+                        'skip login 390: next focus::error::SECRET', 'skip SECRET 390: next focus'):
+            annotation = browser_failure_annotation(1, f'AssertionError [ERR_ASSERTION]: {message}\n')
+            self.assertNotIn('Skip link:', annotation)
+            self.assertNotIn('SECRET', annotation)
+            self.assertNotIn('391', annotation)
 
     def test_browser_closed_and_windows_stack(self):
         annotation = browser_failure_annotation(1, 'TargetClosedError\n    at run (C:\\work\\smoke.cjs:12:9)\n')

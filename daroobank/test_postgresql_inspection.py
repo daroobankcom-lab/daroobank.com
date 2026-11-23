@@ -8,7 +8,7 @@ from django.db import DatabaseError, connection, transaction
 from django.test import TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from .postgresql_inspection import (expected_check_constraints, expected_foreign_keys, expected_tables,
+from .postgresql_inspection import (expected_check_constraints, expected_columns, expected_foreign_keys, expected_tables,
                                      expected_unique_keys, inspect_schema)
 
 
@@ -27,9 +27,11 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertGreater(report['expected_unique_keys'], 0)
         self.assertEqual(report['expected_check_constraints'], len(expected_check_constraints()))
         self.assertGreater(report['expected_check_constraints'], 0)
+        self.assertEqual(report['expected_columns'], len(expected_columns()))
+        self.assertGreater(report['expected_columns'], 0)
         for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
                     'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys',
-                    'missing_check_constraints'):
+                    'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches'):
             self.assertEqual(report[key], 0, key)
         self.assertEqual(set(connection.introspection.table_names()), before)
         self.assertIn('sources_sourceclaim', expected_tables())
@@ -41,7 +43,8 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             with connection.cursor() as cursor:
                 cursor.execute('SET TRANSACTION READ ONLY')
             with CaptureQueriesContext(connection) as queries:
-                report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
+                report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                                        expected_check_constraints(), expected_columns())
             self.assertEqual(len(queries), 1)
             self.assertEqual(report['status'], 'no_selected_issues')
 
@@ -245,6 +248,44 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
             self.assertEqual(report['missing_check_constraints'], 1)
             self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_missing_managed_column_is_reported_without_names(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP COLUMN evidence_note')
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['missing_columns'], 1)
+            self.assertEqual(report['status'], 'attention')
+            self.assertNotIn('evidence_note', output.getvalue())
+            transaction.set_rollback(True)
+
+    def test_changed_column_nullability_is_reported_in_both_directions(self):
+        for sql in ('ALTER TABLE sources_sourceclaim ALTER COLUMN owner DROP NOT NULL',
+                    'ALTER TABLE sources_sourceclaim ALTER COLUMN starts_on SET NOT NULL'):
+            with self.subTest(sql=sql), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(sql)
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report['missing_columns'], 0)
+                self.assertEqual(report['column_nullability_mismatches'], 1)
+                self.assertEqual(report['status'], 'attention')
+                transaction.set_rollback(True)
+
+    def test_existing_column_with_wrong_type_is_not_detected(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN owner TYPE text')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                                    expected_check_constraints(), expected_columns())
+            self.assertEqual(report['missing_columns'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
             transaction.set_rollback(True)
 
     def test_out_of_scope_catalog_issues_are_not_reported(self):

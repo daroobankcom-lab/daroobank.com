@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — PostgreSQL managed-column clues
+
+**Changes:** The development catalog inspection counts missing managed-model columns and differences in PostgreSQL nullability versus current model metadata. Synthetic rolled-back DDL tests cover a missing column and changes in both nullability directions.
+
+**Limits:** It does not compare column types or defaults; a type change with the same name and nullability passes. It does not establish schema equivalence or production safety; see ADR 0075.
+
 ## 2026-11-23 — PostgreSQL named-check clues
 
 **Changes:** Catalog inspection now reports missing explicitly named model check constraints and wrong constraint types; unvalidated checks remain separately flagged. Synthetic rolled-back PostgreSQL DDL exercises each case.

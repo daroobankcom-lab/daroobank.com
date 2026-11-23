@@ -66,7 +66,20 @@ def expected_check_constraints():
     return sorted(result)
 
 
-def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constraints=()):
+def expected_columns():
+    """Concrete local fields for managed model and auto-created through tables."""
+    result = set()
+    for model in apps.get_models(include_auto_created=True):
+        meta = model._meta
+        if not meta.managed or meta.proxy or meta.swapped:
+            continue
+        for field in meta.local_fields:
+            if field.column:
+                result.add((meta.db_table, field.column, not field.null))
+    return sorted(result)
+
+
+def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constraints=(), columns=()):
     """Return aggregate clues from one PostgreSQL statement, never catalog names or data.
 
     Resolution follows the active search path. This is not a comparison to the
@@ -101,6 +114,9 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             ), expected_checks AS (
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, constraint_name
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, constraint_name text)
+            ), expected_columns AS (
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name, not_null
+                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, column_name text, not_null boolean)
             )
             SELECT
                 (SELECT COUNT(*) FROM names),
@@ -136,20 +152,32 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                 (SELECT COUNT(*) FROM expected_checks),
                 (SELECT COUNT(*) FROM expected_checks e WHERE NOT EXISTS (
                     SELECT 1 FROM pg_catalog.pg_constraint c
-                    WHERE c.conrelid = e.table_oid AND c.conname = e.constraint_name AND c.contype = 'c'))
+                    WHERE c.conrelid = e.table_oid AND c.conname = e.constraint_name AND c.contype = 'c')),
+                (SELECT COUNT(*) FROM expected_columns),
+                (SELECT COUNT(*) FROM expected_columns e WHERE NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_attribute a
+                    JOIN tables t ON t.oid = a.attrelid
+                    WHERE a.attrelid = e.table_oid AND a.attname = e.column_name AND a.attnum > 0 AND NOT a.attisdropped)),
+                (SELECT COUNT(*) FROM expected_columns e JOIN pg_catalog.pg_attribute a
+                    ON a.attrelid = e.table_oid AND a.attname = e.column_name AND a.attnum > 0 AND NOT a.attisdropped
+                    JOIN tables t ON t.oid = a.attrelid WHERE a.attnotnull <> e.not_null)
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
                           for table, columns, primary in unique_keys]),
-              json.dumps([{'table_name': table, 'constraint_name': name} for table, name in check_constraints])])
+              json.dumps([{'table_name': table, 'constraint_name': name} for table, name in check_constraints]),
+              json.dumps([{'table_name': table, 'column_name': name, 'not_null': not_null}
+                          for table, name, not_null in columns])])
         values = cursor.fetchone()
     keys = ('expected_tables', 'unresolved_tables', 'non_table_relations', 'unvalidated_constraints',
             'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',
             'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'expected_unique_keys', 'missing_unique_keys',
-            'expected_check_constraints', 'missing_check_constraints')
+            'expected_check_constraints', 'missing_check_constraints', 'expected_columns', 'missing_columns',
+            'column_nullability_mismatches')
     result = dict(zip(keys, values))
     result['status'] = ('attention' if any(result[key] for key in (
         'unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes',
         'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
-        'nondefault_action_foreign_keys', 'missing_unique_keys', 'missing_check_constraints')) else 'no_selected_issues')
+        'nondefault_action_foreign_keys', 'missing_unique_keys', 'missing_check_constraints', 'missing_columns',
+        'column_nullability_mismatches')) else 'no_selected_issues')
     return result

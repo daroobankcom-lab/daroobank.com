@@ -83,6 +83,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0074: PostgreSQL named check-constraint clues](0074-postgresql-check-constraint-names.md) — development-only implementation, 23 November 2026.
 
+- [0075: PostgreSQL managed-column clues](0075-postgresql-column-clues.md) — development-only implementation, 23 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

@@ -119,6 +119,30 @@ class SearchPaginationTests(TestCase):
                 self.assertNotContains(html, '<script>', status_code=400)
                 self.assertEqual(html['Cache-Control'], 'no-store')
 
+    def test_invalid_cursor_recovery_preserves_query_without_echoing_cursor(self):
+        product = self.make_product('محصول ساختگی', manufacturer='شرکت & نمونه')
+        query = 'شرکت & نمونه'
+        for bad in ('cursor-canary-827\x00<script>', 'cursor-canary-827-💊', 'x' * (MAX_CURSOR_LENGTH + 1)):
+            for name in ('search', 'search_api'):
+                for method in (self.client.get, self.client.head):
+                    with self.subTest(cursor=ascii(bad[:30]), endpoint=name, method=method.__name__):
+                        with self.assertNumQueries(0):
+                            response = method(reverse(name), {'q': query, 'cursor': bad})
+                        self.assertEqual(response.status_code, 400)
+                        self.assertEqual(response['Cache-Control'], 'no-store')
+                        self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+                        self.assertEqual(response['X-Robots-Tag'], 'noindex, follow')
+                        self.assertNotIn(b'cursor-canary-827', response.content)
+                        if method == self.client.get and name == 'search_api':
+                            self.assertEqual(response.json()['error']['code'], 'invalid_cursor')
+                        if method == self.client.get and name == 'search':
+                            self.assertContains(response, 'value="شرکت &amp; نمونه"', status_code=400)
+                            self.assertNotContains(response, '&lt;script&gt;', status_code=400)
+                            self.assertNotContains(response, 'name="cursor"', status_code=400)
+        recovered = self.client.get(reverse('search'), {'q': query})
+        self.assertEqual(recovered.status_code, 200)
+        self.assertEqual([result.pk for result in recovered.context['results']], [product.pk])
+
     def test_expired_deleted_or_changed_anchor_requests_restart(self):
         for i in range(31):
             self.make_product(f'محصول {i:02}')

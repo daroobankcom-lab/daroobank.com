@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — public-search cursor recovery coverage
+
+**Changes:** Added server and synthetic Chromium regression tests for the existing invalid-cursor recovery: valid query retained, invalid cursor not echoed or resubmitted, and restart by Enter. Tests cover selected malformed Unicode, NUL and overlong cursors, GET/HEAD and privacy headers, plus layout at four widths and axe at 390. No search behavior or medical data changed.
+
+**Limits:** The checks are not exhaustive input, accessibility, privacy or security reviews; access logs can still contain search URLs, and pagination is not a snapshot. Axe's inconclusive contrast results require manual review.
+
 ## 2026-11-22 — invalid public-search query handling
 
 **Changes:** A NUL in a public search previously caused a PostgreSQL text error. Search now rejects NUL or surrogate code points in the retained query prefix before a database query, returning HTTP 400 with a blank recovery form or an `invalid_query` API error; the invalid input is not echoed. Existing 120-character truncation and other search normalization remain unchanged. Added PostgreSQL, API contract and synthetic browser regression tests.

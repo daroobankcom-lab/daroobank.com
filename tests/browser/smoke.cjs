@@ -236,6 +236,23 @@ async function run() {
       await page.locator('#drug-search').fill('Browser Synthetic Product');
       await Promise.all([page.waitForURL('**/search/?q=Browser*'), page.locator('#drug-search').press('Enter')]);
       assert.equal(await page.locator('.result-card').count(), 1);
+      const invalidCursorParams = new URLSearchParams({q: 'Browser Synthetic Product', cursor: 'cursor-canary-827<script>'});
+      response = await page.goto(base + '/search/?' + invalidCursorParams);
+      assert.equal(response.status(), 400);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.equal(response.headers()['referrer-policy'], 'no-referrer');
+      assert.match(await page.locator('h1').innerText(), /ادامه جست‌وجو در دسترس نیست/);
+      assert.equal(await page.locator('#drug-search').inputValue(), 'Browser Synthetic Product');
+      assert(!(await page.locator('body').innerText()).includes('cursor-canary-827'));
+      assert.equal(await page.locator('input[name=cursor]').count(), 0);
+      await checkLayout(page, `invalid cursor ${width}`);
+      if (width === 390) await auditAccessibility(page, 'invalid search cursor');
+      await Promise.all([
+        page.waitForURL(url => url.pathname === '/search/' && url.searchParams.get('q') === 'Browser Synthetic Product' && !url.searchParams.has('cursor')),
+        page.locator('#drug-search').press('Enter'),
+      ]);
+      assert.equal(new URL(page.url()).searchParams.has('cursor'), false);
+      assert.equal(await page.locator('.result-card').count(), 1);
       response = await page.goto(base + '/prices/');
       assert.equal(response.status(), 200);
       await checkLayout(page, `prices ${width}`);

@@ -608,7 +608,9 @@ async function run() {
       await page.goto(base + '/staff/clinical/');
       await page.getByRole('link', {name: 'بازرسی فنی محدود پیش‌نویس‌ها ←'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/clinical/inspection/');
-      assert.match(await page.locator('main .staff-alert').innerText(), /وجود حساب نویسنده بررسی نمی‌شود/);
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود فعلی حساب نویسنده همین نسخه/);
+      assert.match(await page.locator('main .staff-alert').innerText(), /حساب نویسنده والد، تاریخچه کامل و بازبینی‌ها بررسی نمی‌شوند/);
+      assert.equal(await page.locator('#category option[value="author_missing"]').count(), 1);
       await checkScanIdSyntax(page, `clinical scan ${width}`);
       await submitLocalizedScan(page, '۰۰۰۰');
       await checkStaffScanError(page, 'clinical scan', width);

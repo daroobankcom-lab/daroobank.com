@@ -79,9 +79,9 @@ class ClinicalInspectionTests(TestCase):
         with CaptureQueriesContext(connection) as captured:
             report = inspect_drafts()
         self.assertEqual(report['rows'], [{'id': draft.pk, 'status': 'evidence_over_limit'}])
-        self.assertEqual(len(captured), 2)
-        self.assertIn('ROW_NUMBER()', captured[1]['sql'].upper())
-        self.assertIn('<= 11', captured[1]['sql'])
+        self.assertEqual(len(captured), 3)  # drafts, authors, bounded assertions
+        self.assertIn('ROW_NUMBER()', captured[2]['sql'].upper())
+        self.assertIn('<= 11', captured[2]['sql'])
 
     def test_paging_filter_and_bounded_queries(self):
         drafts = [self.draft() for _ in range(51)]
@@ -91,7 +91,7 @@ class ClinicalInspectionTests(TestCase):
         self.assertEqual(first['scanned'], 50)
         self.assertEqual(first['rows'], [])
         self.assertEqual(first['next_after'], drafts[49].pk)
-        self.assertEqual(len(queries), 2)  # batch plus one bounded per-draft window query
+        self.assertEqual(len(queries), 3)  # batch, authors, bounded per-draft window query
         self.assertIn('LIMIT 51', queries[0]['sql'].upper())
         next_page = inspect_drafts(after=first['next_after'], category='draft_invalid')
         self.assertEqual(next_page['rows'], [{'id': drafts[50].pk, 'status': 'draft_invalid'}])
@@ -109,11 +109,11 @@ class ClinicalInspectionTests(TestCase):
         with CaptureQueriesContext(connection) as captured:
             report = inspect_drafts()
         self.assertEqual(report['scanned'], 50)
-        self.assertEqual(len(captured), 3)  # batch + assertions + distinct recorders
+        self.assertEqual(len(captured), 4)  # batch + authors + assertions + distinct recorders
         self.assertTrue(all(query['sql'].lstrip().upper().startswith('SELECT') for query in captured))
-        self.assertIn('ROW_NUMBER()', captured[1]['sql'].upper())
-        self.assertIn('PARTITION BY', captured[1]['sql'].upper())
-        self.assertIn('<= 11', captured[1]['sql'])
+        self.assertIn('ROW_NUMBER()', captured[2]['sql'].upper())
+        self.assertIn('PARTITION BY', captured[2]['sql'].upper())
+        self.assertIn('<= 11', captured[2]['sql'])
         self.assertTrue(all(row['status'] == 'available' for row in report['rows']))
 
     def test_batch_matches_individual_statuses_and_missing_recorders(self):
@@ -190,8 +190,8 @@ class ClinicalInspectionTests(TestCase):
         self.assertEqual([len(d._inspection_references) for d in loaded], [11, 11])
         with CaptureQueriesContext(connection) as captured:
             report = inspect_drafts()
-        self.assertEqual(len(captured), 2)
-        sql = captured[1]['sql']
+        self.assertEqual(len(captured), 3)
+        sql = captured[2]['sql']
         self.assertNotIn(f', {drafts[50].pk}', sql)  # lookahead does not enter the evidence query
         self.assertEqual(report['rows'][0]['status'], 'evidence_over_limit')
         self.assertEqual(report['rows'][49]['status'], 'evidence_over_limit')

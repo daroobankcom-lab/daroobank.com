@@ -1,6 +1,6 @@
 # ADR 0017: batched supplementary-reference inspection
 
-Status: development-only implementation, 22 November 2026; changes the query strategy in [ADR 0016](0016-clinical-technical-inspection.md), not its diagnostic semantics or limits.
+Status: development-only implementation, 22 November 2026; changes the query strategy in [ADR 0016](0016-clinical-technical-inspection.md). Later [ADR 0056](0056-clinical-inspection-author-presence.md) adds author-presence semantics and one SELECT.
 
 ## Decision
 

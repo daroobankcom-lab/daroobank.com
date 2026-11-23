@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — clinical inspection author-presence clue
+
+**Changes:** The bounded clinical scan now reports a separate current-author-missing status before checking supplementary references. A page-local account lookup adds at most one SELECT, and the private page offers a filter and explains the limited check. Synthetic tests cover precedence, account absence, pagination, privacy and the unexamined parent author.
+
+**Limits:** Account existence is not activity, identity or qualification; reads are separate and non-snapshot, and parent authors and reviews remain unchecked. This is not clinical approval; see ADR 0056.
+
 ## 2026-11-23 — selected CSV staging conflict handling
 
 **Changes:** Product/price staging and their receipt transactions translate selected PostgreSQL concurrency failures after rollback. Uploads return a private 409 and ask for the file to be selected again; the price CLI reports a command error. Synthetic tests cover actual advisory-lock timeouts and simulated candidate/manifest rollback.

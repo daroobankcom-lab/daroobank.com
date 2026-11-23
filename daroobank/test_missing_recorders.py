@@ -126,15 +126,15 @@ class MissingRecorderTests(TestCase):
         finally:
             ClinicalDraft.objects.filter(pk=self.draft.pk).update(author_id=self.author.pk)
 
-    def test_payload_diagnostics_do_not_check_creator_accounts(self):
+    def test_source_dates_ignore_creator_but_clinical_scan_reports_missing_author(self):
         try:
             SourceClaim.objects.filter(pk=self.claim.pk).update(recorded_by_id=self.missing)
             ClinicalDraft.objects.filter(pk=self.draft.pk).update(author_id=self.missing)
             self.assertEqual(inspect_dates()['rows'], [{'id': self.claim.pk, 'status': 'unknown'}])
-            self.assertEqual(inspect_drafts()['rows'], [{'id': self.draft.pk, 'status': 'available'}])
+            self.assertEqual(inspect_drafts()['rows'], [{'id': self.draft.pk, 'status': 'author_missing'}])
             self.client.force_login(self.viewer)
             self.assertContains(self.client.get(reverse('staff_source_date_inspection')), 'وجود حساب ثبت‌کننده بررسی نمی‌شود')
-            self.assertContains(self.client.get(reverse('staff_clinical_inspection')), 'وجود حساب نویسنده بررسی نمی‌شود')
+            self.assertContains(self.client.get(reverse('staff_clinical_inspection')), 'حساب نویسنده در دسترس نیست')
         finally:
             SourceClaim.objects.filter(pk=self.claim.pk).update(recorded_by_id=self.author.pk)
             ClinicalDraft.objects.filter(pk=self.draft.pk).update(author_id=self.author.pk)

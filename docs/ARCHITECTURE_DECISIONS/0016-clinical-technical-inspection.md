@@ -1,6 +1,6 @@
 # ADR 0016: bounded technical inspection of synthetic clinical drafts
 
-Status: development-only implementation, 22 November 2026; query strategy superseded by [ADR 0017](0017-batched-clinical-inspection.md). Builds on [ADR 0005](0005-clinical-draft-triage.md) and [ADR 0006](0006-clinical-evidence-assertions.md).
+Status: development-only implementation, 22 November 2026; query strategy superseded by [ADR 0017](0017-batched-clinical-inspection.md), and author-presence semantics extended by [ADR 0056](0056-clinical-inspection-author-presence.md). Builds on [ADR 0005](0005-clinical-draft-triage.md) and [ADR 0006](0006-clinical-evidence-assertions.md).
 
 ## Decision
 

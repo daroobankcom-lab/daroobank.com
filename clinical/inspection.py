@@ -1,11 +1,13 @@
 """Bounded technical clues for synthetic drafts, not evidence verification."""
+from daroobank.account_checks import current_accounts
+
 from .evidence import MAX_INSPECTION_DRAFTS, inspection_evidence_statuses
 from .models import ClinicalDraft
 from .services import valid_draft
 
 BATCH_SIZE = MAX_INSPECTION_DRAFTS
 MAX_PK = 9_223_372_036_854_775_807
-CATEGORIES = ('available', 'draft_invalid', 'evidence_invalid', 'evidence_over_limit')
+CATEGORIES = ('available', 'draft_invalid', 'author_missing', 'evidence_invalid', 'evidence_over_limit')
 
 
 class InvalidInspection(ValueError):
@@ -20,11 +22,18 @@ def inspect_drafts(*, after=0, category=''):
     drafts = list(ClinicalDraft.objects.select_related('parent').filter(pk__gt=after).order_by('pk')[:BATCH_SIZE + 1])
     batch = drafts[:BATCH_SIZE]
     valid = [draft for draft in batch if valid_draft(draft)]
-    statuses = inspection_evidence_statuses(valid)
+    # Existence is a separate current observation, not identity or qualification.
+    # Invalid drafts take precedence; no related rows are scanned for them.
+    authors = current_accounts([draft.author_id for draft in valid], using=drafts[0]._state.db) if valid else {}
+    valid_ids = {draft.pk for draft in valid}
+    with_author = [draft for draft in valid if draft.author_id in authors]
+    statuses = inspection_evidence_statuses(with_author) if with_author else {}
     rows = []
     for draft in batch:
-        if draft.pk not in statuses:
+        if draft.pk not in valid_ids:
             status = 'draft_invalid'
+        elif draft.author_id not in authors:
+            status = 'author_missing'
         else:
             evidence = statuses[draft.pk]
             status = {'available': 'available', 'invalid': 'evidence_invalid', 'over_limit': 'evidence_over_limit'}[evidence]

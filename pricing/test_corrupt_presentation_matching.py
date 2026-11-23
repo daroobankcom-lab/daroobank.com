@@ -1,5 +1,7 @@
 """Synthetic matching with invalid candidate presentation text."""
 import io
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -8,7 +10,7 @@ from django.urls import reverse
 
 from catalog.models import ProductPresentation
 from ingestion.receipts import stage_price_with_receipt
-from .importer import stage_csv, suggest_product
+from .importer import _load_irc_index, stage_csv, suggest_product
 from .models import PriceCandidate, PriceCandidateReview
 from .reviews import ReviewConflict, product_fingerprint, record_preliminary_review
 from .test_workflow import csv_bytes
@@ -61,6 +63,25 @@ class CorruptPresentationMatchingTests(TestCase):
         # A different identity on the same IRC does not poison this matching key.
         ProductPresentation.objects.filter(pk=duplicate.pk).update(strength='10 mg')
         self.assertEqual(suggest_product(self.row)[1].pk, self.product.pk)
+
+    def test_invalid_first_match_stays_ambiguous_after_later_valid_match(self):
+        ProductPresentation.objects.filter(pk=self.product.pk).update(name_fa='invalid\x1bname')
+        ProductPresentation.objects.create(**self.product_data)
+        self.assertEqual(suggest_product(self.row), ('ambiguous', None))
+
+    def test_non_string_identity_makes_group_ambiguous_without_guessing(self):
+        # PostgreSQL text columns normally return strings; simulate a malformed
+        # materialized value to exercise the defensive, group-wide fallback.
+        bad = SimpleNamespace(irc='001', manufacturer=None, strength='5 mg',
+                              dosage_form='قرص', package_description='10 عدد', name_fa='نام ساختگی')
+        with patch('pricing.importer.ProductPresentation.objects.filter') as query:
+            query.return_value.order_by.return_value.__getitem__.return_value = [bad]
+            self.assertIsNone(_load_irc_index('001'))
+
+    def test_stale_irc_projection_is_still_skipped_not_repaired(self):
+        ProductPresentation.objects.filter(pk=self.product.pk).update(irc='other')
+        self.assertEqual(suggest_product(self.row), ('unmatched', None))
+        self.assertEqual(ProductPresentation.objects.get(pk=self.product.pk).irc_normalized, '001')
 
     def test_persian_joiner_and_unpublished_rows_remain_allowed(self):
         ProductPresentation.objects.filter(pk=self.product.pk).update(manufacturer='سازنده\u200cفرضی')

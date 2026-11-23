@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — public display control-character guard
+
+**Changes:** Shared public presentation eligibility now rejects non-string display fields and Unicode control/surrogate characters, including in optional fields and source metadata. Synthetic bypass tests cover HTML and JSON search/detail; Persian zero-width non-joiners remain valid.
+
+**Limits:** This does not repair records or establish identity, source authenticity, Unicode spoofing protection, clinical validity or production readiness. See ADR 0045.
+
 ## 2026-11-23 — slashless privacy boundaries
 
 **Changes:** Known slashless search and product routes receive the public privacy headers even on Django's append-slash redirect; the staff root without a slash receives staff privacy headers and is blocked when the development portal is disabled. Exact path boundaries and redirect queries are tested.

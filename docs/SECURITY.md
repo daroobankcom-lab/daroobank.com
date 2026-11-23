@@ -47,7 +47,7 @@ Price upload requires view and add permissions, explicit source-rights attestati
 
 ## Presentation read surface
 
-HTML and JSON details share search's eligibility checks and reject unpublished, undated, incomplete or invalid-source records, including HTTPS URLs with embedded userinfo. Read-side checks cannot establish source legitimacy, rights or content accuracy and do not repair stale search indexes caused by bulk writes. Source URLs, including query parameters, are public; operators must not store secrets or personal information there. Detail pages are deliberately noindex/no-store, not a security boundary for published data. No third-party assessment or production release is implied.
+HTML and JSON details share search's eligibility checks and reject unpublished, undated, incomplete or invalid-source records, including HTTPS URLs with embedded userinfo. Read-side checks reject selected control/surrogate characters in public display fields but do not constitute complete Unicode spoofing protection; see [ADR 0045](ARCHITECTURE_DECISIONS/0045-public-display-control-characters.md). Read-side checks cannot establish source legitimacy, rights or content accuracy and do not repair stale search indexes caused by bulk writes. Source URLs, including query parameters, are public; operators must not store secrets or personal information there. Detail pages are deliberately noindex/no-store, not a security boundary for published data. No third-party assessment or production release is implied.
 
 ## Search cursors
 

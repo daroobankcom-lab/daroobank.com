@@ -1,4 +1,5 @@
 """Bounded public catalog reads; flags and source checks are not approval."""
+import unicodedata
 from urllib.parse import urlsplit
 
 from django.core import signing
@@ -8,7 +9,7 @@ from django.db.models import Q
 from django.http import Http404
 from django.utils.crypto import constant_time_compare, salted_hmac
 
-from .models import ProductPresentation
+from .models import PRESENTATION_SEARCH_FIELDS, ProductPresentation
 from .normalization import normalize_search
 
 MAX_QUERY_LENGTH = 120
@@ -66,8 +67,17 @@ def public_candidates():
 
 
 def is_public_presentation(product):
-    """Fail closed on malformed source metadata, even after bypassed model validation."""
-    if not product.published or not product.verified_at or not product.source_name.strip():
+    """Reject selected malformed display data, even after bypassed validation."""
+    if not product.published or not product.verified_at:
+        return False
+    # Do not emit control characters from corrupted direct writes in HTML or
+    # JSON. Unicode format characters (including Persian ZWNJ) are intentionally
+    # not prohibited by this limited check; it is not a spoofing defense.
+    for field in (*PRESENTATION_SEARCH_FIELDS, 'source_name', 'source_url'):
+        value = getattr(product, field)
+        if not isinstance(value, str) or any(unicodedata.category(ch) in ('Cc', 'Cs') for ch in value):
+            return False
+    if not product.source_name.strip():
         return False
     if not product.source_url or product.source_url != product.source_url.strip():
         return False

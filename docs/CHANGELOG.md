@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — identity package formulation lock
+
+**Changes:** Package review and correction now re-read and lock the product's formulation after the package/product locks. Missing formulations conflict. Synthetic tests cover selected contention in both directions, cached rows, missing FKs, outer transactions and still-unlocked component/ingredient changes; interface text describes the limits.
+
+**Limits:** Ingredient/component rows and account identities remain outside this explicit lock, the reads are not a full snapshot, and a same-transaction bypass can add components. More locks can wait or deadlock; no retries or production/clinical guarantee. See ADR 0039.
+
 ## 2026-11-22 — identity package immediate-product lock
 
 **Changes:** Package review and correction lock the package then re-read and lock its immediate product before evaluating the graph. Missing products conflict, and direct non-string review decisions now conflict rather than raising an unhashable-input type error. Synthetic PostgreSQL tests exercise both lock directions, cached reads, outer transactions, missing products, validation and an unlocked formulation mutation; Chromium checks the new scope notice.

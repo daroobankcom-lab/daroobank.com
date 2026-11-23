@@ -1,6 +1,6 @@
 # ADR 0038: immediate product row lock for identity package review and correction
 
-Status: development-only, 22 November 2026. Narrows the package graph concurrency limitations in ADRs [0012](0012-synthetic-identity-drafts.md), [0013](0013-synthetic-package-revisions.md) and [0037](0037-identity-graph-creator-presence.md).
+Status: development-only, 22 November 2026. The formulation-row limitation was subsequently narrowed by [ADR 0039](0039-identity-package-formulation-lock.md). Narrows the package graph concurrency limitations in ADRs [0012](0012-synthetic-identity-drafts.md), [0013](0013-synthetic-package-revisions.md) and [0037](0037-identity-graph-creator-presence.md).
 
 ## Problem and decision
 

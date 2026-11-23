@@ -288,6 +288,18 @@ def _lock_package_product(package):
     return product
 
 
+def _lock_product_formulation(product):
+    """Re-read and lock the formulation after locking the immediate product."""
+    using = product._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Identity formulation locking requires an atomic writer transaction.')
+    formulation = FormulationDraft.objects.using(using).select_for_update().filter(pk=product.formulation_id).first()
+    if formulation is None:
+        raise IdentityConflict('فرمولاسیون زنجیره در دسترس نیست.')
+    product.formulation = formulation  # Discard any stale joined or cached formulation.
+    return formulation
+
+
 def _revision_payload(parent_id, child_id, recorded_by_id, change_reason, parent_graph_sha256, child_graph_sha256):
     return {'parent_id': parent_id, 'child_id': child_id, 'recorded_by_id': recorded_by_id,
             'change_reason': change_reason, 'parent_graph_sha256': parent_graph_sha256,
@@ -305,7 +317,8 @@ def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash
     with transaction.atomic():
         parent = IdentityPackageDraft.objects.select_for_update().filter(pk=parent_id).first()
         if parent is None: raise IdentityConflict('بسته پیشین در دسترس نیست.')
-        _lock_package_product(parent)
+        product = _lock_package_product(parent)
+        _lock_product_formulation(product)
         parent_graph = safe_snapshot(parent, package_snapshot)
         if not parent_graph or digest(parent_graph) != expected_graph_hash:
             raise IdentityConflict('بسته پیشین یا وابستگی آن تغییر کرده یا ناسازگار است.')
@@ -454,7 +467,8 @@ def review_package(*, actor, package_id, decision, reason, expected_review, expe
     with transaction.atomic():
         package = IdentityPackageDraft.objects.select_for_update().filter(pk=package_id).first()
         if not package: raise IdentityConflict('بسته در دسترس نیست.')
-        _lock_package_product(package)
+        product = _lock_package_product(package)
+        _lock_product_formulation(product)
         graph = safe_snapshot(package, package_snapshot)
         if not graph or digest(graph) != expected_graph_hash: raise IdentityConflict('اطلاعات زنجیره تغییر کرده یا ناسازگار است.')
         if actor.pk in graph_authors(graph): raise PermissionDenied

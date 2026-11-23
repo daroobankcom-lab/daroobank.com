@@ -12,7 +12,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from .identity import (IdentityConflict, digest, package_snapshot, review_package, revise_package)
-from .models import (FormulationDraft, IdentityPackageDraft, IdentityPackageReview,
+from .models import (IngredientDraft, IdentityPackageDraft, IdentityPackageReview,
                      IdentityPackageRevision, IdentityProductDraft)
 from .test_identity import ALL, PACKAGE, build, user
 
@@ -137,7 +137,7 @@ class IdentityProductLockTests(TransactionTestCase):
             self.assertIsNotNone(future.result(timeout=10))
         self.assertEqual(IdentityProductDraft.objects.filter(pk=self.product.pk).update(name='تغییر ساختگی'), 1)
 
-    def test_review_does_not_lock_formulation_after_snapshot(self):
+    def test_review_does_not_lock_ingredient_after_snapshot(self):
         from .identity import _require_creator_accounts
         ready, resume = Event(), Event()
         def pause(ids, *, using):
@@ -153,14 +153,14 @@ class IdentityProductLockTests(TransactionTestCase):
                         with transaction.atomic():
                             with connection.cursor() as cursor:
                                 cursor.execute("SET LOCAL lock_timeout = '2s'")
-                            self.assertEqual(FormulationDraft.objects.filter(pk=self.form.pk).update(name='فرمول تغییر یافته ساختگی'), 1)
+                            self.assertEqual(IngredientDraft.objects.filter(pk=self.ingredient.pk).update(name_fa='ماده تغییر یافته ساختگی'), 1)
                     finally:
                         resume.set()
                     event = future.result(timeout=10)
-            self.assertEqual(event.graph_snapshot['product']['formulation']['name'], self.form.name)
-            self.assertEqual(FormulationDraft.objects.get(pk=self.form.pk).name, 'فرمول تغییر یافته ساختگی')
+            self.assertEqual(event.graph_snapshot['product']['formulation']['ingredients'][0]['name_fa'], self.ingredient.name_fa)
+            self.assertEqual(IngredientDraft.objects.get(pk=self.ingredient.pk).name_fa, 'ماده تغییر یافته ساختگی')
         finally:
-            FormulationDraft.objects.filter(pk=self.form.pk).update(name=self.form.name)
+            IngredientDraft.objects.filter(pk=self.ingredient.pk).update(name_fa=self.ingredient.name_fa)
 
     def test_product_update_waits_for_each_writer_and_can_proceed_after_commit(self):
         from .identity import _require_creator_accounts

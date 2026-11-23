@@ -9,6 +9,7 @@ import unicodedata
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
+from daroobank.account_checks import current_account_exists
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from ingestion.locks import lock_source_stage
 
@@ -136,7 +137,8 @@ def review_product(*, candidate_id, actor, decision, reason, expected_review, ex
         candidate = ProductCandidate.objects.select_for_update().get(pk=candidate_id)
         if candidate.staged_by_id == actor.pk:
             raise PermissionDenied
-        if not candidate.staged_by_id or not candidate.source_rights_attested:
+        if (not candidate.staged_by_id or not candidate.source_rights_attested
+                or not current_account_exists(candidate.staged_by_id, using=candidate._state.db)):
             raise ReviewConflict('اظهار مجوز یا ثبت‌کننده در دسترس نیست.')
         try:
             valid_source(candidate.source_name, candidate.source_url)

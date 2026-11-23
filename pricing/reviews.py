@@ -9,6 +9,7 @@ import re
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
+from daroobank.account_checks import current_account_exists
 from daroobank.validation import valid_review_reason
 
 from .importer import FIELDS, LIMITS, ImportValidationError, parse_csv, suggest_product, validate_source
@@ -84,6 +85,8 @@ def record_preliminary_review(*, candidate_id, actor, decision, reason, expected
             raise ReviewConflict('این رکورد فاقد ثبت‌کننده یا اظهار مجوز است و در این مسیر قابل بررسی نیست.')
         if candidate.staged_by_id == actor.pk:
             raise PermissionDenied
+        if not current_account_exists(candidate.staged_by_id, using=candidate._state.db):
+            raise ReviewConflict('حساب ثبت‌کننده در دسترس نیست؛ بررسی متوقف شد.')
         ensure_candidate_integrity(candidate)
         latest = candidate.reviews.order_by('-pk').first()
         if (latest.pk if latest else 0) != expected_review:

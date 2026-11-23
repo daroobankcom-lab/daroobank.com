@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — missing product and price stager accounts
+
+**Changes:** Product and price review now conflict if the current stager account is missing. Orphaned products remain visible, both details show a notice and disable review, and nullable price stagers retain their separate handling. Comparisons and receipt inspections explicitly describe their narrower checks. Synthetic tests exercise service and HTTP paths, all decisions, nullable and inactive accounts, diagnostic boundaries and selected bypass/race limitations.
+
+**Limits:** Existence is not attribution or authorization and accounts are not locked; receipt actors and other relationships are outside this change. See ADR 0034.
+
 ## 2026-11-22 — missing source and clinical creator accounts
 
 **Changes:** Source review and the three clinical writers now reject a missing current creator account. Source and clinical queues/details retain orphaned rows; clinical text/actions are hidden and source review is disabled. The clinical queue uses a page-local author lookup. Synthetic tests cover deferred-FK corruption, direct/HTTP writes, ordinary and inactive accounts, ancestor and diagnostic boundaries, nonparticipating mutations and selected account-update races; scan pages explain that they do not check creator accounts.

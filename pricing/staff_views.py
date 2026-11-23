@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.account_checks import current_accounts
 from daroobank.review_history import recent_reviews_with_reviewers
 from sources.services import related_claims
 from ingestion.receipts import related_receipts, stage_price_with_receipt
@@ -74,7 +75,8 @@ def _current_suggestion(candidate):
 def _detail_response(request, candidate, *, form=None, status=200):
     current_status, current_product = _current_suggestion(candidate)
     reviews = recent_reviews_with_reviewers(candidate.reviews.all())
-    can_review = bool(request.user.has_perm('pricing.review_pricecandidate') and candidate.staged_by_id
+    candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
+    can_review = bool(request.user.has_perm('pricing.review_pricecandidate') and candidate.display_stager is not None
                       and candidate.source_rights_attested and candidate.staged_by_id != request.user.pk)
     if form is None and can_review:
         form = PriceReviewForm(initial={
@@ -151,7 +153,7 @@ def price_upload(request):
 def _get_candidate(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Candidate not found')
-    return get_object_or_404(PriceCandidate.objects.select_related('suggested_product', 'staged_by'), pk=pk)
+    return get_object_or_404(PriceCandidate.objects.select_related('suggested_product'), pk=pk)
 
 
 @login_required(login_url='staff_login')

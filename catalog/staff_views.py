@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import Http404, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.account_checks import current_accounts
 from daroobank.review_history import recent_reviews_with_reviewers
 from sources.services import related_claims
 from ingestion.receipts import related_receipts, stage_product_with_receipt
@@ -28,7 +29,7 @@ def candidates(request):
     if status not in ('', 'pending', 'further_review', 'reject', 'defer'):
         return HttpResponseBadRequest('Invalid filter.')
     latest = ProductCandidateReview.objects.filter(candidate_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
-    rows = ProductCandidate.objects.select_related('staged_by').annotate(latest_decision=Subquery(latest)).order_by('-pk')
+    rows = ProductCandidate.objects.annotate(latest_decision=Subquery(latest)).order_by('-pk')
     if status == 'pending':
         rows = rows.filter(latest_decision__isnull=True)
     elif status:
@@ -72,13 +73,14 @@ def upload(request):
 def get_candidate(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Candidate not found')
-    return get_object_or_404(ProductCandidate.objects.select_related('staged_by'), pk=pk)
+    return get_object_or_404(ProductCandidate.objects.all(), pk=pk)
 
 
 def detail_response(request, candidate, *, form=None, status=200):
     reviews = recent_reviews_with_reviewers(candidate.reviews.all())
+    candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
     can_review = (request.user.has_perm(REVIEW) and candidate.staged_by_id != request.user.pk
-                  and bool(candidate.staged_by_id) and candidate.source_rights_attested)
+                  and candidate.display_stager is not None and candidate.source_rights_attested)
     if form is None and can_review:
         form = ProductReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0,
                                           'expected_hash': candidate.payload_sha256})

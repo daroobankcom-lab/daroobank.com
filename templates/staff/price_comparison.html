@@ -1,5 +1,6 @@
 <section class="staff-panel staff-review-block" aria-labelledby="price-comparison-heading">
   <h2 id="price-comparison-heading">نسخه‌های دیگر همین رکورد منبع</h2>
+  <p class="staff-panel-note">وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود.</p>
   <p class="staff-panel-note">فقط رکوردهای مرحله‌ای با همان نشانی منبع و شناسه منبع نمایش داده می‌شوند. ترتیب بر اساس شناسه ثبت داخلی است، نه تاریخ اثر. نشانی منبع در اثر انگشت محتوای قیمت قرار ندارد؛ این مقایسه تأیید هویت، قیمت، حقوق منبع یا روند بازار نیست و در رویداد بازبینی ذخیره یا دوباره کنترل نمی‌شود.</p>
   {% if not comparison.available %}<div class="staff-alert">اطلاعات این رکورد ناسازگار است؛ مقایسه متوقف شد.</div>{% else %}
   {% for item in comparison.revisions %}<article class="staff-review-item">

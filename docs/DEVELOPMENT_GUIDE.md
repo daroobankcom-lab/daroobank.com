@@ -206,7 +206,7 @@ Source, product, price and clinical details load at most 25 recent review rows w
 
 A source claim with a missing current recorder remains visible with a notice, but cannot be reviewed through the service. A clinical draft with a missing current author remains reachable but its content and write actions are hidden; review, supplementary-reference addition and revision from that draft conflict. The clinical queue checks current author IDs once per page; the source queue and date summary do not check recorder accounts. Source date and clinical technical inspections do not check creator existence, so a technically available scan result is not proof that a writer can act on it.
 
-These checks only ask whether the account exists at one read. They do not lock it, check activity or qualifications, establish historical identity, or check authors of earlier versions. Nonparticipating mutations can still create inconsistent state after the check. No records are repaired, and other domains are not covered. Synthetic data only; see [ADR 0033](ARCHITECTURE_DECISIONS/0033-missing-source-and-clinical-creators.md).
+These checks only ask whether the account exists at one read. They do not lock it, check activity or qualifications, establish historical identity, or check authors of earlier versions. Nonparticipating mutations can still create inconsistent state after the check. No records are repaired; product and price review are subsequently covered separately by ADR 0034, while other domains are not covered. Synthetic data only; see [ADR 0033](ARCHITECTURE_DECISIONS/0033-missing-source-and-clinical-creators.md).
 
 ## Development-only CSV intake receipts
 
@@ -359,3 +359,7 @@ From an identity record detail, authorized staff can open the read-only parent-p
 ### Optional isolated browser smoke test
 
 For synthetic-only Chromium checks, use Linux x86-64, Node 22.17+ and follow the dedicated database setup and command in [Testing strategy](TESTING_STRATEGY.md#opt-in-synthetic-chromium-smoke-test). Never run against production or real data.
+
+### Missing product and price stager accounts
+
+Product and price review reject a missing current stager, and detail pages keep candidates visible while disabling review. A null price stager has its own notice. The queues, candidate comparisons and receipt manifest checks do not assess candidate-stager existence; a technically consistent result is not proof of review eligibility. Account lookups do not lock or verify past identity, activity, qualifications or rights. Reads can become stale and receipt actors and other relationships are not covered. Synthetic data only; see [ADR 0034](ARCHITECTURE_DECISIONS/0034-missing-product-and-price-stagers.md).

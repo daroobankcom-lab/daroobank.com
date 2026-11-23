@@ -191,3 +191,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Missing source and clinical creator accounts
 
 `daroobank/test_missing_recorders.py` uses synthetic deferred-FK corruption to check missing-account behavior in source review and three clinical writers, private HTTP responses, queue visibility, ordinary/inactive accounts, page-local lookup, unverified diagnostic and ancestry boundaries, selected later bypasses and an unlocked-account race. Browser smoke checks the scan warnings and normal flows at four widths. These tests do not certify attribution, concurrency or production use; see [ADR 0033](ARCHITECTURE_DECISIONS/0033-missing-source-and-clinical-creators.md).
+
+## Missing product and price stager accounts
+
+`daroobank/test_missing_stagers.py` exercises synthetic deferred-FK corruption for both review services and HTTP pages, all decisions, nullable price stagers, normal/inactive accounts, permission and self-review checks, comparison and receipt inspection boundaries, same-transaction bypasses, and selected unlocked-account update races. Browser smoke checks comparison and inspection warnings at four widths. The race does not establish concurrent deletion behavior or every schedule. See [ADR 0034](ARCHITECTURE_DECISIONS/0034-missing-product-and-price-stagers.md).

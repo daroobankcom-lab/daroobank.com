@@ -469,6 +469,7 @@ async function run() {
       await page.goto(base + `/staff/products/${ids.candidate}/`);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی فرآورده ساختگی برای مرورگر'}).innerText(), /بازبینی فرآورده ساختگی برای مرورگر/);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      assert.match(await page.locator('#comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
       await checkLayout(page, `product review history ${width}`);
       if (width === 390) await auditAccessibility(page, 'product review history');
       await page.goto(base + '/staff/sources/');
@@ -692,6 +693,7 @@ async function run() {
       assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'بازبینی قیمت ساختگی برای مرورگر'}).innerText(), /بازبینی قیمت ساختگی برای مرورگر/);
       assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
       assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await pricePage.locator('#price-comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
       await checkLayout(pricePage, `price detail ${width}`);
       if (width === 390) await auditAccessibility(pricePage, 'price detail');
       const receiptInspection = `/staff/operations/imports/${ids.receipt}/inspection/`;
@@ -701,6 +703,7 @@ async function run() {
       assert.match(await pricePage.locator('main').innerText(), /ردیف داده 1/);
       assert.match(await pricePage.locator('main').innerText(), /ردیف داده 2/);
       assert(!(await pricePage.locator('main').innerText()).includes('browser-detail'));
+      assert.match(await pricePage.locator('main').innerText(), /وجود حساب ثبت‌کننده نامزدها در این بررسی سنجیده نمی‌شود/);
       await checkLayout(pricePage, `receipt inspection ${width}`);
       if (width === 390) await auditAccessibility(pricePage, 'receipt inspection');
       await pricePage.locator('#after').fill('۵۰۰۱');

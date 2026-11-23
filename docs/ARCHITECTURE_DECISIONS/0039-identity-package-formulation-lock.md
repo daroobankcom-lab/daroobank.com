@@ -1,6 +1,6 @@
 # ADR 0039: formulation row lock for identity package review and correction
 
-Status: development-only, 22 November 2026. Narrows the formulation-row limitation of [ADR 0038](0038-identity-package-product-lock.md) for the two package writers below, not the entire identity graph.
+Status: development-only, 22 November 2026. Existing component/ingredient row locking was subsequently extended in [ADR 0040](0040-identity-components-and-ingredients-locks.md). Narrows the formulation-row limitation of [ADR 0038](0038-identity-package-product-lock.md) for the two package writers below, not the entire identity graph.
 
 ## Problem and decision
 

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — bounded identity component and ingredient locks
+
+**Changes:** Selected identity dependent-creation, package-review and correction services now lock and re-read bounded existing component and ingredient rows after their applicable parent locks. Missing rows fail closed. Synthetic tests exercise both update directions across six writer paths, shared ingredients, outer transactions, bounded SQL and a deferred concurrent insertion.
+
+**Limits:** New rows and later or same-transaction bypass mutations can still stale observations; locks are not gap locks or evidence of authenticity. Waiting/deadlocks remain possible without retry. See ADR 0040.
+
 ## 2026-11-22 — identity package formulation lock
 
 **Changes:** Package review and correction now re-read and lock the product's formulation after the package/product locks. Missing formulations conflict. Synthetic tests cover selected contention in both directions, cached rows, missing FKs, outer transactions and still-unlocked component/ingredient changes; interface text describes the limits.

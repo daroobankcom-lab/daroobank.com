@@ -210,8 +210,12 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 
 ## Identity package/product concurrency and input validation
 
-`catalog/test_identity_product_lock.py` covers synthetic PostgreSQL product update contention in both directions for review and correction, stale cached product replacement, missing product, outer-transaction lock lifetime, direct and HTTP input validation, and (after ADR 0039) an unlocked ingredient mutation after a review snapshot. These selected schedules do not prove graph-wide isolation, deletion safety or absence of deadlocks. See [ADR 0038](ARCHITECTURE_DECISIONS/0038-identity-package-product-lock.md).
+`catalog/test_identity_product_lock.py` covers synthetic PostgreSQL product update contention in both directions for review and correction, stale cached product replacement, missing product, outer-transaction lock lifetime, direct and HTTP input validation, and (after ADR 0040) a same-transaction ingredient bypass after a review snapshot. These selected schedules do not prove graph-wide isolation, deletion safety or absence of deadlocks. See [ADR 0038](ARCHITECTURE_DECISIONS/0038-identity-package-product-lock.md).
 
 ## Identity package/formulation concurrency
 
-`catalog/test_identity_formulation_lock.py` exercises selected PostgreSQL formulation update contention in both directions for package review and correction, cache replacement, missing formulation, outer-transaction lock lifetime, an unlocked component update and a same-transaction component-insertion bypass. It does not establish concurrent insert/deletion behavior, full graph isolation or absence of deadlocks. See [ADR 0039](ARCHITECTURE_DECISIONS/0039-identity-package-formulation-lock.md).
+`catalog/test_identity_formulation_lock.py` exercises selected PostgreSQL formulation update contention in both directions for package review and correction, cache replacement, missing formulation, outer-transaction lock lifetime, a same-transaction component-update bypass and a same-transaction component-insertion bypass. It does not establish concurrent insert/deletion behavior, full graph isolation or absence of deadlocks. See [ADR 0039](ARCHITECTURE_DECISIONS/0039-identity-package-formulation-lock.md).
+
+## Identity component and ingredient concurrency
+
+`catalog/test_identity_component_locks.py` checks synthetic PostgreSQL locks, updates before and during selected writer operations, missing rows, outer transactions, bounded SQL, shared ingredients and a deferred concurrent insertion that commits after review. Other tests demonstrate same-transaction bypasses. These are selected schedules and do not prove deadlock freedom, concurrent deletion safety or full isolation; see [ADR 0040](ARCHITECTURE_DECISIONS/0040-identity-components-and-ingredients-locks.md).

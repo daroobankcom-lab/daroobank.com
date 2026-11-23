@@ -137,26 +137,15 @@ class IdentityProductLockTests(TransactionTestCase):
             self.assertIsNotNone(future.result(timeout=10))
         self.assertEqual(IdentityProductDraft.objects.filter(pk=self.product.pk).update(name='تغییر ساختگی'), 1)
 
-    def test_review_does_not_lock_ingredient_after_snapshot(self):
+    def test_same_transaction_bypass_can_change_ingredient_after_snapshot(self):
         from .identity import _require_creator_accounts
-        ready, resume = Event(), Event()
-        def pause(ids, *, using):
+        def mutate(ids, *, using):
             _require_creator_accounts(ids, using=using)
-            ready.set()
-            if not resume.wait(8): raise TimeoutError('Writer did not resume')
+            IngredientDraft.objects.filter(pk=self.ingredient.pk).update(name_fa='ماده تغییر یافته ساختگی')
         try:
-            with patch('catalog.identity._require_creator_accounts', side_effect=pause):
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(self.run_writer, 'review')
-                    try:
-                        self.assertTrue(ready.wait(8))
-                        with transaction.atomic():
-                            with connection.cursor() as cursor:
-                                cursor.execute("SET LOCAL lock_timeout = '2s'")
-                            self.assertEqual(IngredientDraft.objects.filter(pk=self.ingredient.pk).update(name_fa='ماده تغییر یافته ساختگی'), 1)
-                    finally:
-                        resume.set()
-                    event = future.result(timeout=10)
+            with patch('catalog.identity._require_creator_accounts', side_effect=mutate):
+                event = review_package(actor=self.actor, package_id=self.package.pk, decision='defer', reason=REASON,
+                    expected_review=0, expected_graph_hash=self.graph_hash)
             self.assertEqual(event.graph_snapshot['product']['formulation']['ingredients'][0]['name_fa'], self.ingredient.name_fa)
             self.assertEqual(IngredientDraft.objects.get(pk=self.ingredient.pk).name_fa, 'ماده تغییر یافته ساختگی')
         finally:

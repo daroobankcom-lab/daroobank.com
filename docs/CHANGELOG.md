@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — price review concurrency limits and validation
+
+**Changes:** Added separate-connection PostgreSQL tests for simultaneous reviewers, locked product updates, concurrent duplicate inserts and a staging cache observed across a committed product change. The price detail page now warns that acceptance does not guarantee uniqueness. Review service and form reject out-of-range IDs, with direct service calls rejecting boolean IDs and malformed decisions.
+
+**Limits:** One test deliberately reproduces a duplicate inserted between the fresh locked match and acceptance; it is not fixed by this change. Row locks do not protect absent matches or future writes. Tests cover selected interleavings with synthetic data, not production behavior or an approval, provenance or audit system. See ADR 0022.
+
 ## 2026-11-22 — bounded per-IRC price matching reuse
 
 **Changes:** Added a per-invocation, eight-group LRU of bounded candidate indexes, so distinct price identities sharing an IRC can reuse one catalog query. Fresh matching and accept-review use the same matching logic, retaining conservative over-limit ambiguity and row locking. Tests compare the previous algorithm, exercise stale indexes, duplicate matches, the 100/101 boundary, eviction and changing catalog data; Chromium covers a synthetic multi-identity preview.

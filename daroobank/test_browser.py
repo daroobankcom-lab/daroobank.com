@@ -1,4 +1,5 @@
 """Opt-in, isolated PostgreSQL + real Chromium smoke tests with synthetic data."""
+import io
 import os
 import subprocess
 from datetime import timedelta
@@ -18,7 +19,9 @@ from catalog.test_identity import ALL, INGREDIENT, build, user
 from clinical.services import create_draft, draft_data, review_draft
 from clinical.evidence import evidence_state
 from ingestion.models import ImportReceipt
+from pricing.importer import stage_csv
 from pricing.models import PriceCandidate
+from pricing.test_workflow import csv_bytes
 from sources.services import record_claim
 from tools.browser_test_diagnostics import browser_failure_annotation
 
@@ -77,12 +80,18 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
             manufacturer='سازنده فرضی', strength='1 mg', dosage_form='قرص', package_description='10 عدد',
             irc='001', source_name='منبع ساختگی', source_url='https://example.org/public',
             verified_at=timezone.now(), published=True)
+        stage_csv(io.BytesIO(csv_bytes([dict(source_record_id='browser-detail', irc='001', manufacturer='سازنده فرضی',
+            strength='1 mg', dosage_form='قرص', package_description='10 عدد', amount='100', currency='RIAL',
+            category='retail', unit='package', effective_date='', source_published_date='')])),
+            'منبع ساختگی مرورگر', 'https://example.org/browser-detail', staged_by=price_stager,
+            commit=True, rights_attested=True)
+        browser_price = PriceCandidate.objects.get(source_record_id='browser-detail')
         # The subprocess receives only what it needs; database credentials are not propagated.
         env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG', 'TMPDIR') if key in os.environ}
         env.update(BROWSER_BASE_URL=self.live_server_url, BROWSER_AUTHOR='browser-author', BROWSER_REVIEWER='browser-reviewer',
                    BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
-                   BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk))
+                   BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk))
         try:
             result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
                                     capture_output=True, text=True, timeout=180)
@@ -96,7 +105,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IngredientDraft.objects.filter(name_fa='csrf-canary').count(), 0)
         self.assertEqual(IngredientDraft.objects.filter(name_fa='ماده تازه ساختگی مرورگر').count(), 1)
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
-        self.assertEqual(PriceCandidate.objects.count(), 0)
+        self.assertEqual(PriceCandidate.objects.count(), 1)
         self.assertEqual(ImportReceipt.objects.count(), 0)
         self.assertIn('browser checks passed', result.stdout)
         print(result.stdout.strip())

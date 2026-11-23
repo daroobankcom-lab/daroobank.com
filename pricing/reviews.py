@@ -15,6 +15,9 @@ from .importer import FIELDS, LIMITS, ImportValidationError, parse_csv, suggest_
 from .models import PriceCandidate, PriceCandidateReview
 
 
+MAX_PK = 9_223_372_036_854_775_807
+
+
 class ReviewConflict(ValueError):
     pass
 
@@ -65,10 +68,12 @@ def ensure_candidate_integrity(candidate):
 
 
 def record_preliminary_review(*, candidate_id, actor, decision, reason, expected_review, expected_product, expected_product_hash):
-    if not actor.is_authenticated or not actor.is_active or not actor.is_staff or not actor.has_perm('pricing.view_pricecandidate') or not actor.has_perm('pricing.review_pricecandidate'):
+    if not actor or not actor.is_authenticated or not actor.is_active or not actor.is_staff or not actor.has_perm('pricing.view_pricecandidate') or not actor.has_perm('pricing.review_pricecandidate'):
         raise PermissionDenied
-    if (decision not in dict(PriceCandidateReview.DECISIONS) or not valid_review_reason(reason) or not isinstance(expected_review, int)
-            or expected_review < 0 or not isinstance(expected_product, int) or expected_product < 0
+    if (type(candidate_id) is not int or not 1 <= candidate_id <= MAX_PK
+            or not isinstance(decision, str) or decision not in dict(PriceCandidateReview.DECISIONS)
+            or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
+            or type(expected_product) is not int or not 0 <= expected_product <= MAX_PK
             or not isinstance(expected_product_hash, str)):
         raise ReviewConflict('نتیجه یا توضیح بررسی معتبر نیست.')
     if decision == PriceCandidateReview.ACCEPT_SUGGESTION and not re.fullmatch(r'[0-9a-f]{64}', expected_product_hash):
@@ -86,6 +91,7 @@ def record_preliminary_review(*, candidate_id, actor, decision, reason, expected
         product = None
         fingerprint = ''
         if decision == PriceCandidateReview.ACCEPT_SUGGESTION:
+            # Locks existing rows, not absent matching rows or future inserts.
             current, product = suggest_product(candidate.source_fields, lock=True)
             if current != PriceCandidate.MATCH_SUGGESTED or product is None:
                 raise ReviewConflict('پیشنهاد تطبیق فعلی یکتا نیست؛ پذیرش اولیه ممکن نیست.')

@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF', 'PRICE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -543,6 +543,12 @@ async function run() {
       assert.match(await pricePage.locator('.staff-upload-result').innerText(), /بدون تطبیق: 1/);
       assert.match(await pricePage.locator('.staff-upload-result').innerText(), /هیچ قیمتی منتشر نشده/);
       await checkLayout(pricePage, `price preview result ${width}`);
+      response = await pricePage.goto(base + `/staff/prices/${ids.price}/`);
+      assert.equal(response.status(), 200);
+      assert.equal(await pricePage.getByText('این بازبینی تضمین یکتایی نیست', {exact: false}).count(), 1);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      await checkLayout(pricePage, `price detail ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'price detail');
       await priceContext.close();
     }
     const authorContext = await contextFor(browser, 390, errors);

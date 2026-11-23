@@ -32,3 +32,5 @@ Record future decisions with context, alternatives, consequences and status. Sup
 - [0020: request-local price staging match observations](0020-price-staging-match-cache.md) — development-only implementation, 22 November 2026.
 
 - [0021: bounded request-local price IRC candidate indexes](0021-price-irc-candidate-cache.md) — development-only implementation, 22 November 2026.
+
+- [0022: price-review concurrency boundaries](0022-price-review-concurrency.md) — development-only tests and input hardening, 22 November 2026.

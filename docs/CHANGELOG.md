@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — identity graph creator presence in writes
+
+**Changes:** Selected identity dependent creation, package review and correction writers now reject a missing current creator anywhere in their validated current graph, with one bounded bulk account read per check. Tests cover every graph position with temporary deferred-FK account deletion, independent permissions and self-review, conflicts and rollback, inactive accounts, maximum graph size and selected unlocked/bypass behavior.
+
+**Limits:** Structural views and lineage remain account-independent; creator accounts are not locked or authenticated, correction ancestor/link actors are not checked, and graph reads are not a snapshot. See ADR 0037.
+
 ## 2026-11-22 — identity package review account display
 
 **Changes:** Identity package history and correction pages retain reviews but suppress details when the current reviewer account is missing, using a bounded page-local lookup. Cursor positions and real latest-review versions remain intact; missing prior accounts alone do not block later review or correction. Identity workspace and lineage pages explicitly warn that graph/link creator existence is not checked. Synthetic tests cover permissions, missing reviewers, pagination, fresh/stale submissions, account/graph boundaries and stale reads.

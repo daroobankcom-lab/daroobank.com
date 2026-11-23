@@ -203,3 +203,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Identity package missing reviewers
 
 `catalog/test_identity_missing_reviewers.py` uses synthetic deferred-FK corruption to test missing review accounts, hidden details, cursors, stale/fresh HTTP submissions, later corrections, permissions and privacy, inactive accounts, bounded lookup, selected stale reads and a graph-creator check boundary. Chromium covers normal identity views and warnings at four widths. These cases do not authenticate reviewers or demonstrate all concurrent schedules; see [ADR 0036](ARCHITECTURE_DECISIONS/0036-identity-reviewer-lookup.md).
+
+## Identity graph creator presence
+
+`catalog/test_identity_missing_creators.py` temporarily deletes synthetic creator accounts under deferred FKs in rollback savepoints to exercise selected graph writers and every creator position, no-write conflicts, permissions, self-review, selected HTTP paths, inactive accounts and bounded lookup. Same-transaction bypass and a separate account-deactivation test show selected limits, not concurrent deletion or every schedule. See [ADR 0037](ARCHITECTURE_DECISIONS/0037-identity-graph-creator-presence.md).

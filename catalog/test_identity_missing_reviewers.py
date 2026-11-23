@@ -9,7 +9,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from daroobank.account_checks import current_accounts
-from .identity import (create_formulation, digest, ingredient_payload, ingredient_snapshot, package_snapshot,
+from .identity import (IdentityConflict, create_formulation, digest, ingredient_payload, ingredient_snapshot, package_snapshot,
                        review_is_consistent, review_package, revise_package)
 from .models import IdentityPackageDraft, IdentityPackageReview, IngredientDraft
 from .test_identity import ALL, FORM, PACKAGE, build, user
@@ -148,7 +148,7 @@ class MissingIdentityReviewerTests(TestCase):
             self.client.get(self.detail())
         self.assertEqual(len(lookup.call_args.args[0]), 25)
 
-    def test_creator_account_presence_is_not_graph_validation_or_write_validation(self):
+    def test_creator_account_presence_is_not_structural_graph_validation(self):
         original_hash = self.ingredient.payload_sha256
         try:
             self.ingredient.recorded_by_id = MISSING
@@ -156,11 +156,11 @@ class MissingIdentityReviewerTests(TestCase):
             IngredientDraft.objects.filter(pk=self.ingredient.pk).update(recorded_by_id=MISSING, payload_sha256=fake_hash)
             self.ingredient.refresh_from_db()
             self.assertEqual(ingredient_snapshot(self.ingredient)['recorded_by_id'], MISSING)
-            new_formulation = create_formulation(actor=self.author, data=FORM, components=[self.part])
-            self.assertEqual(new_formulation.components.first().ingredient_id, self.ingredient.pk)
+            with self.assertRaises(IdentityConflict):
+                create_formulation(actor=self.author, data=FORM, components=[self.part])
             self.client.force_login(self.viewer)
             response = self.client.get(reverse('staff_identity_detail', args=['ingredient', self.ingredient.pk]))
-            self.assertContains(response, 'وجود حساب ثبت‌کنندگان زنجیره و پیوندهای اصلاح در این بررسی کنترل نمی‌شود')
+            self.assertContains(response, 'نمایش و بازرسی پیوندها آن را کنترل نمی‌کنند')
         finally:
             IngredientDraft.objects.filter(pk=self.ingredient.pk).update(recorded_by_id=self.author.pk, payload_sha256=original_hash)
 

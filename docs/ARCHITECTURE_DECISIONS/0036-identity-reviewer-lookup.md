@@ -1,6 +1,6 @@
 # ADR 0036: current identity package reviewer lookup
 
-Status: development-only, 22 November 2026. Extends the recent-review display approach of [ADR 0032](0032-reviewer-lookup-in-intake-history.md) to paginated identity package history and the latest-review display on package correction.
+Status: development-only, 22 November 2026. Graph-writer creator checks were subsequently narrowed by [ADR 0037](0037-identity-graph-creator-presence.md). Extends the recent-review display approach of [ADR 0032](0032-reviewer-lookup-in-intake-history.md) to paginated identity package history and the latest-review display on package correction.
 
 ## Problem and decision
 

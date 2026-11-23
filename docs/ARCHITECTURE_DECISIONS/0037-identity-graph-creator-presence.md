@@ -1,0 +1,17 @@
+# ADR 0037: current creator presence for identity graph writes
+
+Status: development-only, 22 November 2026. Narrows the graph-writer limitation in [ADR 0036](0036-identity-reviewer-lookup.md); it does not change the structural snapshot and lineage classifiers.
+
+## Problem and decision
+
+Identity graph snapshots contain creator IDs in their hashes but only validate their numeric shape. Selected synthetic tests temporarily delete a creator account using direct SQL while PostgreSQL defers the foreign keys. The existing graph remains internally consistent even though the current account is missing, and the prior code permitted dependent writes. This is a corruption/bypass scenario, not an ordinary committed state with intact constraints and protected deletion.
+
+After existing authorization, input checks and structural snapshot validation, dependent formulation creation checks all selected ingredient creators; product creation checks the formulation and its ingredients; package creation checks the product, formulation and ingredients. Ingredient, formulation, product and package correction check all creators in the selected parent graph. Package review checks all creators in the current package graph, retaining the existing self-review denial. A missing current account causes `IdentityConflict` and transaction rollback without the requested write. Each check uses a single same-database bulk account read for distinct IDs in the validated graph (at most five ingredients plus formulation, product and package, i.e. eight IDs); nested creation during correction can perform further checks. Inactive or non-staff creator accounts still exist. The current actor is subject to the pre-existing authorization rules, not a new historical identity check.
+
+Structural snapshot, comparison and lineage classifiers and ordinary page displays do **not** perform creator-presence checks; selected pages explain this distinction. Thus a consistent graph can remain visible while a subsequent writer conflicts. Revision-link actors and creators of earlier correction ancestors are not checked just because they appear in lineage. Prior review-account existence still does not by itself block a review or correction, as described in ADR 0036. No data are repaired.
+
+## Evidence and limitations
+
+Tests use temporary direct account deletion inside a PostgreSQL savepoint, then roll it back before deferred constraints are checked. Two ingredient authors and separate formulation/product/package authors exercise each selected writer and each applicable graph position, all package review decisions, permission/self-review ordering, zero writes on conflict, ordinary/inactive account paths, bounded eight-account lookup, and selected private HTTP conflicts. A test-only same-transaction bypass after lookup demonstrates a stale snapshot. A separate-connection test shows an ingredient creator can be deactivated while package review is paused; it does not demonstrate concurrent deletion or all schedules.
+
+The account rows are not locked. Some graph components or other underlying records are not locked by these checks, and the database reads are not a single snapshot; account deletion, direct or bulk mutation, insertion and ABA may affect outcomes after a read. Presence does not establish past identity, permissions, qualifications, source rights, accuracy or clinical equivalence. This is not a complete concurrency, ancestry, audit or production design and makes no publication claim. Use synthetic data only.

@@ -635,7 +635,7 @@ async function run() {
       if (width === 390) await auditAccessibility(page, 'identity form');
       response = await page.goto(base + `/staff/catalog/identity/package/${ids.package}/`);
       assert.equal(response.status(), 200);
-      assert.match(await page.locator('main').innerText(), /وجود حساب ثبت‌کنندگان زنجیره و پیوندهای اصلاح در این بررسی کنترل نمی‌شود/);
+      assert.match(await page.locator('main').innerText(), /نمایش و بازرسی پیوندها آن را کنترل نمی‌کنند/);
       assert.match(await page.locator('main').innerText(), /وجود فعلی حساب بازبین، هویت تاریخی یا صلاحیت او را اثبات نمی‌کند/);
       await checkLayout(page, `identity package detail ${width}`);
       if (width === 390) await auditAccessibility(page, 'identity package detail');

@@ -60,6 +60,36 @@ function blendOn(color, background) {
   return `rgb(${result.join(', ')})`;
 }
 
+async function checkScanIdSyntax(page, label) {
+  const input = page.locator('#after');
+  assert.equal(await input.getAttribute('type'), 'text');
+  assert.equal(await input.getAttribute('inputmode'), 'numeric');
+  assert.equal(await input.getAttribute('aria-describedby'), 'after-hint');
+  assert.match(await page.locator('#after-hint').innerText(), /فقط ارقام انگلیسی/);
+  for (const [value, expected] of [['0', true], ['0001', true], ['9223372036854775807', true],
+                                    ['9223372036854775808', true], ['', false], ['1e2', false],
+                                    ['١', false], ['12345678901234567890', false]]) {
+    await input.fill(value);
+    assert.equal(await input.inputValue(), value, `${label}: input precision`);
+    assert.equal(await input.evaluate(element => element.validity.valid), expected, `${label}: syntax for ${value}`);
+  }
+  // Native constraint validation stops an exponent from submitting the form.
+  await input.fill('1e2');
+  const blocked = await input.evaluate(element => {
+    let invalid = false, submitted = false;
+    const onInvalid = () => { invalid = true; };
+    const onSubmit = event => { submitted = true; event.preventDefault(); };
+    element.addEventListener('invalid', onInvalid);
+    element.form.addEventListener('submit', onSubmit);
+    element.form.requestSubmit();
+    element.removeEventListener('invalid', onInvalid);
+    element.form.removeEventListener('submit', onSubmit);
+    return {invalid, submitted};
+  });
+  assert.deepEqual(blocked, {invalid: true, submitted: false}, `${label}: invalid ID submitted`);
+  await input.fill('0');
+}
+
 async function checkKeyboardFocus(page, selector, label, container) {
   const state = await page.locator(selector).evaluate((element, container) => {
     const style = getComputedStyle(element);
@@ -300,6 +330,7 @@ async function run() {
       assert.equal(new URL(page.url()).pathname, '/staff/sources/dates/');
       assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
       assert.equal(await page.getByLabel('وضعیت تاریخ در این بخش').count(), 1);
+      await checkScanIdSyntax(page, `source scan ${width}`);
       await page.getByRole('link', {name: 'فهرست ادعاهای منبع ←'}).focus();
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '#after', `scan start ${width}`, '.staff-section');
@@ -340,6 +371,7 @@ async function run() {
       await page.getByRole('link', {name: 'ورود به بازرسی کاتالوگ'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/catalog/quality/');
       assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
+      await checkScanIdSyntax(page, `catalog scan ${width}`);
       await page.getByRole('link', {name: 'صف نامزدهای فرآورده ←'}).focus();
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '#after', `quality start ${width}`, '.staff-section');

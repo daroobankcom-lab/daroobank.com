@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — staff inspection ID entry
+
+**Changes:** Replaced the two starting-ID number controls with required numeric-mode text controls and an ASCII digit syntax constraint, plus visible accessible guidance. This preserves large integer text exactly and prevents empty or exponent-form submissions that the server rejected. Existing server limits, query behavior, permissions and data remain unchanged. Synthetic Chromium checks syntax and invalid submission at four widths; PostgreSQL tests cover the boundaries.
+
+**Limits:** HTML validates syntax, not the exact upper numeric bound; 19-digit values above the maximum still get HTTP 400 from the server. Browser keyboards and native validation messages vary; real-device and screen-reader validation remains necessary. Axe contrast inconclusives still need manual review.
+
 ## 2026-11-22 — focus failure diagnostics
 
 **Changes:** Browser failure annotations can now identify focus checks by an exact, fixed allowlist of control labels, viewport widths and failure reasons. Tests reject unrecognized and injected messages; no arbitrary assertion text is copied. The focus criterion, application CSS and failure behavior are unchanged.

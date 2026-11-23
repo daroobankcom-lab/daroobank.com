@@ -101,12 +101,19 @@ class SourceDateInspectionTests(TestCase):
         self.client.force_login(self.inactive)
         self.assertNotEqual(self.client.get(url).status_code, 200)
         self.client.force_login(self.viewer)
-        for params in [{'after': '-1'}, {'after': 'x'}, {'after': '1' * 20}, {'after': str(MAX_PK + 1)},
+        for params in [{'after': ''}, {'after': '-1'}, {'after': 'x'}, {'after': '1e2'},
+                       {'after': '1' * 20}, {'after': str(MAX_PK + 1)},
                        {'after': '١'}, {'category': 'EXPIRED'}, {'category': '<script>'}]:
             with self.subTest(params=params):
                 response = self.client.get(url, params)
                 self.assertEqual(response.status_code, 400)
                 self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
+        self.assertEqual(self.client.get(url, {'after': MAX_PK}).status_code, 200)
+        self.assertEqual(self.client.get(url, {'after': '0' * 19}).status_code, 200)
+        html = self.client.get(url)
+        self.assertContains(html, 'aria-describedby="after-hint"')
+        self.assertContains(html, 'pattern="[0-9]{1,19}"')
+        self.assertContains(html, '9223372036854775807')
         self.assertEqual(self.client.post(url).status_code, 405)
         self.assertEqual(self.client.head(url).status_code, 200)
         with self.settings(STAFF_PORTAL_ENABLED=False):

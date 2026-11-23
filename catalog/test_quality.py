@@ -88,9 +88,14 @@ class CatalogQualityTests(TestCase):
         for val in [-1, MAX_PK + 1, True, '1', None]:
             with self.subTest(val=val), self.assertRaises(QualityError): inspect_batch(after=val)
         self.client.force_login(self.user)
-        for val in ['-1', '+1', ' 1', '١', '1'*100, str(MAX_PK + 1), 'x']:
+        for val in ['', '-1', '+1', ' 1', '١', '1e2', '1'*100, str(MAX_PK + 1), 'x']:
             self.assertEqual(self.client.get(reverse('staff_catalog_quality'), {'after': val}).status_code, 400)
         self.assertEqual(self.client.get(reverse('staff_catalog_quality'), {'after': MAX_PK}).status_code, 200)
+        self.assertEqual(self.client.get(reverse('staff_catalog_quality'), {'after': '0' * 19}).status_code, 200)
+        html = self.client.get(reverse('staff_catalog_quality'))
+        self.assertContains(html, 'aria-describedby="after-hint"')
+        self.assertContains(html, 'pattern="[0-9]{1,19}"')
+        self.assertContains(html, '9223372036854775807')
 
     def test_next_link_and_duplicates_across_batch_boundary_are_not_claimed(self):
         self.draft.irc = ''

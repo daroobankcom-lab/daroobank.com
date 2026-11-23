@@ -113,6 +113,13 @@ class StaffWorkspaceTests(TestCase):
                         self.assertNotContains(workspace, f'href="{reverse(other_route)}?{other_query}"')
                         self.assertEqual(self.client.get(reverse(other_route) + '?' + other_query).status_code, 403)
 
+    def test_public_and_staff_skip_target_is_programmatically_focusable(self):
+        for name in ('home', 'about', 'staff_login'):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name))
+                self.assertContains(response, '<main id="main" tabindex="-1">')
+                self.assertContains(response, 'class="skip-link" href="#main"')
+
     def test_login_does_not_steal_initial_focus_even_after_invalid_post(self):
         login = reverse('staff_login')
         for response in (self.client.get(login), self.client.post(login, {

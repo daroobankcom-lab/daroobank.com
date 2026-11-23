@@ -76,7 +76,12 @@ class BrowserFailureAnnotationTests(SimpleTestCase):
                     message = f'skip {page} {width}: {phase}'
                     annotation = browser_failure_annotation(1, f'AssertionError [ERR_ASSERTION]: {message}\n')
                     self.assertIn(f'Skip link: {page} {width} ({phase}).', annotation)
-        for message in ('skip home 391: target', 'skip home 390: target SECRET',
+        for phase in ('main focus', 'next focus'):
+            for region in ('none', 'expected', 'skip', 'main', 'body', 'header', 'footer', 'other-main', 'other'):
+                annotation = browser_failure_annotation(1,
+                    f'AssertionError [ERR_ASSERTION]: skip login 1440: {phase} ({region})\n')
+                self.assertIn(f'Skip link: login 1440 ({phase}: {region}).', annotation)
+        for message in ('skip login 1440: next focus (SECRET)', 'skip home 391: target', 'skip home 390: target SECRET',
                         'skip login 390: next focus::error::SECRET', 'skip SECRET 390: next focus'):
             annotation = browser_failure_annotation(1, f'AssertionError [ERR_ASSERTION]: {message}\n')
             self.assertNotIn('Skip link:', annotation)

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — focusable skip target and failure categories
+
+**Changes:** The shared main landmark is focusable by native fragment navigation but not in normal Tab order. Browser checks wait for actual landmark focus before Tab, verify a missing target tabindex fails, and report only a fixed active-element region on selected failures. This follows CI run 45137885675, which failed the login skip next-focus check at 1440 pixels.
+
+**Limits:** The active element in that historical run was not recorded; the failure's cause remains unknown, as does the older home failure's. This change is not a demonstrated root-cause fix or screen-reader and cross-browser certification. See ADR 0027.
+
 ## 2026-11-22 — skip navigation and contrast checks
 
 **Changes:** The staff login form no longer forces focus to username. Real-keyboard browser coverage now checks skip navigation on home, about and login, invalid-login recovery and selected forced-color states, with negative mutation tests and bounded diagnostic annotations. The test waits for the fragment before Tab and keeps axe outside the keyboard sequence. Darkened a home eyebrow and decorative captions after axe reported low contrast; selected opaque-background contrast checks were added.

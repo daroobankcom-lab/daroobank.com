@@ -33,6 +33,12 @@ _SKIP_MESSAGES = {
     for page in ('home', 'about', 'login', 'forced-home', 'forced-login') for width in (320, 390, 768, 1440)
     for phase in ('initial focus', 'target', 'visible focus', 'fragment navigation', 'next focus')
 }
+_SKIP_MESSAGES.update({
+    f'skip {page} {width}: {phase} ({region})': (page, width, f'{phase}: {region}')
+    for page in ('home', 'about', 'login', 'forced-home', 'forced-login') for width in (320, 390, 768, 1440)
+    for phase in ('main focus', 'next focus')
+    for region in ('none', 'expected', 'skip', 'main', 'body', 'header', 'footer', 'other-main', 'other')
+})
 
 
 def _focus_failure(stderr):

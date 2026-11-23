@@ -140,6 +140,22 @@ async function checkStaffScanError(page, label, width) {
   assert.equal(await page.locator('#after').inputValue(), '0');
 }
 
+// Reduce active-element diagnostics to fixed categories; never print page values or URLs.
+async function focusRegion(page, selector) {
+  return page.evaluate(selector => {
+    const active = document.activeElement;
+    if (!active) return 'none';
+    if (active.matches(selector)) return 'expected';
+    if (active.matches('.skip-link')) return 'skip';
+    if (active.matches('main#main')) return 'main';
+    if (active === document.body) return 'body';
+    if (active.closest('header')) return 'header';
+    if (active.closest('footer')) return 'footer';
+    if (active.closest('main#main')) return 'other-main';
+    return 'other';
+  }, selector);
+}
+
 // Exercise actual keyboard and same-document fragment navigation, not .focus().
 // Audit tools must not run between the keypresses; they may themselves move focus.
 async function checkSkipLink(page, label, selector, timeout = 5000) {
@@ -162,9 +178,18 @@ async function checkSkipLink(page, label, selector, timeout = 5000) {
     if (error.name === 'TimeoutError') assert.fail(`${label}: fragment navigation`);
     throw error;
   }
+  try {
+    // Native fragment navigation must actually focus the target, not just update
+    // the address. Do not programmatically focus it on behalf of the user.
+    await page.waitForFunction(() => document.activeElement === document.querySelector('main#main'), null, {timeout});
+  } catch (error) {
+    if (error.name === 'TimeoutError') assert.fail(`${label}: main focus (${await focusRegion(page, selector)})`);
+    throw error;
+  }
   await page.keyboard.press('Tab');
-  assert(await page.locator(selector).evaluate(el => el === document.activeElement && !!el.closest('main#main')),
-         `${label}: next focus`);
+  if (!(await page.locator(selector).evaluate(el => el === document.activeElement && !!el.closest('main#main')))) {
+    assert.fail(`${label}: next focus (${await focusRegion(page, selector)})`);
+  }
 }
 
 async function checkKeyboardFocus(page, selector, label, container) {
@@ -335,6 +360,9 @@ async function run() {
         await broken.goto(base + '/');
         await broken.locator('#drug-search').evaluate(el => el.setAttribute('tabindex', '-1'));
         await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: next focus/);
+        await broken.goto(base + '/');
+        await broken.locator('main#main').evaluate(el => el.removeAttribute('tabindex'));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search', 250), /skip home 390: main focus/);
         await broken.goto(base + '/');
         await broken.locator('.skip-link').evaluate(el => el.addEventListener('click', e => e.preventDefault()));
         await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search', 250), /skip home 390: fragment navigation/);

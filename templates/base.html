@@ -31,7 +31,7 @@
     <a class="header-cta" href="{% url 'search' %}"><span>جست‌وجوی دارو</span><span aria-hidden="true">←</span></a>
   </div>
 </header>
-<main id="main">{% if private_staff and staff_portal_enabled and request.user.is_authenticated and request.user.is_active and request.user.is_staff and request.resolver_match.url_name != 'staff_workspace' %}<div class="container"><a class="staff-detail-link" href="{% url 'staff_workspace' %}">فضای کاری همکاران ←</a></div>{% endif %}{% block content %}{% endblock %}</main>
+<main id="main" tabindex="-1">{% if private_staff and staff_portal_enabled and request.user.is_authenticated and request.user.is_active and request.user.is_staff and request.resolver_match.url_name != 'staff_workspace' %}<div class="container"><a class="staff-detail-link" href="{% url 'staff_workspace' %}">فضای کاری همکاران ←</a></div>{% endif %}{% block content %}{% endblock %}</main>
 <footer class="site-footer">
   <div class="container footer-top">
     <div class="footer-brand"><a class="brand" href="{% url 'home' %}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 4v24M4 16h24"/><path d="M11.2 20.8 20.8 11.2"/></svg></span><span><strong>داروبانک</strong><small>DAROOBANK</small></span></a><p>در مسیر ساخت مرجعی روشن و مسئولانه برای اطلاعات دارویی.</p></div>

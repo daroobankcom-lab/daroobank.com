@@ -21,3 +21,9 @@ Expand the existing CI error annotation's exact allowlist to include skip-naviga
 ## Limits
 
 Only headless Chromium and selected synthetic flows were tested; forced colors and reduced motion are emulations, not physical devices or assistive technologies. Keyboard and visual checks are not comprehensive WCAG conformance or a screen-reader, browser interoperability, production security or clinical assessment. Browser sandbox is disabled in this isolated development test. Failed job logs and historical cause remain unavailable; later passes do not prove those failures fixed. Login deliberately no longer focuses the username automatically; users can navigate to it with the keyboard or pointer.
+
+## Follow-up: explicit fragment target focus
+
+After this decision was first pushed, GitHub run 45137885675 failed the new skip check at **login, 1440 pixels, next focus**, even though local runs passed; its annotation did not record the active element. PostgreSQL and Compose passed. We cannot infer whether this was timing, browser behavior, application behavior or an interaction with the test. The earlier home failure also remains unexplained.
+
+Give the shared `<main>` target `tabindex="-1"` so native fragment navigation can focus the main landmark without adding it to normal Tab order. The synthetic test now waits for actual native focus on main, not just the URL fragment, before pressing Tab. It does not call `focus()` on the target or retry. Removing the target tabindex on a separate synthetic page causes the new target-focus assertion to fail locally. On main/next-focus failure, a fixed allowlist may add only a broad active-element region to the CI annotation, not IDs, contents or other untrusted page data. Selected templates and negative paths are tested. This is a targeted accessibility and diagnostic improvement, not evidence that the historical failures are resolved; manual assistive-technology and cross-browser checks remain necessary.

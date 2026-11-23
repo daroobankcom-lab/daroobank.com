@@ -1,6 +1,6 @@
 # ADR 0031: distinguish clinical draft and reference comparisons in review detail
 
-Status: development-only, 22 November 2026. No review or draft records are rewritten; only synthetic data is appropriate.
+Status: development-only, 22 November 2026. The missing-draft-author limitation below describes the historical state; [ADR 0033](0033-missing-source-and-clinical-creators.md) narrows it. No review or draft records are rewritten; only synthetic data is appropriate.
 
 ## Problem and decision
 

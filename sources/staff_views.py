@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.account_checks import current_accounts
 from daroobank.review_history import recent_reviews_with_reviewers
 from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
@@ -19,7 +20,7 @@ from .services import ADD, FIELDS, REVIEW, VIEW, ClaimError, ReviewConflict, dat
 def get_claim(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Claim not found')
-    return get_object_or_404(SourceClaim.objects.select_related('recorded_by'), pk=pk)
+    return get_object_or_404(SourceClaim.objects.all(), pk=pk)
 
 
 @login_required(login_url='staff_login')
@@ -30,7 +31,7 @@ def claims(request):
     if status not in ('', 'pending', 'further_review', 'reject', 'defer'):
         return HttpResponseBadRequest('Invalid filter.')
     latest = SourceClaimReview.objects.filter(claim_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
-    rows = SourceClaim.objects.select_related('recorded_by').annotate(latest_decision=Subquery(latest)).order_by('-pk')
+    rows = SourceClaim.objects.annotate(latest_decision=Subquery(latest)).order_by('-pk')
     if status == 'pending':
         rows = rows.filter(latest_decision__isnull=True)
     elif status:
@@ -90,8 +91,10 @@ def create(request):
 
 def detail_response(request, claim, *, form=None, status=200):
     reviews = recent_reviews_with_reviewers(claim.reviews.all())
+    claim.display_recorder = current_accounts([claim.recorded_by_id], using=claim._state.db).get(claim.recorded_by_id)
     current_status = date_label(claim)
-    can_review = (request.user.has_perm(REVIEW) and claim.recorded_by_id != request.user.pk and current_status != 'invalid')
+    can_review = (request.user.has_perm(REVIEW) and claim.display_recorder is not None
+                  and claim.recorded_by_id != request.user.pk and current_status != 'invalid')
     if can_review and form is None:
         form = SourceReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0, 'expected_hash': claim.payload_sha256})
     return render(request, 'staff/source_detail.html', {

@@ -1,6 +1,6 @@
 # ADR 0032: bounded reviewer lookup for private triage histories
 
-Status: development-only, 22 November 2026. Extends the missing-reviewer handling introduced for clinical detail in [ADR 0031](0031-clinical-detail-review-comparisons.md) to source-claim, product-candidate and price-candidate detail histories.
+Status: development-only, 22 November 2026. Missing source and clinical creators are subsequently addressed in [ADR 0033](0033-missing-source-and-clinical-creators.md). Extends the missing-reviewer handling introduced for clinical detail in [ADR 0031](0031-clinical-detail-review-comparisons.md) to source-claim, product-candidate and price-candidate detail histories.
 
 ## Problem and decision
 

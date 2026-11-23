@@ -6,6 +6,7 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.account_checks import current_account_exists, current_accounts
 from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
 from daroobank.review_history import recent_reviews_with_reviewers
@@ -22,7 +23,7 @@ from .services import ADD, FIELDS, REVIEW, VIEW, DraftConflict, DraftError, crea
 def get_draft(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Draft not found')
-    return get_object_or_404(ClinicalDraft.objects.select_related('author', 'parent'), pk=pk)
+    return get_object_or_404(ClinicalDraft.objects.select_related('parent'), pk=pk)
 
 
 @login_required(login_url='staff_login')
@@ -33,13 +34,14 @@ def drafts(request):
     if status not in ('', 'pending', 'further_review', 'reject', 'defer') or audience not in ('', 'patient', 'professional'):
         return HttpResponseBadRequest('Invalid filter.')
     latest = ClinicalDraftReview.objects.filter(draft_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
-    rows = ClinicalDraft.objects.select_related('author', 'parent').annotate(latest_decision=Subquery(latest)).order_by('-pk')
+    rows = ClinicalDraft.objects.select_related('parent').annotate(latest_decision=Subquery(latest)).order_by('-pk')
     if status == 'pending': rows = rows.filter(latest_decision__isnull=True)
     elif status: rows = rows.filter(latest_decision=status)
     if audience: rows = rows.filter(audience=audience)
     page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    authors = current_accounts([item.author_id for item in page.object_list], using=rows.db)
     for item in page.object_list:
-        item.is_valid = valid_draft(item)
+        item.is_valid = item.author_id in authors and valid_draft(item)
     return render(request, 'staff/clinical_drafts.html', {
         'page_title': 'پیش‌نویس‌های علمی | داروبانک', 'description': 'صف داخلی گزاره‌های ساختگی.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'audience': audience,
@@ -89,7 +91,7 @@ def create(request):
 def revise(request, pk):
     require_staff(request.user, VIEW, ADD)
     parent = get_draft(pk)
-    if not valid_draft(parent):
+    if not valid_draft(parent) or not current_account_exists(parent.author_id, using=parent._state.db):
         return detail_response(request, parent, status=409)
     initial = {**draft_data(parent), 'expected_parent_hash': parent.payload_sha256}
     form = RevisionForm(request.POST or None, initial=initial)
@@ -111,7 +113,8 @@ def revise(request, pk):
 
 
 def detail_response(request, draft, *, form=None, status=200):
-    valid = valid_draft(draft)
+    draft.display_author = current_accounts([draft.author_id], using=draft._state.db).get(draft.author_id)
+    valid = draft.display_author is not None and valid_draft(draft)
     reviews = recent_reviews_with_reviewers(draft.reviews.all())
     evidence = evidence_state(draft) if valid else {'status': 'invalid'}
     contributor = evidence['status'] == 'available' and any(item.recorded_by_id == request.user.pk for item in evidence['items'])
@@ -232,7 +235,7 @@ def review(request, pk):
 def reference_create(request, pk):
     require_staff(request.user, VIEW, ADD)
     draft = get_draft(pk)
-    if not valid_draft(draft):
+    if not valid_draft(draft) or not current_account_exists(draft.author_id, using=draft._state.db):
         return detail_response(request, draft, status=409)
     state = evidence_state(draft)
     if state['status'] != 'available':

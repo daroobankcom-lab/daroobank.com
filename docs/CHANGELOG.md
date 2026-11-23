@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — missing source and clinical creator accounts
+
+**Changes:** Source review and the three clinical writers now reject a missing current creator account. Source and clinical queues/details retain orphaned rows; clinical text/actions are hidden and source review is disabled. The clinical queue uses a page-local author lookup. Synthetic tests cover deferred-FK corruption, direct/HTTP writes, ordinary and inactive accounts, ancestor and diagnostic boundaries, nonparticipating mutations and selected account-update races; scan pages explain that they do not check creator accounts.
+
+**Limits:** Existence is neither historical identity nor qualification, accounts are not locked, and parent authors or other domains are not covered. Nonparticipating changes can occur after the check. Synthetic only; see ADR 0033.
+
 ## 2026-11-22 — reviewer lookup in intake histories
 
 **Changes:** Source, product and price detail retain recent review rows even if their reviewer account is missing, show an unknown-details notice and keep the real latest review ID in the form. The bounded reviewer lookup is shared with clinical detail. Synthetic tests cover missing latest and older reviewers, stale and fresh submissions, permissions, 25-row/query bounds and non-snapshot lookup; Chromium checks normal histories at four widths.

@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
+from daroobank.account_checks import current_account_exists
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import ClinicalDraft, ClinicalDraftReview
 
@@ -119,6 +120,7 @@ def _valid_draft_for_update(draft):
 
     Call only inside the writer's transaction after locking the draft. A joined
     parent read before obtaining the row lock would be a potentially stale copy.
+    Check only current existence of the subject's author, without locking it.
     """
     if not transaction.get_connection(draft._state.db).in_atomic_block:
         raise TransactionManagementError('Immediate-parent locking requires an atomic writer transaction.')
@@ -130,7 +132,7 @@ def _valid_draft_for_update(draft):
         except ClinicalDraft.DoesNotExist:
             return False
         draft.parent = parent
-    return valid_draft(draft)
+    return valid_draft(draft) and current_account_exists(draft.author_id, using=draft._state.db)
 
 
 def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change_reason=''):

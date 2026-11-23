@@ -483,6 +483,7 @@ async function run() {
       assert.equal(new URL(page.url()).pathname, '/staff/sources/dates/');
       assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
       assert.equal(await page.getByLabel('وضعیت تاریخ در این بخش').count(), 1);
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود حساب ثبت‌کننده بررسی نمی‌شود/);
       await checkScanIdSyntax(page, `source scan ${width}`);
       await submitLocalizedScan(page, '۰۰۰۰');
       await checkStaffScanError(page, 'source scan', width);
@@ -525,6 +526,7 @@ async function run() {
       await page.goto(base + '/staff/clinical/');
       await page.getByRole('link', {name: 'بازرسی فنی محدود پیش‌نویس‌ها ←'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/clinical/inspection/');
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود حساب نویسنده بررسی نمی‌شود/);
       await checkScanIdSyntax(page, `clinical scan ${width}`);
       await submitLocalizedScan(page, '۰۰۰۰');
       await checkStaffScanError(page, 'clinical scan', width);

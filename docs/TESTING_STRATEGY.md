@@ -187,3 +187,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Intake review-history missing accounts
 
 `daroobank/test_recent_review_history.py` uses synthetic deferred-FK corruption to cover missing latest and older reviewers for source, product and price histories, expected IDs, stale and fresh submission outcomes, permissions, 25-row order and query counts. A selected separate-read race shows the lookup can be stale. Chromium covers normal history display at four widths and selected axe checks; broken accounts are covered by HTTP tests, not live browser corruption. These checks do not verify review snapshots or historical actor identity. See [ADR 0032](ARCHITECTURE_DECISIONS/0032-reviewer-lookup-in-intake-history.md).
+
+## Missing source and clinical creator accounts
+
+`daroobank/test_missing_recorders.py` uses synthetic deferred-FK corruption to check missing-account behavior in source review and three clinical writers, private HTTP responses, queue visibility, ordinary/inactive accounts, page-local lookup, unverified diagnostic and ancestry boundaries, selected later bypasses and an unlocked-account race. Browser smoke checks the scan warnings and normal flows at four widths. These tests do not certify attribution, concurrency or production use; see [ADR 0033](ARCHITECTURE_DECISIONS/0033-missing-source-and-clinical-creators.md).

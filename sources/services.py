@@ -11,6 +11,7 @@ from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 
 from catalog.normalization import normalize_search
+from daroobank.account_checks import current_account_exists
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import SourceClaim, SourceClaimReview
 
@@ -106,8 +107,9 @@ def review_claim(*, actor, claim_id, decision, reason, expected_review, expected
         claim = SourceClaim.objects.select_for_update().get(pk=claim_id)
         if claim.recorded_by_id == actor.pk:
             raise PermissionDenied
-        if not valid_claim(claim) or claim.payload_sha256 != expected_hash:
-            raise ReviewConflict('اطلاعات منبع تغییر کرده یا معتبر نیست؛ بازبینی متوقف شد.')
+        if (not valid_claim(claim) or claim.payload_sha256 != expected_hash
+                or not current_account_exists(claim.recorded_by_id, using=claim._state.db)):
+            raise ReviewConflict('اطلاعات منبع یا ثبت‌کننده در دسترس نیست یا تغییر کرده است؛ بازبینی متوقف شد.')
         latest = claim.reviews.order_by('-pk').first()
         if (latest.pk if latest else 0) != expected_review:
             raise ReviewConflict('بازبینی جدیدی ثبت شده است؛ صفحه را تازه کنید.')

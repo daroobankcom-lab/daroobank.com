@@ -72,8 +72,10 @@ class ClinicalReferenceLockingTests(TransactionTestCase):
         with transaction.atomic():
             self.change()
             with ThreadPoolExecutor(max_workers=1) as pool:
-                with self.assertRaises(OperationalError):
+                with self.assertRaises(DraftConflict) as caught:
                     pool.submit(self.worker, review, '300ms').result(timeout=10)
+                driver = caught.exception.__cause__.__cause__
+                self.assertEqual(getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None), '55P03')
         with ThreadPoolExecutor(max_workers=1) as pool:
             with self.assertRaises(DraftConflict):
                 pool.submit(self.worker, review).result(timeout=10)

@@ -72,8 +72,10 @@ class ProductReviewConcurrencyTests(TransactionTestCase):
             ProductCandidate.objects.select_for_update().get(pk=self.candidate.pk)
             ProductCandidate.objects.filter(pk=self.candidate.pk).update(source_fields={'bad': 'synthetic alteration'})
             with ThreadPoolExecutor(max_workers=1) as pool:
-                with self.assertRaises(OperationalError):
+                with self.assertRaises(ReviewConflict) as caught:
                     pool.submit(self.worker, attempt, '300ms').result(timeout=10)
+                driver = caught.exception.__cause__.__cause__
+                self.assertEqual(getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None), '55P03')
         with ThreadPoolExecutor(max_workers=1) as pool:
             with self.assertRaises(ReviewConflict):
                 pool.submit(self.worker, attempt).result(timeout=10)

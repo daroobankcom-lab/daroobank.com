@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
+from daroobank.review_write_boundary import review_write_boundary
 from daroobank.validation import valid_review_reason
 
 from .importer import FIELDS, LIMITS, ImportValidationError, parse_csv, suggest_product, validate_source
@@ -89,7 +90,7 @@ def record_preliminary_review(*, candidate_id, actor, decision, reason, expected
         raise ReviewConflict('نتیجه یا توضیح بررسی معتبر نیست.')
     if decision == PriceCandidateReview.ACCEPT_SUGGESTION and not re.fullmatch(r'[0-9a-f]{64}', expected_product_hash):
         raise ReviewConflict('شناسه تطبیق معتبر نیست.')
-    with transaction.atomic():
+    with review_write_boundary(ReviewConflict):
         candidate = PriceCandidate.objects.select_for_update().get(pk=candidate_id)
         if not candidate.staged_by_id or not candidate.source_rights_attested:
             raise ReviewConflict('این رکورد فاقد ثبت‌کننده یا اظهار مجوز است و در این مسیر قابل بررسی نیست.')

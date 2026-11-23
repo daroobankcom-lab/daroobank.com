@@ -68,8 +68,10 @@ class SourceReviewConcurrencyTests(TransactionTestCase):
             SourceClaim.objects.select_for_update().get(pk=self.claim.pk)
             SourceClaim.objects.filter(pk=self.claim.pk).update(owner='مالک ساختگی تغییر یافته')
             with ThreadPoolExecutor(max_workers=1) as pool:
-                with self.assertRaises(OperationalError):
+                with self.assertRaises(ReviewConflict) as caught:
                     pool.submit(self.worker, attempt, '300ms').result(timeout=10)
+                driver = caught.exception.__cause__.__cause__
+                self.assertEqual(getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None), '55P03')
         with ThreadPoolExecutor(max_workers=1) as pool:
             with self.assertRaises(ReviewConflict):
                 pool.submit(self.worker, attempt).result(timeout=10)

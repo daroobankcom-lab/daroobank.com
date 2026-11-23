@@ -78,8 +78,10 @@ class PriceConcurrencyTests(TransactionTestCase):
         with transaction.atomic():
             ProductPresentation.objects.select_for_update().get(pk=self.product.pk)
             with ThreadPoolExecutor(max_workers=1) as pool:
-                with self.assertRaises(OperationalError):
+                with self.assertRaises(ReviewConflict) as caught:
                     pool.submit(self.worker, attempt, lock_timeout='300ms').result(timeout=10)
+                driver = caught.exception.__cause__.__cause__
+                self.assertEqual(getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None), '55P03')
             ProductPresentation.objects.filter(pk=self.product.pk).update(strength='different')
         with ThreadPoolExecutor(max_workers=1) as pool:
             with self.assertRaises(ReviewConflict):

@@ -251,3 +251,21 @@ class ClinicalLatestReviewLockTests(TransactionTestCase):
         self.assertNotEqual(event.pk, self.latest.pk)
         self.latest.refresh_from_db()
         self.assertEqual(self.latest.reason, 'تغییر قبلی ساختگی')
+
+    def test_failed_write_rolls_back_and_releases_latest_review_lock(self):
+        with patch('clinical.services.ClinicalDraftReview.objects.create', side_effect=RuntimeError('synthetic failure')):
+            with self.assertRaisesRegex(RuntimeError, 'synthetic failure'):
+                review_draft(actor=self.reviewer, draft_id=self.draft.pk, decision='defer', reason=REASON,
+                             expected_review=self.latest.pk, expected_hash=self.draft.payload_sha256)
+        self.assertEqual(ClinicalDraftReview.objects.filter(draft=self.draft).count(), 1)
+        def update():
+            close_old_connections()
+            try:
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                    return ClinicalDraftReview.objects.filter(pk=self.latest.pk).update(reason=REASON)
+            finally:
+                connection.close()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            self.assertEqual(pool.submit(update).result(timeout=10), 1)

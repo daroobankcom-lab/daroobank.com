@@ -11,6 +11,7 @@ from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_account_exists
+from daroobank.review_write_boundary import review_write_boundary
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import ClinicalDraft, ClinicalDraftReview
 
@@ -179,7 +180,7 @@ def review_draft(*, actor, draft_id, decision, reason, expected_review, expected
             or (expected_evidence_hash is not None and (not isinstance(expected_evidence_hash, str)
                 or not HASH.fullmatch(expected_evidence_hash)))):
         raise DraftConflict('اطلاعات بازبینی معتبر نیست.')
-    with transaction.atomic():
+    with review_write_boundary(DraftConflict):
         draft = ClinicalDraft.objects.select_for_update(of=('self',)).get(pk=draft_id)
         if draft.author_id == actor.pk:
             raise PermissionDenied

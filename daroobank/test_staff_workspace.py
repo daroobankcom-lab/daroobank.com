@@ -38,6 +38,32 @@ class StaffWorkspaceTests(TestCase):
         self.client.force_login(inactive)
         self.assertNotEqual(self.client.get(url).status_code, 200)
 
+    @override_settings(APPEND_SLASH=True, SECURE_SSL_REDIRECT=False)
+    def test_slashless_staff_root_is_private_and_disabled_before_redirect(self):
+        for enabled in (False, True):
+            with self.settings(STAFF_PORTAL_ENABLED=enabled):
+                for method in (self.client.get, self.client.head):
+                    with self.subTest(enabled=enabled, method=method.__name__), self.assertNumQueries(0):
+                        response = method('/staff', {'next': 'synthetic-canary'})
+                        self.assertEqual(response.status_code, 301 if enabled else 404)
+                        if enabled:
+                            self.assertEqual(response['Location'], '/staff/?next=synthetic-canary')
+                        self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                        self.assertEqual(response['Referrer-Policy'], 'same-origin')
+                        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
+        with self.settings(STAFF_PORTAL_ENABLED=False):
+            csrf_client = Client(enforce_csrf_checks=True)
+            with self.assertNumQueries(0):
+                response = csrf_client.post('/staff', {'synthetic': 'canary'})
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+            self.assertNotIn(b'canary', response.content)
+        # A prefix lookalike is neither a staff endpoint nor hidden by the gate.
+        with self.settings(STAFF_PORTAL_ENABLED=False):
+            response = self.client.get('/staffing')
+            self.assertEqual(response.status_code, 404)
+            self.assertNotEqual(response.get('Cache-Control'), 'private, no-store, max-age=0')
+
     def test_no_permission_is_empty_private_and_no_business_reads(self):
         self.client.force_login(self.user)
         with CaptureQueriesContext(connection) as queries:

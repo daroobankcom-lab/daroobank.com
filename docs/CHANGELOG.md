@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — slashless privacy boundaries
+
+**Changes:** Known slashless search and product routes receive the public privacy headers even on Django's append-slash redirect; the staff root without a slash receives staff privacy headers and is blocked when the development portal is disabled. Exact path boundaries and redirect queries are tested.
+
+**Limits:** Redirects retain query strings; upstream redirects, logging, proxies and other unresolved paths remain outside scope. See ADR 0044.
+
 ## 2026-11-23 — isolated synthetic restore drill
 
 **Changes:** An opt-in PostgreSQL test creates separate random synthetic source and target databases, verifies archive creation, one failed truncated restore, a full restore, migration state and a synthetic identity graph. CI runs it with matching PostgreSQL 16 client commands in a container; the designated test runner refuses parsed reuse and parallel options for restore and browser exercises, including abbreviations. Explicit runner overrides bypass that guard.

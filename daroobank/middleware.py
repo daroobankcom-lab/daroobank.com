@@ -1,3 +1,5 @@
+import re
+
 from django.conf import settings
 from django.http import HttpResponseNotFound
 
@@ -6,8 +8,9 @@ class PublicReadPrivacyHeadersMiddleware:
     """Apply privacy headers to resolved public reads, including CSRF/405 errors.
 
     Runs outside CommonMiddleware and CsrfViewMiddleware so their responses for
-    these resolved views receive the same policy. Unresolved requests, redirects
-    before URL resolution and responses from an upstream proxy are outside scope.
+    these resolved views receive the same policy. Known slashless search/product
+    paths receive the policy too, including CommonMiddleware's redirect. Other
+    unresolved requests and responses generated upstream are outside scope.
     """
 
     view_names = frozenset({
@@ -20,7 +23,13 @@ class PublicReadPrivacyHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         match = getattr(request, 'resolver_match', None)
-        if match is not None and match.url_name in self.view_names:
+        # CommonMiddleware resolves slash-appended routes without setting
+        # request.resolver_match on the original request. Match only the known
+        # slashless public reads; do not apply this to unrelated URLs.
+        slashless = request.path_info in {'/search', '/api/v1/search'} or bool(
+            re.fullmatch(r'/(?:api/v1/)?products/[0-9]+', request.path_info)
+        )
+        if (match is not None and match.url_name in self.view_names) or slashless:
             response['Cache-Control'] = 'no-store'
             response['Referrer-Policy'] = 'no-referrer'
             response['X-Robots-Tag'] = 'noindex, follow'
@@ -34,7 +43,7 @@ class StaffPrivacyHeadersMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        is_staff_path = request.path_info.startswith('/staff/')
+        is_staff_path = request.path_info == '/staff' or request.path_info.startswith('/staff/')
         if is_staff_path and not settings.STAFF_PORTAL_ENABLED:
             response = HttpResponseNotFound()
         else:

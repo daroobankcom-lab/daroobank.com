@@ -21,6 +21,8 @@
 
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.
 
+- [0044: slashless privacy boundaries](0044-slashless-privacy-boundaries.md) — development implementation, 23 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

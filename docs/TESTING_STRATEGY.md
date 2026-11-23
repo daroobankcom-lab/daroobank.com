@@ -110,7 +110,7 @@ At 390 CSS pixels, axe-core 4.14.1 runs the `wcag2a`, `wcag2aa`, `wcag21a`, `wca
 
 ## Resolved public-read error headers
 
-`catalog/test_public_read_privacy.py` checks the `no-store`, `no-referrer` and `noindex` policy on resolved search, presentation and OpenAPI views for GET/HEAD, selected 400/404/500 responses, Django's 405s with `Allow: GET, HEAD`, and CSRF middleware's 403 before the view. Rejected methods perform no database queries in the tested paths. Tests also check that unrelated pages and the staff portal retain their existing policies. These checks do not cover unresolved paths, redirects before resolution, reverse proxies, log redaction, all middleware configurations or deployment security; debug error pages can disclose request data.
+`catalog/test_public_read_privacy.py` checks the `no-store`, `no-referrer` and `noindex` policy on resolved search, presentation and OpenAPI views for GET/HEAD, selected 400/404/500 responses, Django's 405s with `Allow: GET, HEAD`, and CSRF middleware's 403 before the view. Rejected methods perform no database queries in the tested paths. Tests also check that unrelated pages and the staff portal retain their existing policies. Tests also cover known slashless search/product paths and slashless staff root, including append-slash redirects, disabled slash appending, query retention, lookalikes and the disabled staff gate. Other unresolved paths, upstream redirects, reverse proxies, log redaction, all middleware configurations and deployment security remain outside scope; debug error pages can disclose request data. See [ADR 0044](ARCHITECTURE_DECISIONS/0044-slashless-privacy-boundaries.md).
 
 ## Browser failure diagnostics in CI
 

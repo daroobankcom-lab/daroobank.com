@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — projection repair conflict handling
+
+**Changes:** The default-database synthetic projection writer now translates three selected PostgreSQL concurrency failures after rollback into its existing domain error; the CLI reports its generic failure. Tests exercise a real lock timeout at service and command boundaries and simulated selected failures after an update.
+
+**Limits:** There is no automatic retry. Real deadlocks and serialization failures in this path, surrounding-transaction commits and production operation are not established; see ADR 0063.
+
 ## 2026-11-23 — price candidate CLI consistency check
 
 **Changes:** The local listing now checks stored price payload/derived values before emitting full fields or computing a current suggestion. Inconsistent rows receive a reduced JSON shape and `payload_status: invalid`; consistent rows receive `payload_status: consistent`. The stored-status filter and row limit are unchanged. Synthetic tests cover malformed and altered payloads, filtering and coherent recomputation.

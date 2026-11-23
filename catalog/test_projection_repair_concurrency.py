@@ -1,8 +1,10 @@
 """Selected real PostgreSQL locking interleavings for projection repair."""
 from concurrent.futures import ThreadPoolExecutor
+import io
 from threading import Event, current_thread
 from unittest.mock import patch
 
+from django.core.management import CommandError, call_command
 from django.db import OperationalError, close_old_connections, connection, transaction
 from django.test import TransactionTestCase, override_settings
 
@@ -39,13 +41,32 @@ class ProjectionRepairConcurrencyTests(TransactionTestCase):
             product.strength = '10 mg'
             product.save(update_fields=['strength'])
             with ThreadPoolExecutor(max_workers=1) as pool:
-                with self.assertRaises(OperationalError):
+                with self.assertRaises(ProjectionRepairError) as caught:
                     pool.submit(self.worker, self.apply, '300ms').result(timeout=10)
+                self.assertIsInstance(caught.exception.__cause__, OperationalError)
+                self.assertEqual(caught.exception.__cause__.__cause__.sqlstate, '55P03')
         with self.assertRaises(ProjectionRepairError): self.apply()
         self.product.refresh_from_db()
         self.assertEqual(self.product.strength, '10 mg')
         # The controlled model save itself refreshed the projections.
         self.assertEqual(preview_projection(presentation_id=self.product.pk)['status'], 'consistent')
+
+    def test_cli_real_lock_timeout_reports_generic_error_without_partial_output(self):
+        output = io.StringIO()
+        before = ProductPresentation.objects.values().get(pk=self.product.pk)
+        def command():
+            call_command('repair_catalog_projection', presentation_id=self.product.pk, commit=True,
+                         token=self.token, confirm_synthetic=True, stdout=output)
+        with transaction.atomic():
+            ProductPresentation.objects.select_for_update().get(pk=self.product.pk)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                with self.assertRaises(CommandError) as caught:
+                    pool.submit(self.worker, command, '300ms').result(timeout=10)
+        self.assertEqual(str(caught.exception), 'Projection request is unavailable, invalid, unsafe or stale.')
+        self.assertNotIn(self.token, str(caught.exception))
+        self.assertEqual(output.getvalue(), '')
+        self.assertEqual(ProductPresentation.objects.values().get(pk=self.product.pk), before)
+        self.assertEqual(self.apply()['status'], 'repaired')
 
     def test_repair_locks_row_against_a_concurrent_writer(self):
         from . import projection_repair

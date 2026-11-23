@@ -7,8 +7,10 @@ from datetime import datetime
 
 from django.conf import settings
 from django.core import signing
-from django.db import connections, transaction
+from django.db import connections
 from django.utils.crypto import constant_time_compare, salted_hmac
+
+from daroobank.write_conflict_boundary import write_conflict_boundary
 
 from .models import PRESENTATION_SEARCH_FIELDS, ProductPresentation
 from .normalization import normalize_search
@@ -120,7 +122,9 @@ def apply_projection(*, presentation_id, token, synthetic_confirmed=False):
             raise ProjectionRepairError('Invalid or stale repair request.')
     except (signing.BadSignature, ValueError, TypeError, KeyError, IndexError, OverflowError) as exc:
         raise ProjectionRepairError('Invalid or stale repair request.') from exc
-    with transaction.atomic(using=DB_ALIAS):
+    # DB_ALIAS is deliberately the default database, matching the boundary's
+    # transaction. Translate only selected PostgreSQL conflicts after rollback.
+    with write_conflict_boundary(ProjectionRepairError):
         row = ProductPresentation.objects.using(DB_ALIAS).select_for_update().filter(pk=presentation_id).values().first()
         if row is None:
             raise ProjectionRepairError('Invalid or stale repair request.')

@@ -1,6 +1,6 @@
 # ADR 0024: explicit one-row synthetic projection repair
 
-Status: development-only local command, 22 November 2026; extends [ADR 0023](0023-presentation-partial-save-projections.md). No production workflow, source verification or audit is provided.
+Status: development-only local command, 22 November 2026; extends [ADR 0023](0023-presentation-partial-save-projections.md). Selected write conflicts are handled as described in [ADR 0063](0063-projection-repair-conflict-boundary.md). No production workflow, source verification or audit is provided.
 
 ## Decision
 

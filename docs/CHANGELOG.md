@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — isolated synthetic restore drill
+
+**Changes:** An opt-in PostgreSQL test creates separate random synthetic source and target databases, verifies archive creation, one failed truncated restore, a full restore, migration state and a synthetic identity graph. CI installs a PostgreSQL client and runs it; guarded settings refuse reuse and parallel tests.
+
+**Limits:** This is not an encrypted/off-host backup, production recovery policy, complete-data verification or clinical assurance. Use a disposable cluster only; see ADR 0043.
+
 ## 2026-11-23 — skip-link diagnostic classification
 
 **Changes:** Restore privacy-preserving CI classification of the structured skip-link visibility assertion; report only fixed failure categories, not the diagnostic JSON. Test malformed and injected input. A separate local 100-context forced-colors probe passed.

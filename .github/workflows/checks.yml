@@ -62,6 +62,16 @@ jobs:
           python manage.py makemigrations --check --dry-run
       - name: Run synthetic tests on PostgreSQL
         run: python manage.py test -v 1 --noinput
+      - name: Install PostgreSQL client for isolated restore drill
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          pg_dump --version
+          pg_restore --version
+      - name: Run isolated synthetic restore drill
+        env:
+          DAROOBANK_RESTORE_TESTS: '1'
+        run: python manage.py test daroobank.test_synthetic_restore --settings=daroobank.restore_test_settings -v 1 --noinput
       - name: Audit resolved Python application dependencies
         run: |
           python -m venv "$RUNNER_TEMP/dependency-audit"

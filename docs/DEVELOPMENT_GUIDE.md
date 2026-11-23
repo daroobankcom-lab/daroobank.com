@@ -269,6 +269,16 @@ The example directories must already exist and be private. PostgreSQL/OS environ
 
 
 
+### Automated synthetic restore drill
+
+On a **disposable PostgreSQL cluster only**, using a role allowed to create/drop test databases, export the development PostgreSQL variables, install compatible `pg_dump` and `pg_restore` on PATH, and run:
+
+```sh
+DAROOBANK_RESTORE_TESTS=1 .venv/bin/python manage.py test daroobank.test_synthetic_restore --settings=daroobank.restore_test_settings -v 1 --noinput
+```
+
+This creates a fresh random test source and a separate random target. It makes an unencrypted synthetic custom-format archive in a temporary private directory, exercises one truncated-archive failure and a successful single-transaction restore, then checks migrations and a synthetic identity graph with a fresh ORM process. The target is dropped only if its creation succeeded; Django manages the source test database. The settings reject `--keepdb` and parallel execution. A crash or interrupted run may leave a specifically named test database or temporary files; verify names and server identity before manual cleanup. Django's test runner may delete an existing test database with a colliding generated name, so do not use this against valuable clusters. Credentials may be visible to privileged processes. It is not a production restore or proof of data completeness; see [ADR 0043](ARCHITECTURE_DECISIONS/0043-synthetic-postgresql-restore-drill.md).
+
 ## Concurrent PostgreSQL CSV staging
 
 Committed product and price CSV stages take a transaction-level PostgreSQL advisory lock keyed by the staging domain and **exact validated source URL**. This also applies to the direct import services and CLI commit paths; preview never acquires the lock. The lock is held until the outermost transaction commits or rolls back, including any receipt and manifest writes. Same-domain, same-URL stages wait rather than interleave their overlapping unique-key inserts in opposite order. File row order and manifest ordinals remain unchanged; replay still creates a separate web receipt while preserving the first candidate recorder.

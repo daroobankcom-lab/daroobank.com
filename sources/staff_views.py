@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from daroobank.scan_input import parse_scan_after
+from daroobank.scan_responses import invalid_scan_response
 from .date_inspection import DATE_CATEGORIES, MAX_PK, inspect_dates
 from .forms import SourceClaimForm, SourceReviewForm
 from .models import SourceClaim, SourceClaimReview
@@ -59,9 +60,9 @@ def date_inspection(request):
     try:
         after = parse_scan_after(request.GET.get('after', '0'), maximum=MAX_PK)
     except ValueError:
-        return HttpResponseBadRequest('Invalid inspection parameters.')
+        return invalid_scan_response(request, restart_route='staff_source_date_inspection')
     if category not in ('', *DATE_CATEGORIES):
-        return HttpResponseBadRequest('Invalid inspection parameters.')
+        return invalid_scan_response(request, restart_route='staff_source_date_inspection')
     report = inspect_dates(after=after, category=category)
     return render(request, 'staff/source_date_inspection.html', {
         'page_title': 'پیمایش تاریخ ادعاها | داروبانک', 'description': 'بازرسی محدود تاریخ‌های اعلام‌شده.',

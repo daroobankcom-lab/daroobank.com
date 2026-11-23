@@ -106,6 +106,28 @@ async function submitLocalizedScan(page, value) {
   assert.equal(await page.locator('#after').inputValue(), '0');
 }
 
+async function checkStaffScanError(page, label, width) {
+  const pathname = new URL(page.url()).pathname;
+  const params = new URLSearchParams({after: '9223372036854775808', category: 'synthetic-canary<script>'});
+  const response = await page.goto(base + pathname + '?' + params);
+  assert.equal(response.status(), 400);
+  assert.match(response.headers()['cache-control'], /no-store/);
+  assert.equal(response.headers()['referrer-policy'], 'same-origin');
+  assert.match(response.headers()['x-robots-tag'], /noindex, nofollow/);
+  assert.match(await page.locator('h1').innerText(), /درخواست بازرسی معتبر نیست/);
+  assert(!(await page.locator('body').innerText()).includes('synthetic-canary'));
+  await checkLayout(page, `${label} error ${width}`);
+  if (width === 390) await auditAccessibility(page, `${label} error`);
+  const restart = page.getByRole('link', {name: 'بازگشت و شروع دوباره ←'});
+  assert.equal(await restart.getAttribute('href'), pathname);
+  await restart.focus();
+  await Promise.all([
+    page.waitForURL(url => url.pathname === pathname && url.search === ''),
+    page.keyboard.press('Enter'),
+  ]);
+  assert.equal(await page.locator('#after').inputValue(), '0');
+}
+
 async function checkKeyboardFocus(page, selector, label, container) {
   const state = await page.locator(selector).evaluate((element, container) => {
     const style = getComputedStyle(element);
@@ -348,6 +370,7 @@ async function run() {
       assert.equal(await page.getByLabel('وضعیت تاریخ در این بخش').count(), 1);
       await checkScanIdSyntax(page, `source scan ${width}`);
       await submitLocalizedScan(page, '۰۰۰۰');
+      await checkStaffScanError(page, 'source scan', width);
       await page.getByRole('link', {name: 'فهرست ادعاهای منبع ←'}).focus();
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '#after', `scan start ${width}`, '.staff-section');
@@ -390,6 +413,7 @@ async function run() {
       assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
       await checkScanIdSyntax(page, `catalog scan ${width}`);
       await submitLocalizedScan(page, '٠٠٠٠');
+      await checkStaffScanError(page, 'catalog scan', width);
       await page.getByRole('link', {name: 'صف نامزدهای فرآورده ←'}).focus();
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '#after', `quality start ${width}`, '.staff-section');

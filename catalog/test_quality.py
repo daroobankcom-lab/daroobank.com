@@ -100,6 +100,30 @@ class CatalogQualityTests(TestCase):
         self.assertContains(html, 'pattern="[0-9۰-۹٠-٩]{1,19}"')
         self.assertContains(html, '9223372036854775807')
 
+    def test_invalid_scan_error_is_private_nonreflecting_and_restarts(self):
+        url = reverse('staff_catalog_quality')
+        self.client.force_login(self.candidate_user)
+        self.assertEqual(self.client.get(url, {'after': 'synthetic-canary<script>'}).status_code, 403)
+        self.client.force_login(self.user)
+        with patch('catalog.quality_views.inspect_batch') as scan:
+            for value in ('synthetic-canary<script>', '', str(MAX_PK + 1)):
+                for method in (self.client.get, self.client.head):
+                    with self.subTest(value=value, method=method.__name__):
+                        response = method(url, {'after': value})
+                        self.assertEqual(response.status_code, 400)
+                        self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                        self.assertEqual(response['Referrer-Policy'], 'same-origin')
+                        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
+                        self.assertNotIn(b'synthetic-canary', response.content)
+                        if method == self.client.get:
+                            self.assertContains(response, 'درخواست بازرسی معتبر نیست', status_code=400)
+                            self.assertContains(response, f'href="{url}"', status_code=400)
+                            self.assertNotContains(response, '&lt;script&gt;', status_code=400)
+                        else:
+                            self.assertEqual(response.content, b'')
+            scan.assert_not_called()
+        self.assertEqual(self.client.get(url).status_code, 200)
+
     def test_localized_starting_id_selects_same_batch(self):
         self.client.force_login(self.user)
         url = reverse('staff_catalog_quality')

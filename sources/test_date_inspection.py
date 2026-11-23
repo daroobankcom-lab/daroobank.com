@@ -125,6 +125,31 @@ class SourceDateInspectionTests(TestCase):
         self.assertNotContains(self.client.get(reverse('home')), url)
         self.assertNotContains(self.client.get(reverse('sitemap')), url)
 
+    def test_invalid_scan_error_is_private_nonreflecting_and_restarts(self):
+        url = reverse('staff_source_date_inspection')
+        self.client.force_login(self.add_only)
+        self.assertEqual(self.client.get(url, {'after': 'synthetic-canary<script>'}).status_code, 403)
+        self.client.force_login(self.viewer)
+        with patch('sources.staff_views.inspect_dates') as scan:
+            for params in ({'after': 'synthetic-canary<script>'}, {'after': str(MAX_PK + 1)},
+                           {'category': 'synthetic-canary<script>'}):
+                for method in (self.client.get, self.client.head):
+                    with self.subTest(params=params, method=method.__name__):
+                        response = method(url, params)
+                        self.assertEqual(response.status_code, 400)
+                        self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                        self.assertEqual(response['Referrer-Policy'], 'same-origin')
+                        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
+                        self.assertNotIn(b'synthetic-canary', response.content)
+                        if method == self.client.get:
+                            self.assertContains(response, 'درخواست بازرسی معتبر نیست', status_code=400)
+                            self.assertContains(response, f'href="{url}"', status_code=400)
+                            self.assertNotContains(response, '&lt;script&gt;', status_code=400)
+                        else:
+                            self.assertEqual(response.content, b'')
+            scan.assert_not_called()
+        self.assertEqual(self.client.get(url).status_code, 200)
+
     def test_localized_starting_id_selects_same_batch_and_cursor(self):
         self.client.force_login(self.viewer)
         url = reverse('staff_source_date_inspection')

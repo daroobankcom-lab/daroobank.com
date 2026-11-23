@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+  <div class="staff-topline"><div><div class="kicker"><span></span> بازرسی داخلی · فقط خواندنی</div><h1>درخواست بازرسی معتبر نیست</h1></div></div>
+  <div class="staff-alert staff-alert-error">
+    <p>شناسه را با یک تا ۱۹ رقم فارسی، عربی یا انگلیسی، از <bdi dir="ltr">0</bdi> تا <bdi dir="ltr">9223372036854775807</bdi> وارد کنید. اگر فیلتر وجود دارد، یکی از گزینه‌های موجود را انتخاب کنید.</p>
+    <p>با بازگشت، بازرسی از ابتدا و با فیلتر پیش‌فرض شروع می‌شود.</p>
+  </div>
+  <p><a class="staff-detail-link" href="{% url restart_route %}">بازگشت و شروع دوباره ←</a></p>
+</div></section>{% endblock %}

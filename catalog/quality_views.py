@@ -5,6 +5,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_safe
 
 from daroobank.scan_input import parse_scan_after
+from daroobank.scan_responses import invalid_scan_response
 from .intake import require_staff
 from .quality import ISSUE_LABELS, MAX_PK, inspect_batch
 from .quality_irc import InvalidIRCCursor, QualityAnchorNotFound, inspect_irc
@@ -17,7 +18,7 @@ def quality(request):
     try:
         after = parse_scan_after(request.GET.get('after', '0'), maximum=MAX_PK)
     except ValueError:
-        return HttpResponseBadRequest('Invalid starting ID.')
+        return invalid_scan_response(request, restart_route='staff_catalog_quality')
     report = inspect_batch(after=after)
     for item in report['rows']:
         item['issue_labels'] = [ISSUE_LABELS[code] for code in item['issues']]

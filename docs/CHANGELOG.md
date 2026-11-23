@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — private scan error recovery
+
+**Changes:** Authorized staff now receive a generic Persian HTTP 400 page for invalid catalog-quality or source-date scan parameters, with a fixed local restart link and no reflected input. Restart clears position and filter. Existing authorization, validation, privacy headers and scan limits remain unchanged. Server and synthetic browser tests cover error handling, access checks and recovery.
+
+**Limits:** Invalid URLs can still be logged; the page is not a production security or accessibility review. Automated axe checks have inconclusive contrast results requiring manual review.
+
 ## 2026-11-22 — localized staff inspection IDs
 
 **Changes:** The source-date and catalog-quality starting-ID forms now accept Persian, Arabic-Indic and ASCII digits, including mixed scripts. A shared bounded parser maps only these digits before integer conversion; the unchanged upper limit and permissions still apply. Unit, PostgreSQL and synthetic Chromium tests cover localized values, equivalence, exact boundaries and invalid formats.

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — product detail consistency gate
+
+**Changes:** Product detail reuses its existing candidate comparison availability to suppress the review form and show a warning when the observed candidate payload or derived identity is inconsistent. Tests cover changed payloads, stale and invalid submissions, coherent rewrites and a selected non-snapshot race; write-side validation remains independent.
+
+**Limits:** Raw fields and history remain visible to authorized staff. This is not authenticity, legal authorization, confidentiality or snapshot isolation; see ADR 0069.
+
 ## 2026-11-23 — source detail review comparisons
 
 **Changes:** Source detail checks up to 25 displayed review snapshots and reports limited comparisons to the observed claim, suppressing review details if the current claim or historical review is inconsistent, or the reviewer account is missing. The latest-review token and write-side behavior remain unchanged. Tests exercise a selected stale-read race and successful fresh review after a corrupt historical row.

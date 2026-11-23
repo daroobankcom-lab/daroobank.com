@@ -84,7 +84,8 @@ def get_candidate(pk):
 def detail_response(request, candidate, *, form=None, status=200):
     reviews = recent_reviews_with_reviewers(candidate.reviews.all())
     candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
-    can_review = (request.user.has_perm(REVIEW) and candidate.staged_by_id != request.user.pk
+    comparison = product_comparison_context(candidate)
+    can_review = (comparison['available'] and request.user.has_perm(REVIEW) and candidate.staged_by_id != request.user.pk
                   and candidate.display_stager is not None and candidate.source_rights_attested)
     if form is None and can_review:
         form = ProductReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0,
@@ -92,7 +93,7 @@ def detail_response(request, candidate, *, form=None, status=200):
     return render(request, 'staff/product_detail.html', {
         'page_title': 'نامزد فرآورده | داروبانک', 'description': 'جزئیات داخلی نامزد فرآورده.',
         'noindex': True, 'private_staff': True, 'candidate': candidate, 'reviews': reviews,
-        'can_review': can_review, 'review_form': form, 'comparison': product_comparison_context(candidate),
+        'can_review': can_review, 'review_form': form, 'comparison': comparison,
         'source_claims': related_claims(request.user, candidate.source_url),
         'receipt_refs': related_receipts(request.user, candidate, 'product'),
     }, status=status)

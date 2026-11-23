@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — stronger hero contrast test boundaries
+
+**Changes:** Selected hero text and search-placeholder contrast checks run at four viewport widths and fail closed on selected opacity, filter, blend and background layers. Deliberate compositing and low-contrast mutations verify the checks.
+
+**Limits:** This checks computed colors, not actual pixels, all overlays, states or accessibility criteria; other axe contrast results still need manual review.
+
 ## 2026-11-23 — oversized public product paths
 
 **Changes:** Known public product URL shapes retain privacy headers when an extremely long numeric ID fails URL resolution, including HTTPS redirects. A synthetic test reproduced the previously missing headers before the fix.

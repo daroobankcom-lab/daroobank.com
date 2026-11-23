@@ -241,13 +241,38 @@ async function checkTextContrast(page, selector, containerSelector, label) {
 async function checkHeroContrast(page) {
   const values = await page.evaluate(() => {
     const style = selector => getComputedStyle(document.querySelector(selector));
-    return {
-      background: style('.hero').backgroundImage,
-      colors: ['.hero-lead', '.hint-label', '.search-hint', '.hero-status span:not(.status-icon)']
-        .map(selector => [selector, style(selector).color]),
-      placeholder: getComputedStyle(document.querySelector('#drug-search'), '::placeholder').color,
-      inputBackground: style('.search-form').backgroundColor,
-    };
+    function requirePlainLayers(selector, containerSelector) {
+      const element = document.querySelector(selector);
+      const container = element && element.closest(containerSelector);
+      if (!element || !container) throw new Error('Missing contrast element or container');
+      let node = element, reached = false;
+      while (node) {
+        const css = getComputedStyle(node);
+        if (css.opacity !== '1' || css.filter !== 'none' || css.mixBlendMode !== 'normal') {
+          throw new Error('Contrast needs review for opacity, filter or blending');
+        }
+        if (!reached && node !== container &&
+            (css.backgroundImage !== 'none' || css.backgroundColor !== 'rgba(0, 0, 0, 0)')) {
+          throw new Error('Contrast needs review for an intermediate background');
+        }
+        if (node === container) reached = true;
+        node = node.parentElement;
+      }
+    }
+    const colors = ['.hero-lead', '.hint-label', '.search-hint', '.hero-status span:not(.status-icon)']
+      .map(selector => {
+        requirePlainLayers(selector, '.hero');
+        return [selector, style(selector).color];
+      });
+    requirePlainLayers('#drug-search', '.search-form');
+    const placeholder = getComputedStyle(document.querySelector('#drug-search'), '::placeholder');
+    if (placeholder.opacity !== '1' || placeholder.filter !== 'none' || placeholder.mixBlendMode !== 'normal' ||
+        placeholder.backgroundImage !== 'none' || placeholder.backgroundColor !== 'rgba(0, 0, 0, 0)' ||
+        style('.search-form').backgroundImage !== 'none') {
+      throw new Error('Placeholder contrast needs review for composited layers');
+    }
+    return {background: style('.hero').backgroundImage, colors, placeholder: placeholder.color,
+            inputBackground: style('.search-form').backgroundColor};
   });
   assert.equal(ratio('rgb(0, 0, 0)', 'rgb(255, 255, 255)'), 21);
   const gradient = /^linear-gradient\([^,]+,\s*(rgb\(\d+,\s*\d+,\s*\d+\))\s+[\d.]+%,\s*(rgb\(\d+,\s*\d+,\s*\d+\))\s+[\d.]+%\)$/.exec(values.background);
@@ -342,8 +367,24 @@ async function run() {
       await checkLayout(page, `home ${width}`);
       await checkSkipLink(page, `skip home ${width}`, '#drug-search');
       await checkKeyboardFocus(page, '#drug-search', `search ${width}`, '.search-form');
+      await checkHeroContrast(page);
       if (width === 390) {
-        await auditAccessibility(page, 'home'); await checkHeroContrast(page);
+        await auditAccessibility(page, 'home');
+        for (const [css, error] of [
+          ['.hero-copy { opacity: 0.5 !important; }', /Contrast needs review/],
+          ['.hero-lead { background-image: linear-gradient(white, black) !important; }', /Contrast needs review/],
+          ['.hint-label { background-color: rgba(0, 0, 0, 0.1) !important; }', /Contrast needs review/],
+          ['#drug-search::placeholder { opacity: 0.4 !important; }', /contrast needs review/],
+          ['.hero-lead { color: white !important; }', /contrast below 4.5/],
+          ['#drug-search::placeholder { color: white !important; }', /contrast below 4.5/],
+        ]) {
+          const brokenLayer = await page.addStyleTag({content: css});
+          try {
+            await assert.rejects(checkHeroContrast(page), error);
+          } finally {
+            await brokenLayer.evaluate(el => el.remove());
+          }
+        }
         await checkTextContrast(page, '.eyebrow', '.eyebrow', 'hero eyebrow');
         await checkTextContrast(page, '.art-card-top small', '.art-card', 'art card caption');
         await checkTextContrast(page, '.label-one small', '.float-label', 'first art label caption');

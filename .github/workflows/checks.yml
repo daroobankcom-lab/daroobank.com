@@ -60,6 +60,7 @@ jobs:
           python manage.py migrate --noinput
           python manage.py check
           python manage.py makemigrations --check --dry-run
+          python manage.py inspect_postgresql_schema
       - name: Run synthetic tests on PostgreSQL
         run: python manage.py test -v 1 --noinput
       - name: Prepare matching PostgreSQL clients for isolated restore drill

@@ -250,6 +250,12 @@ Add and review forms carry a fingerprint of the current supplementary set; chang
 The set hash covers ordered assertion IDs, payload hashes and recorder IDs, not timestamps; neither hash nor snapshot is a signature. The service-level ten-item cap, row locking and sequential stale checks do not by themselves prove all concurrency cases. Bulk ORM/SQL can bypass validation or alter history; `PROTECT` foreign keys and ordinary model guards are not a tamper-proof audit or retention policy. No source is fetched, no clinical review/rights are established and no content is published. See [ADR 0006](ARCHITECTURE_DECISIONS/0006-clinical-evidence-assertions.md).
 
 
+## Development-only PostgreSQL catalog inspection
+
+After connecting only to an authorized synthetic development database and applying migrations, run `python manage.py inspect_postgresql_schema`. The DEBUG-only command emits fixed JSON aggregate counts and returns nonzero when selected issues need investigation. It checks names of managed Django tables (including implicit many-to-many and migration history), presence of declared single-column foreign keys between managed tables, selected unvalidated constraints, indexes in unusable states and disabled triggers on the resolved tables. It never automatically repairs, validates or migrates anything. An in-progress concurrent index build can yield a transient warning.
+
+The inspection follows the connection search path and uses one catalog statement snapshot. It does not compare full column, constraint or index definitions to migrations, or foreign-key actions and deferrability; missing non-FK constraints or indexes, application data corruption, unscoped tables, partition children, privileges, backup quality and production readiness remain outside its scope. A zero result is not a database health certificate. Use synthetic data only and restrict local access; DEBUG is not authorization. See [ADR 0070](ARCHITECTURE_DECISIONS/0070-postgresql-catalog-clues.md).
+
 ## PostgreSQL backup and isolated restore
 
 PostgreSQL's `pg_dump` and `pg_restore` are external client utilities, not an application backup service. Use a client version at least as new as the server; access must be restricted and authorized. Dumps contain all user data, password hashes, sessions and other private information, are unencrypted by default and are not committed. Choose a trusted private location, encrypt and retain according to policy, and test restoration separately. A volume alone is not a backup.

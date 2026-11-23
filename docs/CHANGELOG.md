@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — PostgreSQL catalog clues
+
+**Changes:** A development-only, read-only command reports aggregate counts of unresolved managed tables, non-table relations, missing model-declared single-column managed-table foreign keys, unvalidated constraints, unusable index states and disabled triggers. Synthetic PostgreSQL tests create actual selected defects, including a failed concurrent index build and a missing or wrong-target foreign key; CI runs the command after migrations.
+
+**Limits:** It does not compare complete schema definitions with migrations, detect missing non-FK constraints or indexes, validate application data or certify backups, security or production readiness. Only scoped resolved tables are examined; see ADR 0070.
+
 ## 2026-11-23 — product detail consistency gate
 
 **Changes:** Product detail reuses its existing candidate comparison availability to suppress the review form and show a warning when the observed candidate payload or derived identity is inconsistent. Tests cover changed payloads, stale and invalid submissions, coherent rewrites and a selected non-snapshot race; write-side validation remains independent.

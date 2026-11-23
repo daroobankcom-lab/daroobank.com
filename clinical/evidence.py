@@ -60,10 +60,15 @@ def _check_assertions(draft, items):
     return 'available', {item.recorded_by_id for item in items}
 
 
-def evidence_state(draft):
-    """Return at most ten validated assertions, not evidence verification."""
+def evidence_state(draft, *, lock=False):
+    """Return a bounded assertion state; lock only for the transactional writers."""
     # Do not use an inner join: a corrupted missing recorder must not hide an assertion.
-    items = list(draft.additional_references.order_by('pk')[:MAX_REFERENCES + 1])
+    # Writers already hold the draft lock, then lock existing assertions in PK
+    # order; this locks neither absent rows nor unrelated users/parent drafts.
+    queryset = draft.additional_references.order_by('pk')
+    if lock:
+        queryset = queryset.select_for_update()
+    items = list(queryset[:MAX_REFERENCES + 1])
     status, recorder_ids = _check_assertions(draft, items)
     if status != 'available':
         return {'status': status}
@@ -128,7 +133,7 @@ def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_eviden
             raise DraftConflict('پیش‌نویس در دسترس نیست.') from exc
         if not valid_draft(draft) or draft.payload_sha256 != expected_draft_hash:
             raise DraftConflict('پیش‌نویس تغییر کرده یا ناسازگار است.')
-        state = evidence_state(draft)
+        state = evidence_state(draft, lock=True)
         if state['status'] != 'available' or state['fingerprint'] != expected_evidence_hash:
             raise DraftConflict('ارجاع‌ها تغییر کرده یا ناسازگارند؛ صفحه را تازه کنید.')
         fingerprint = reference_fingerprint(data, draft.pk, draft.payload_sha256)

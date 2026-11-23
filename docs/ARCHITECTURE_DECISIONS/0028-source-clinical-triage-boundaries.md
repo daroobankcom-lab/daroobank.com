@@ -1,6 +1,6 @@
 # ADR 0028: source and clinical triage input and concurrency boundaries
 
-Status: development-only, 22 November 2026. Extends the source-claim and synthetic clinical-draft workflows; does not add authorization or publication.
+Status: development-only, 22 November 2026. Extends the source-claim and synthetic clinical-draft workflows; does not add authorization or publication. The existing-reference race recorded below was subsequently narrowed by [ADR 0029](0029-clinical-reference-row-locks.md); this document records the original observation.
 
 ## Input decision
 

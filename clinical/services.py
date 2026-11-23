@@ -155,7 +155,7 @@ def review_draft(*, actor, draft_id, decision, reason, expected_review, expected
         if not valid_draft(draft) or draft.payload_sha256 != expected_hash:
             raise DraftConflict('پیش‌نویس یا نسخه پیشین تغییر کرده یا ناسازگار است.')
         from .evidence import evidence_state
-        evidence = evidence_state(draft)
+        evidence = evidence_state(draft, lock=True)
         if evidence['status'] != 'available':
             raise DraftConflict('ارجاع‌های تکمیلی ناسازگارند یا از سقف مجاز بیشترند.')
         if any(item.recorded_by_id == actor.pk for item in evidence['items']):

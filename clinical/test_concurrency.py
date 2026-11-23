@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.db import close_old_connections, connection
+from django.db import OperationalError, close_old_connections, connection
 from django.test import TransactionTestCase
 
 from .evidence import MAX_REFERENCES, add_reference, evidence_state, reference_fingerprint, reviewed_evidence
@@ -89,25 +89,25 @@ class ClinicalConcurrentEvidenceTests(TransactionTestCase):
         self.assertEqual(event.review_snapshot['evidence_fingerprint'], initial)
         self.assertEqual(event.review_snapshot['evidence_snapshot'], [])
 
-    def test_bypass_mutation_of_reference_can_cross_parent_lock(self):
+    def test_review_locks_existing_reference_but_later_bypass_can_stale_snapshot(self):
         initial = evidence_state(self.draft)['fingerprint']
         reference, _ = add_reference(actor=self.actors[0], draft_id=self.draft.pk, data=self.ref,
             expected_draft_hash=self.draft.payload_sha256, expected_evidence_hash=initial)
         current = evidence_state(self.draft)['fingerprint']
         ready, resume = Event(), Event()
         review_thread = []
-        def paused_evidence(draft):
-            state = evidence_state(draft)
+        def paused_evidence(draft, **kwargs):
+            state = evidence_state(draft, **kwargs)
             if review_thread and current_thread() is review_thread[0]:
                 ready.set()
                 if not resume.wait(8):
                     raise TimeoutError('Synthetic evidence review did not resume')
             return state
-        def worker(fn):
+        def worker(fn, lock_timeout='2s'):
             close_old_connections()
             try:
                 with connection.cursor() as cursor:
-                    cursor.execute("SET lock_timeout = '2s'")
+                    cursor.execute("SELECT set_config('lock_timeout', %s, false)", [lock_timeout])
                     cursor.execute("SET statement_timeout = '10s'")
                 return fn()
             finally:
@@ -130,10 +130,12 @@ class ClinicalConcurrentEvidenceTests(TransactionTestCase):
                 future = pool.submit(worker, review)
                 try:
                     self.assertTrue(ready.wait(8), 'Review did not finish reading evidence under lock')
-                    self.assertEqual(pool.submit(worker, bypass).result(timeout=10), 1)
+                    with self.assertRaises(OperationalError):
+                        pool.submit(worker, bypass, '300ms').result(timeout=10)
                 finally:
                     resume.set()
                 event = ClinicalDraftReview.objects.get(pk=future.result(timeout=10))
+                self.assertEqual(pool.submit(worker, bypass).result(timeout=10), 1)
         self.assertEqual(event.review_snapshot['evidence_fingerprint'], current)
         self.assertEqual(event.review_snapshot['evidence_snapshot'][0]['reference']['reference_title'], self.ref['reference_title'])
         after = evidence_state(self.draft)

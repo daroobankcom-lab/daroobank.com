@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — limited clinical reference row locking
+
+**Changes:** Review and reference addition lock the bounded existing assertion rows after the draft lock, before validation, while read-only inspection stays non-locking. PostgreSQL tests exercise waiting updates, stale conflicts, rollback, outer transaction lifetime and the 11-row sentinel. The specific concurrent existing-reference update from ADR 0028 is blocked while the write transaction holds the lock.
+
+**Limits:** Later updates and pending new inserts can stale snapshots; a separate test demonstrates an unprotected concurrent parent update. There is no predicate or parent lock, retry, audit or clinical guarantee, and locks can wait or deadlock. See ADR 0029.
+
 ## 2026-11-22 — source and clinical triage boundaries
 
 **Changes:** Source review rejects malformed/out-of-range IDs, boolean IDs and non-string decisions; clinical review applies the same expectation bounds and decision type check. Both hidden fields reject out-of-range values and offer a private, explicit detail-page restart. Tests exercise direct services, permissions, HTTP errors, synthetic Chromium recovery and selected PostgreSQL review races. Clinical detail warns about stale reference snapshots.

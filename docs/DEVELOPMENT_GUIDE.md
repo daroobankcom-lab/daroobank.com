@@ -196,7 +196,7 @@ Private product, price and source intake now consistently reject URLs with even 
 
 ### Source and clinical triage boundaries
 
-A malformed hidden expected-review ID in a source claim or clinical draft review is rejected; use the provided link to return to the detail page and reassess. That link starts a fresh form and discards the submitted fields. Even a successful preliminary review records only what that workflow observed: references may change concurrently or later, especially through bypass writers, and a review can already be stale when it commits. Neither the ID checks nor the review establish source rights, authenticity, clinical approval or permission to publish. Use synthetic data only; see [ADR 0028](ARCHITECTURE_DECISIONS/0028-source-clinical-triage-boundaries.md).
+A malformed hidden expected-review ID in a source claim or clinical draft review is rejected; use the provided link to return to the detail page and reassess. That link starts a fresh form and discards the submitted fields. Even a successful preliminary review records only what that workflow observed. Review and reference addition lock the existing bounded reference rows until the surrounding transaction ends, but do not lock absent references or the immediate parent; other writes or later changes can make the observation stale, including a demonstrated parent-update race. Neither the ID checks nor the review establish source rights, authenticity, clinical approval or permission to publish. Use synthetic data only; see [ADR 0028](ARCHITECTURE_DECISIONS/0028-source-clinical-triage-boundaries.md) and [ADR 0029](ARCHITECTURE_DECISIONS/0029-clinical-reference-row-locks.md).
 
 ## Development-only CSV intake receipts
 

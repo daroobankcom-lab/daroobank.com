@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — current-field public search recheck
+
+**Changes:** Before displaying a SQL search candidate, recheck that its fetched current normalized fields still contain the query. Synthetic tests cover stale positives and negatives, unchanged valid matches, Persian normalization and continuation after 150 stale hits.
+
+**Limits:** Stale indexes can still hide matches; this does not repair data, offer a snapshot or prove identity or clinical correctness. See ADR 0046.
+
 ## 2026-11-23 — early HTTPS redirect privacy
 
 **Changes:** A response-only middleware wraps Django's security middleware so its early HTTPS redirects receive the existing privacy headers for known public-read and staff paths. The HTTPS redirect and the disabled staff gate retain their order; synthetic tests cover both, methods, query retention and lookalikes.

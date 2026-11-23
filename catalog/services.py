@@ -116,6 +116,12 @@ def search_product_page(query, cursor=''):
     for product in batch[:MAX_SEARCH_CANDIDATES]:
         scanned += 1
         if is_public_presentation(product):
+            # A bulk update or direct SQL can leave the stored projection stale.
+            # Recheck the current fetched fields before presenting a SQL match.
+            # This cannot find candidates omitted by a stale projection.
+            current_text = normalize_search(' '.join(getattr(product, field) for field in PRESENTATION_SEARCH_FIELDS))
+            if normalized not in current_text:
+                continue
             results.append(product)
             if len(results) == MAX_RESULTS:
                 break

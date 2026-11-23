@@ -8,6 +8,7 @@ import unicodedata
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
 from daroobank.validation import valid_private_source_url, valid_review_reason
@@ -124,6 +125,15 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
     return counts
 
 
+def _lock_latest_review(candidate):
+    """Lock the latest existing review ID; absent and future rows remain unlocked."""
+    using = candidate._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest-review locking requires an atomic writer transaction.')
+    return (ProductCandidateReview.objects.using(using).filter(candidate_id=candidate.pk)
+            .order_by('-pk').select_for_update().only('pk').first())
+
+
 def review_product(*, candidate_id, actor, decision, reason, expected_review, expected_hash):
     if actor is None:
         raise PermissionDenied
@@ -150,7 +160,7 @@ def review_product(*, candidate_id, actor, decision, reason, expected_review, ex
                 or candidate.irc_normalized != normalize_search(candidate.source_fields['irc'])
                 or candidate.payload_sha256 != digest or expected_hash != digest):
             raise ReviewConflict('اطلاعات رکورد تغییر کرده است؛ صفحه را تازه کنید.')
-        latest = candidate.reviews.order_by('-pk').first()
+        latest = _lock_latest_review(candidate)
         if (latest.pk if latest else 0) != expected_review:
             raise ReviewConflict('بازبینی جدیدی ثبت شده است؛ صفحه را تازه کنید.')
         snapshot = {'source_name': candidate.source_name, 'source_url': candidate.source_url,

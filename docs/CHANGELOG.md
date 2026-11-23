@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — source claim creation conflict handling
+
+**Changes:** Source-claim creation translates selected PostgreSQL write conflicts after rollback, and the staff form returns a private HTTP 409 rather than a raw database failure. Tests include a real unique-insert lock timeout at the service and HTTP boundaries, plus simulated selected failures after insertion and explicit replay preserving the original recorder.
+
+**Limits:** No automatic retry, source authorization, production guarantee or outer-commit handling is added. Real deadlock and serialization failures on this path were not reproduced; see ADR 0066.
+
 ## 2026-11-23 — price detail consistency gate
 
 **Changes:** A staff price detail now checks the staged payload before computing its current suggestion; an inconsistent payload shows a warning and suppresses that suggestion and new review form. A stale POST still fails at the existing write-side check. Queue and detail candidate queries no longer join an unused stored suggestion. Synthetic regressions cover changed amount, fields, hash and URL, conflict responses and SQL joins.

@@ -30,6 +30,10 @@ class ClaimError(ValueError):
     pass
 
 
+class ClaimConflict(ClaimError):
+    """A selected transactional conflict while recording a claim."""
+
+
 class ReviewConflict(ValueError):
     pass
 
@@ -93,7 +97,7 @@ def record_claim(*, actor, data):
     require_staff(actor, VIEW, ADD)
     validate_data(data)
     digest = fingerprint(data)
-    with transaction.atomic():
+    with write_conflict_boundary(ClaimConflict):
         return SourceClaim.objects.get_or_create(source_url=data['source_url'], payload_sha256=digest,
                                                   defaults={**data, 'recorded_by': actor})
 

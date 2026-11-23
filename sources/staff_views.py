@@ -14,7 +14,8 @@ from daroobank.scan_responses import invalid_scan_response
 from .date_inspection import DATE_CATEGORIES, MAX_PK, inspect_dates
 from .forms import SourceClaimForm, SourceReviewForm
 from .models import SourceClaim, SourceClaimReview
-from .services import ADD, FIELDS, REVIEW, VIEW, ClaimError, ReviewConflict, date_label, record_claim, require_staff, review_claim
+from .services import (ADD, FIELDS, REVIEW, VIEW, ClaimConflict, ClaimError, ReviewConflict,
+                       date_label, record_claim, require_staff, review_claim)
 
 
 def get_claim(pk):
@@ -81,16 +82,20 @@ def date_inspection(request):
 def create(request):
     require_staff(request.user, VIEW, ADD)
     form = SourceClaimForm(request.POST or None)
+    status = 200
     if request.method == 'POST' and form.is_valid():
         try:
             claim, _created = record_claim(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS})
             return redirect('staff_source_detail', pk=claim.pk)
+        except ClaimConflict as exc:
+            form.add_error(None, str(exc))
+            status = 409
         except ClaimError as exc:
             form.add_error(None, str(exc))
     return render(request, 'staff/source_create.html', {
         'page_title': 'ثبت ادعای منبع | داروبانک', 'description': 'ثبت ادعای حقوق منبع.',
         'noindex': True, 'private_staff': True, 'form': form,
-    })
+    }, status=status)
 
 
 def detail_response(request, claim, *, form=None, status=200):

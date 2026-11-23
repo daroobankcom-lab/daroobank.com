@@ -186,11 +186,19 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
     # Validate the whole file before any write; malformed input cannot partially stage.
     rows = parse_csv(path)
     counts = {'rows': len(rows), 'suggested': 0, 'ambiguous': 0, 'unmatched': 0, 'created': 0, 'duplicates': 0}
+    # Only validated rows reach this point. suggest_product uses precisely these
+    # normalized identity fields; retain one observation per key for this call.
+    # The catalog can change during the call, so these remain advisory, not a snapshot.
+    suggestions = {}
     with transaction.atomic():
         if commit:
             lock_source_stage('price', source_url)
         for row, currency, amount, effective, published in rows:
-            match_status, product = suggest_product(row)
+            identity = tuple(normalize_search(row[field]) for field in IDENTITY_FIELDS)
+            if identity not in suggestions:
+                status, product = suggest_product(row)
+                suggestions[identity] = (status, product.pk if product else None)
+            match_status, product_id = suggestions[identity]
             counts[match_status] += 1
             if not commit:
                 continue
@@ -204,7 +212,7 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
                     'original_amount': row['amount'], 'original_currency': currency,
                     'amount_rial': amount, 'price_category': row['category'], 'unit': row['unit'],
                     'effective_date': effective, 'source_published_date': published,
-                    'suggested_product': product, 'match_status': match_status,
+                    'suggested_product_id': product_id, 'match_status': match_status,
                 },
             )
             counts['created' if created else 'duplicates'] += 1

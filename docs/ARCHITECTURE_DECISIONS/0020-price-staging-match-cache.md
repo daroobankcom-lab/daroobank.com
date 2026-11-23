@@ -1,0 +1,15 @@
+# ADR 0020: request-local matching observations for synthetic price CSV staging
+
+Status: development-only implementation, 22 November 2026; extends the matching rules in [ADR 0004](0004-intake-row-manifest.md).
+
+## Decision
+
+During each `stage_csv` invocation (web preview/stage or local CLI), reuse the first product-matching observation for rows with the same tuple of normalized IRC, manufacturer, strength, dosage form and package description. These are exactly the fields consulted by the current matcher after the whole file passes validation. The request-local dictionary stores only the status and suggested product ID, has at most one key per input row (up to 5,000), and is discarded when the call ends or fails. A subsequent invocation always recomputes its own observations. No cache is shared between requests, users, files or processes.
+
+Every input row still gets its own suggestion count and, for committed receipt-backed web staging, its own row outcome. The original input fields, existing source/payload deduplication, authorization/attestation, transaction and per-source staging lock do not change. A replay does not modify an existing candidate's original suggestion; the new receipt records the current invocation's observation for that row. Ambiguous and unmatched results are also reused; the existing conservative rule for more than 100 indexed candidates is unchanged. Detail suggestions and the accept-suggestion review check are recomputed outside this cache; reject/defer do not perform that acceptance check.
+
+## Consequences and limits
+
+In a synthetic preview with 5,000 matching rows sharing one normalized identity, the matcher issues one catalog query instead of 5,000; this is an operation-count test, not a production performance benchmark. A file with 5,000 distinct identities can still issue 5,000 match queries. The row/key caps do not bound query work, memory bytes, lock waits, wall time or behavior under production load. Database indexes and matching rules still affect outcomes.
+
+The cache intentionally changes within-invocation freshness: if the catalog changes after the first observation, later rows with that key reuse the earlier result; distinct keys may be observed at different times. There is no catalog snapshot, authorization of sources, verification of identity or clinical/price approval. A candidate or receipt may therefore reflect a stale suggestion; reviewers should reassess; accepting a suggestion performs the existing fresh match check. Catalog changes, including concurrent deletion of a suggested product, can still cause transaction failure or rollback. Tests inject a same-transaction change to establish the intended cache semantics; they do not prove concurrency or crash safety. The web form and CLI warn about reuse. Only synthetic non-sensitive data should be used in the development portal.

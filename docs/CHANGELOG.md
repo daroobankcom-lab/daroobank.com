@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — request-local price matching reuse
+
+**Changes:** Price CSV preview and staging now reuse one matching observation per normalized identity within each invocation, preserving per-row counts, receipts, source/payload deduplication and fresh detail and accept-suggestion review matching. The web form and CLI explain the reuse. Tests cover 5,000 repeated and distinct keys, all identity fields, ambiguous sets, replay, receipt outcomes, rollback and catalog changes between rows; synthetic Chromium exercises price preview at four widths.
+
+**Limits:** Repeated rows may reuse a stale first observation if the catalog changes during the call; different identities can reflect different times. This is not a snapshot, production benchmark, source authorization or approval. Up to 5,000 distinct identities can still cause 5,000 matching queries; byte size, database work and time are not bounded by the cache.
+
 ## 2026-11-22 — synthetic clinical review snapshot inspection
 
 **Changes:** Added a private read-only, per-draft, 50-review scan with page-local status filters and non-reflecting error recovery. It validates supported historical draft and supplementary-evidence snapshot structures, reports missing or invalid images and compares the snapshot draft hash/author ID to a technically consistent current version. It shows IDs and fixed statuses only. PostgreSQL tests and synthetic Chromium exercise access, tampering, pagination and selected accessibility checks.

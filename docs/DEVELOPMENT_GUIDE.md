@@ -78,6 +78,8 @@ DAROOBANK_DEBUG=1 .venv/bin/python manage.py list_price_candidates --limit 30
 # Optional: --status suggested, ambiguous, or unmatched
 ```
 
+During one preview or staging invocation, rows with identical normalized IRC, manufacturer, strength, dosage form and package description reuse the first matching observation for that identity. Other fields, including amount and source record ID, remain distinct row data and do not enter the match key; deduplication and row receipts are unchanged. This bounds cached keys to at most the input's 5,000 rows but does not bound query work or time. The cache is discarded after the invocation, and the detail suggestion and accept-suggestion review check are recomputed. Concurrent catalog changes may be missed for later rows with a reused key, while distinct keys may reflect different times; this is not a snapshot or verification. A replay leaves the original candidate suggestion intact even when the new receipt records a different current invocation result. See [ADR 0020](ARCHITECTURE_DECISIONS/0020-price-staging-match-cache.md).
+
 The JSON output includes the original match status and a fresh current suggestion. The initial match is only a snapshot and can become stale; even a current exact match is **not verification**, does not establish IRC scope and must be independently reviewed. This command does not approve candidates. Existing candidate revisions are not changed on replay, and identical source/record/payload combinations are deduplicated. This command records no review decision. There is no tamper-proof audit log, official-source integration, automatic scheduler or public price publication.
 
 ## Development-only staff queue

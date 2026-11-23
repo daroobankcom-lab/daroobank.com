@@ -518,6 +518,30 @@ async function run() {
       assert.match(await page.locator('body').innerText(), /گام ۲۱|گام 21/);
       await checkLayout(page, `lineage next ${width}`);
       await context.close();
+      const priceContext = await contextFor(browser, width, errors);
+      const pricePage = await priceContext.newPage();
+      await login(pricePage, 'browser-price-stager');
+      response = await pricePage.goto(base + '/staff/prices/import/');
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('.staff-panel-note').innerText(), /اولین نتیجه تطبیق/);
+      await checkLayout(pricePage, `price preview form ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'price preview form');
+      await pricePage.locator('#id_source_name').fill('منبع ساختگی مرورگر');
+      await pricePage.locator('#id_source_url').fill('https://example.org/browser-price');
+      const csv = 'source_record_id,irc,manufacturer,strength,dosage_form,package_description,amount,currency,category,unit,effective_date,source_published_date\n' +
+        'browser-1,001,سازنده فرضی,1 mg,قرص,10 عدد,100,RIAL,retail,package,,\n' +
+        'browser-2,۰۰۱,سازنده فرضی,1 mg,قرص,10 عدد,200,RIAL,retail,package,,\n';
+      await pricePage.locator('#id_csv_file').setInputFiles({name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(csv)});
+      const [preview] = await Promise.all([
+        pricePage.waitForResponse(r => r.url().endsWith('/staff/prices/import/') && r.request().method() === 'POST'),
+        pricePage.locator('.staff-review-form button[type=submit]').click(),
+      ]);
+      assert.equal(preview.status(), 200);
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /ردیف‌ها: 2/);
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /پیشنهاد تطبیق: 2/);
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /هیچ قیمتی منتشر نشده/);
+      await checkLayout(pricePage, `price preview result ${width}`);
+      await priceContext.close();
     }
     const authorContext = await contextFor(browser, 390, errors);
     const page = await authorContext.newPage();

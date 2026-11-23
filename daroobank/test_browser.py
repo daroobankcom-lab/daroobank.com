@@ -17,6 +17,8 @@ from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresen
 from catalog.test_identity import ALL, INGREDIENT, build, user
 from clinical.services import create_draft, draft_data, review_draft
 from clinical.evidence import evidence_state
+from ingestion.models import ImportReceipt
+from pricing.models import PriceCandidate
 from sources.services import record_claim
 from tools.browser_test_diagnostics import browser_failure_annotation
 
@@ -62,6 +64,9 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                      reason='دلیل خصوصی ساختگی بازبینی مرورگر', expected_review=0,
                      expected_hash=clinical_leaf.payload_sha256,
                      expected_evidence_hash=evidence_state(clinical_leaf)['fingerprint'])
+        price_stager = user('browser-price-stager')
+        price_stager.user_permissions.add(*Permission.objects.filter(content_type__app_label='pricing',
+                                         codename__in=['view_pricecandidate', 'add_pricecandidate']))
         ingredient, _, formulation, product, package = build(author)
         leaf = ingredient
         for i in range(22):
@@ -91,5 +96,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IngredientDraft.objects.filter(name_fa='csrf-canary').count(), 0)
         self.assertEqual(IngredientDraft.objects.filter(name_fa='ماده تازه ساختگی مرورگر').count(), 1)
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
+        self.assertEqual(PriceCandidate.objects.count(), 0)
+        self.assertEqual(ImportReceipt.objects.count(), 0)
         self.assertIn('browser checks passed', result.stdout)
         print(result.stdout.strip())

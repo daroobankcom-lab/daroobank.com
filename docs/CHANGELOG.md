@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — selected price latest-review lock
+
+**Changes:** Price triage locks its latest existing review while comparing the prior ID. Synthetic PostgreSQL tests cover selected competing writers, transaction boundaries, deferred insertion and the acceptance path holding the existing product lock; the private page describes history limits.
+
+**Limits:** Only the latest existing row and its ID are involved; prior content is not checked, deferred insertion and later bypass remain possible, product matching is not a uniqueness guarantee, and added locks may wait or deadlock. No retry, approval or publication is added; see ADR 0051.
+
 ## 2026-11-23 — selected source latest-review lock
 
 **Changes:** Source triage locks its latest existing review while comparing the prior ID. Synthetic PostgreSQL tests cover selected competing writers, transaction boundaries and deferred insertion, and the private detail page describes history limitations. A clinical test also checks a preceding update with unchanged ID.

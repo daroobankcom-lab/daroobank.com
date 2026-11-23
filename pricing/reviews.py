@@ -8,6 +8,7 @@ import re
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
 from daroobank.validation import valid_review_reason
@@ -68,6 +69,15 @@ def ensure_candidate_integrity(candidate):
         raise ReviewConflict('اطلاعات منبع یا مقدار ذخیره‌شده تغییر کرده است؛ بررسی متوقف شد.')
 
 
+def _lock_latest_review(candidate):
+    """Lock the latest existing review ID; absent and future rows remain unlocked."""
+    using = candidate._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest-review locking requires an atomic writer transaction.')
+    return (PriceCandidateReview.objects.using(using).filter(candidate_id=candidate.pk)
+            .order_by('-pk').select_for_update().only('pk').first())
+
+
 def record_preliminary_review(*, candidate_id, actor, decision, reason, expected_review, expected_product, expected_product_hash):
     if not actor or not actor.is_authenticated or not actor.is_active or not actor.is_staff or not actor.has_perm('pricing.view_pricecandidate') or not actor.has_perm('pricing.review_pricecandidate'):
         raise PermissionDenied
@@ -88,7 +98,7 @@ def record_preliminary_review(*, candidate_id, actor, decision, reason, expected
         if not current_account_exists(candidate.staged_by_id, using=candidate._state.db):
             raise ReviewConflict('حساب ثبت‌کننده در دسترس نیست؛ بررسی متوقف شد.')
         ensure_candidate_integrity(candidate)
-        latest = candidate.reviews.order_by('-pk').first()
+        latest = _lock_latest_review(candidate)
         if (latest.pk if latest else 0) != expected_review:
             raise ReviewConflict('این رکورد هم‌زمان تغییر کرده است؛ صفحه را تازه کنید.')
         product = None

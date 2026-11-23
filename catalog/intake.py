@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
+from daroobank.bounded_read import read_bounded_bytes
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from ingestion.exceptions import StagingConflict
@@ -65,7 +66,7 @@ def valid_fields(row):
 
 def parse_product_csv(file):
     try:
-        data = file.read(MAX_FILE_BYTES + 1)
+        data = read_bounded_bytes(file, limit=MAX_FILE_BYTES)
     except OSError as exc:
         raise IntakeError('خواندن فایل ممکن نیست.') from exc
     if len(data) > MAX_FILE_BYTES:

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — bounded CSV short-read handling
+
+**Changes:** Both synthetic CSV parsers now join ordinary short reads up to EOF or one byte beyond the existing size cap before validating any rows. A reproduced prefix-acceptance bug could otherwise stage a partial file; tests check valid and invalid tails, no partial receipt, byte and call limits, HTTP and CLI read failures.
+
+**Limits:** EOF is trusted, reads can block and callers with exceptionally fragmented streams may hit the read-call cap. This is not file provenance, source authorization or a production availability guarantee; see ADR 0059.
+
 ## 2026-11-23 — ID-only account existence reads
 
 **Changes:** Source and clinical queue presence checks and both account checks in the clinical technical scan now select only account IDs, rather than full account objects. Tests cover invalid/duplicate IDs, inactive users, alias forwarding, query columns and the existing bounds.

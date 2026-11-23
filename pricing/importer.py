@@ -10,6 +10,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
 
+from daroobank.bounded_read import read_bounded_bytes
 from daroobank.validation import valid_private_source_url
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from ingestion.exceptions import StagingConflict
@@ -89,10 +90,10 @@ def parse_date(value, field):
 def parse_csv(path):
     try:
         if hasattr(path, 'read'):
-            data = path.read(MAX_FILE_BYTES + 1)
+            data = read_bounded_bytes(path, limit=MAX_FILE_BYTES)
         else:
             with Path(path).open('rb') as f:
-                data = f.read(MAX_FILE_BYTES + 1)
+                data = read_bounded_bytes(f, limit=MAX_FILE_BYTES)
     except OSError as exc:
         raise ImportValidationError('Cannot read input file.') from exc
     if len(data) > MAX_FILE_BYTES:

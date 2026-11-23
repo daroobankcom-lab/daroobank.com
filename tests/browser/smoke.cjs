@@ -407,6 +407,30 @@ async function run() {
         await assert.rejects(checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'mutated background'), /background images/);
         await backgroundMutation.evaluate(node => node.remove());
       }
+      await page.goto(base + '/staff/clinical/');
+      await page.getByRole('link', {name: 'بازرسی فنی محدود پیش‌نویس‌ها ←'}).click();
+      assert.equal(new URL(page.url()).pathname, '/staff/clinical/inspection/');
+      await checkScanIdSyntax(page, `clinical scan ${width}`);
+      await submitLocalizedScan(page, '۰۰۰۰');
+      await checkStaffScanError(page, 'clinical scan', width);
+      await page.getByRole('link', {name: 'صف پیش‌نویس‌ها ←'}).focus();
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#after', `clinical scan start ${width}`, '.staff-section');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#category', `clinical scan category ${width}`, '.staff-section');
+      await page.locator('#category').selectOption('available');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '.staff-filter button', `clinical scan submit ${width}`, '.staff-section');
+      await Promise.all([page.waitForURL('**/staff/clinical/inspection/?after=0&category=available'), page.keyboard.press('Enter')]);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      assert.equal(await page.getByRole('link', {name: 'جزئیات پیش‌نویس'}).count(), 1);
+      assert(!(await page.locator('main').innerText()).includes('عنوان خصوصی مرورگر'));
+      await checkLayout(page, `clinical scan ${width}`);
+      if (width === 390) {
+        await auditAccessibility(page, 'clinical scan');
+        await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical scan status');
+      }
+      await page.goto(base + '/staff/sources/dates/');
       await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       await page.getByRole('link', {name: 'ورود به بازرسی کاتالوگ'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/catalog/quality/');

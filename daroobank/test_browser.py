@@ -15,6 +15,7 @@ from django.utils import timezone
 from catalog.identity import digest, ingredient_snapshot, revise_identity
 from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresentation
 from catalog.test_identity import ALL, INGREDIENT, build, user
+from clinical.services import create_draft
 from sources.services import record_claim
 from tools.browser_test_diagnostics import browser_failure_annotation
 
@@ -34,6 +35,15 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         author = user('browser-author', *ALL, 'view_productcandidate', 'view_productpresentation')
         author.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
                                     codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        author.user_permissions.add(*Permission.objects.filter(content_type__app_label='clinical',
+                                    codename__in=['view_clinicaldraft', 'add_clinicaldraft']))
+        create_draft(actor=author, data={
+            'subject': 'موضوع ساختگی مرورگر', 'audience': 'patient', 'title': 'عنوان خصوصی مرورگر',
+            'statement': 'متن خصوصی و ساختگی برای آزمون مرورگر', 'reference_title': 'مرجع فرضی',
+            'reference_url': 'https://example.org/browser', 'reference_location': 'بخش فرضی',
+            'reference_author': '', 'reference_version': '', 'reference_published_on': None,
+            'reference_accessed_on': None,
+        })
         record_claim(actor=author, data={
             'source_name': 'منبع ساختگی مرورگر', 'source_url': 'https://example.org/fixture',
             'owner': 'مالک فرضی', 'evidence_url': 'https://example.org/evidence', 'evidence_note': '',

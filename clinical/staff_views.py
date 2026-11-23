@@ -6,7 +6,10 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.scan_input import parse_scan_after
+from daroobank.scan_responses import invalid_scan_response
 from sources.services import related_claims
+from .inspection import CATEGORIES, MAX_PK, inspect_drafts
 from .forms import DraftForm, ReferenceForm, RevisionForm, ReviewForm
 from .evidence import ASSERTION_FIELDS, add_reference, evidence_state, reviewed_evidence
 from .models import ClinicalDraft, ClinicalDraftReview
@@ -39,6 +42,25 @@ def drafts(request):
         'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'audience': audience,
         'can_add': request.user.has_perm(ADD), 'can_products': request.user.has_perm('catalog.view_productcandidate'),
         'can_prices': request.user.has_perm('pricing.view_pricecandidate'), 'can_sources': request.user.has_perm('sources.view_sourceclaim'),
+    })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def inspection(request):
+    require_staff(request.user, VIEW)
+    category = request.GET.get('category', '')
+    try:
+        after = parse_scan_after(request.GET.get('after', '0'), maximum=MAX_PK)
+    except ValueError:
+        return invalid_scan_response(request, restart_route='staff_clinical_inspection')
+    if category not in ('', *CATEGORIES):
+        return invalid_scan_response(request, restart_route='staff_clinical_inspection')
+    report = inspect_drafts(after=after, category=category)
+    return render(request, 'staff/clinical_inspection.html', {
+        'page_title': 'بازرسی فنی پیش‌نویس‌ها | داروبانک',
+        'description': 'بازرسی محدود پیش‌نویس‌های ساختگی.',
+        'noindex': True, 'private_staff': True, 'report': report,
     })
 
 

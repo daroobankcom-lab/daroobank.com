@@ -20,3 +20,5 @@
 - [0011: indexed IRC inspection across batches](0011-indexed-irc-inspection.md) — development implementation, 22 November 2026.
 
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.
+
+- [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.

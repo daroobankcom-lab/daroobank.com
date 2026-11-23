@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — synthetic clinical technical inspection
+
+**Changes:** Added a private, view-permission-only, forward-only inspection of up to 50 draft versions per section with page-local status filtering. Reuses current draft/immediate-parent and bounded supplementary-reference checks, shows only IDs and fixed statuses, and offers non-reflecting invalid-input recovery. PostgreSQL and synthetic Chromium tests cover validation, permissions, bounded queries, paging, privacy and selected accessibility checks.
+
+**Limits:** Not a snapshot or full lineage/review audit; no check proves authenticity, evidence quality, source rights, clinical validity or publication readiness. Query count is bounded, not database work or response size/time; this remains development-only. Axe contrast inconclusives require manual review.
+
 ## 2026-11-22 — private scan error recovery
 
 **Changes:** Authorized staff now receive a generic Persian HTTP 400 page for invalid catalog-quality or source-date scan parameters, with a fixed local restart link and no reflected input. Restart clears position and filter. Existing authorization, validation, privacy headers and scan limits remain unchanged. Server and synthetic browser tests cover error handling, access checks and recovery.

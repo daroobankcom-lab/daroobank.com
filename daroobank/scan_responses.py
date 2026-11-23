@@ -2,7 +2,7 @@
 from django.shortcuts import render
 
 
-_RESTART_ROUTES = frozenset({'staff_catalog_quality', 'staff_source_date_inspection'})
+_RESTART_ROUTES = frozenset({'staff_catalog_quality', 'staff_source_date_inspection', 'staff_clinical_inspection'})
 
 
 def invalid_scan_response(request, *, restart_route):

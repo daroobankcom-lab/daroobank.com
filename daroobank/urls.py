@@ -22,6 +22,7 @@ urlpatterns = [
     path('staff/operations/imports/', ingestion_staff_views.receipts, name='staff_import_receipts'),
     path('staff/operations/imports/<int:pk>/', ingestion_staff_views.receipt_detail, name='staff_import_receipt_detail'),
     path('staff/clinical/', clinical_staff_views.drafts, name='staff_clinical_drafts'),
+    path('staff/clinical/inspection/', clinical_staff_views.inspection, name='staff_clinical_inspection'),
     path('staff/clinical/new/', clinical_staff_views.create, name='staff_clinical_create'),
     path('staff/clinical/<int:pk>/revise/', clinical_staff_views.revise, name='staff_clinical_revise'),
     path('staff/clinical/<int:pk>/references/new/', clinical_staff_views.reference_create, name='staff_clinical_reference_create'),

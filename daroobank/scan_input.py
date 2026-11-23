@@ -1,4 +1,4 @@
-"""Parse starting IDs for the two private, read-only scan forms."""
+"""Parse starting IDs for private, read-only scan forms."""
 
 _DIGITS = str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789')
 

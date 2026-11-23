@@ -88,14 +88,28 @@ class CatalogQualityTests(TestCase):
         for val in [-1, MAX_PK + 1, True, '1', None]:
             with self.subTest(val=val), self.assertRaises(QualityError): inspect_batch(after=val)
         self.client.force_login(self.user)
-        for val in ['', '-1', '+1', ' 1', '١', '1e2', '1'*100, str(MAX_PK + 1), 'x']:
+        for val in ['', '-1', '+1', ' 1', '१', '۱e2', '1e2', '1'*100, str(MAX_PK + 1), '۹۲۲۳۳۷۲۰۳۶۸۵۴۷۷۵۸۰۸', 'x']:
             self.assertEqual(self.client.get(reverse('staff_catalog_quality'), {'after': val}).status_code, 400)
-        self.assertEqual(self.client.get(reverse('staff_catalog_quality'), {'after': MAX_PK}).status_code, 200)
-        self.assertEqual(self.client.get(reverse('staff_catalog_quality'), {'after': '0' * 19}).status_code, 200)
+        for raw, expected in [('١', 1), ('۰' * 19, 0), ('۱2٣', 123), ('۹۲۲۳۳۷۲۰۳۶۸۵۴۷۷۵۸۰۷', MAX_PK),
+                              (str(MAX_PK), MAX_PK)]:
+            response = self.client.get(reverse('staff_catalog_quality'), {'after': raw})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.context['report']['after'], expected)
         html = self.client.get(reverse('staff_catalog_quality'))
         self.assertContains(html, 'aria-describedby="after-hint"')
-        self.assertContains(html, 'pattern="[0-9]{1,19}"')
+        self.assertContains(html, 'pattern="[0-9۰-۹٠-٩]{1,19}"')
         self.assertContains(html, '9223372036854775807')
+
+    def test_localized_starting_id_selects_same_batch(self):
+        self.client.force_login(self.user)
+        url = reverse('staff_catalog_quality')
+        ascii_id = str(self.public.pk)
+        persian_id = ascii_id.translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
+        arabic_id = ascii_id.translate(str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩'))
+        reports = [self.client.get(url, {'after': raw}).context['report'] for raw in (ascii_id, persian_id, arabic_id)]
+        self.assertEqual(reports[0], reports[1])
+        self.assertEqual(reports[0], reports[2])
+        self.assertEqual([row['id'] for row in reports[0]['rows']], [self.draft.pk])
 
     def test_next_link_and_duplicates_across_batch_boundary_are_not_claimed(self):
         self.draft.irc = ''

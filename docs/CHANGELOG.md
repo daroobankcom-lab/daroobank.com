@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — localized staff inspection IDs
+
+**Changes:** The source-date and catalog-quality starting-ID forms now accept Persian, Arabic-Indic and ASCII digits, including mixed scripts. A shared bounded parser maps only these digits before integer conversion; the unchanged upper limit and permissions still apply. Unit, PostgreSQL and synthetic Chromium tests cover localized values, equivalence, exact boundaries and invalid formats.
+
+**Limits:** Other numeral sets, signs, separators and exponent notation are rejected. HTML validates syntax only; the server checks the exact maximum. Device keyboards, screen readers and all browser engines remain untested; this does not change source rights or clinical validity.
+
 ## 2026-11-22 — staff inspection ID entry
 
 **Changes:** Replaced the two starting-ID number controls with required numeric-mode text controls and an ASCII digit syntax constraint, plus visible accessible guidance. This preserves large integer text exactly and prevents empty or exponent-form submissions that the server rejected. Existing server limits, query behavior, permissions and data remain unchanged. Synthetic Chromium checks syntax and invalid submission at four widths; PostgreSQL tests cover the boundaries.

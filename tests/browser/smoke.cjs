@@ -65,10 +65,11 @@ async function checkScanIdSyntax(page, label) {
   assert.equal(await input.getAttribute('type'), 'text');
   assert.equal(await input.getAttribute('inputmode'), 'numeric');
   assert.equal(await input.getAttribute('aria-describedby'), 'after-hint');
-  assert.match(await page.locator('#after-hint').innerText(), /فقط ارقام انگلیسی/);
-  for (const [value, expected] of [['0', true], ['0001', true], ['9223372036854775807', true],
+  assert.match(await page.locator('#after-hint').innerText(), /ارقام فارسی، عربی یا انگلیسی/);
+  for (const [value, expected] of [['0', true], ['0001', true], ['۱2٣', true], ['١', true],
+                                    ['۹۲۲۳۳۷۲۰۳۶۸۵۴۷۷۵۸۰۷', true], ['9223372036854775807', true],
                                     ['9223372036854775808', true], ['', false], ['1e2', false],
-                                    ['١', false], ['12345678901234567890', false]]) {
+                                    ['१', false], ['12345678901234567890', false]]) {
     await input.fill(value);
     assert.equal(await input.inputValue(), value, `${label}: input precision`);
     assert.equal(await input.evaluate(element => element.validity.valid), expected, `${label}: syntax for ${value}`);
@@ -88,6 +89,21 @@ async function checkScanIdSyntax(page, label) {
   });
   assert.deepEqual(blocked, {invalid: true, submitted: false}, `${label}: invalid ID submitted`);
   await input.fill('0');
+}
+
+async function submitLocalizedScan(page, value) {
+  const pathname = new URL(page.url()).pathname;
+  await page.locator('#after').fill(value);
+  const [response] = await Promise.all([
+    page.waitForResponse(result => {
+      const url = new URL(result.url());
+      return result.request().method() === 'GET' && url.pathname === pathname && url.searchParams.get('after') === value;
+    }),
+    page.locator('#after').press('Enter'),
+  ]);
+  assert.equal(response.status(), 200);
+  await page.waitForLoadState('load');
+  assert.equal(await page.locator('#after').inputValue(), '0');
 }
 
 async function checkKeyboardFocus(page, selector, label, container) {
@@ -331,6 +347,7 @@ async function run() {
       assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
       assert.equal(await page.getByLabel('وضعیت تاریخ در این بخش').count(), 1);
       await checkScanIdSyntax(page, `source scan ${width}`);
+      await submitLocalizedScan(page, '۰۰۰۰');
       await page.getByRole('link', {name: 'فهرست ادعاهای منبع ←'}).focus();
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '#after', `scan start ${width}`, '.staff-section');
@@ -372,6 +389,7 @@ async function run() {
       assert.equal(new URL(page.url()).pathname, '/staff/catalog/quality/');
       assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
       await checkScanIdSyntax(page, `catalog scan ${width}`);
+      await submitLocalizedScan(page, '٠٠٠٠');
       await page.getByRole('link', {name: 'صف نامزدهای فرآورده ←'}).focus();
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '#after', `quality start ${width}`, '.staff-section');

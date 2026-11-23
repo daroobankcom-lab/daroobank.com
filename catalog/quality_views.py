@@ -1,10 +1,10 @@
 """Private, read-only development catalog diagnostics."""
-import re
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import render
 from django.views.decorators.http import require_safe
 
+from daroobank.scan_input import parse_scan_after
 from .intake import require_staff
 from .quality import ISSUE_LABELS, MAX_PK, inspect_batch
 from .quality_irc import InvalidIRCCursor, QualityAnchorNotFound, inspect_irc
@@ -14,10 +14,11 @@ from .quality_irc import InvalidIRCCursor, QualityAnchorNotFound, inspect_irc
 @require_safe
 def quality(request):
     require_staff(request.user, 'catalog.view_productpresentation')
-    raw = request.GET.get('after', '0')
-    if not re.fullmatch(r'[0-9]{1,19}', raw) or int(raw) > MAX_PK:
+    try:
+        after = parse_scan_after(request.GET.get('after', '0'), maximum=MAX_PK)
+    except ValueError:
         return HttpResponseBadRequest('Invalid starting ID.')
-    report = inspect_batch(after=int(raw))
+    report = inspect_batch(after=after)
     for item in report['rows']:
         item['issue_labels'] = [ISSUE_LABELS[code] for code in item['issues']]
     return render(request, 'staff/catalog_quality.html', {

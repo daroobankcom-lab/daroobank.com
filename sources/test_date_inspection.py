@@ -103,16 +103,20 @@ class SourceDateInspectionTests(TestCase):
         self.client.force_login(self.viewer)
         for params in [{'after': ''}, {'after': '-1'}, {'after': 'x'}, {'after': '1e2'},
                        {'after': '1' * 20}, {'after': str(MAX_PK + 1)},
-                       {'after': '١'}, {'category': 'EXPIRED'}, {'category': '<script>'}]:
+                       {'after': '۹۲۲۳۳۷۲۰۳۶۸۵۴۷۷۵۸۰۸'}, {'after': '१'},
+                       {'category': 'EXPIRED'}, {'category': '<script>'}]:
             with self.subTest(params=params):
                 response = self.client.get(url, params)
                 self.assertEqual(response.status_code, 400)
                 self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
-        self.assertEqual(self.client.get(url, {'after': MAX_PK}).status_code, 200)
-        self.assertEqual(self.client.get(url, {'after': '0' * 19}).status_code, 200)
+        for raw, expected in [('١', 1), ('۰' * 19, 0), ('۱2٣', 123), ('۹۲۲۳۳۷۲۰۳۶۸۵۴۷۷۵۸۰۷', MAX_PK),
+                              (str(MAX_PK), MAX_PK)]:
+            response = self.client.get(url, {'after': raw})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.context['report']['after'], expected)
         html = self.client.get(url)
         self.assertContains(html, 'aria-describedby="after-hint"')
-        self.assertContains(html, 'pattern="[0-9]{1,19}"')
+        self.assertContains(html, 'pattern="[0-9۰-۹٠-٩]{1,19}"')
         self.assertContains(html, '9223372036854775807')
         self.assertEqual(self.client.post(url).status_code, 405)
         self.assertEqual(self.client.head(url).status_code, 200)
@@ -120,6 +124,20 @@ class SourceDateInspectionTests(TestCase):
             self.assertEqual(self.client.get(url).status_code, 404)
         self.assertNotContains(self.client.get(reverse('home')), url)
         self.assertNotContains(self.client.get(reverse('sitemap')), url)
+
+    def test_localized_starting_id_selects_same_batch_and_cursor(self):
+        self.client.force_login(self.viewer)
+        url = reverse('staff_source_date_inspection')
+        ascii_id = str(self.ids[49])
+        persian_id = ascii_id.translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
+        arabic_id = ascii_id.translate(str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩'))
+        with patch('sources.date_inspection.timezone.localdate', return_value=TODAY):
+            reports = [self.client.get(url, {'after': raw, 'category': 'expired'}).context['report']
+                       for raw in (ascii_id, persian_id, arabic_id)]
+        self.assertEqual(reports[0], reports[1])
+        self.assertEqual(reports[0], reports[2])
+        self.assertEqual(reports[0]['scanned'], 50)
+        self.assertEqual(reports[0]['next_after'], self.ids[99])
 
     def test_html_linked_batches_hide_claim_text_and_never_fetch(self):
         self.client.force_login(self.viewer)

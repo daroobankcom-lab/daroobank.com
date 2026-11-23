@@ -1,6 +1,4 @@
 """Development-only registry of unverified source claims."""
-import re
-
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
@@ -9,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.scan_input import parse_scan_after
 from .date_inspection import DATE_CATEGORIES, MAX_PK, inspect_dates
 from .forms import SourceClaimForm, SourceReviewForm
 from .models import SourceClaim, SourceClaimReview
@@ -56,12 +55,14 @@ def claims(request):
 @require_safe
 def date_inspection(request):
     require_staff(request.user, VIEW)
-    raw_after = request.GET.get('after', '0')
     category = request.GET.get('category', '')
-    if (not re.fullmatch(r'[0-9]{1,19}', raw_after) or int(raw_after) > MAX_PK
-            or category not in ('', *DATE_CATEGORIES)):
+    try:
+        after = parse_scan_after(request.GET.get('after', '0'), maximum=MAX_PK)
+    except ValueError:
         return HttpResponseBadRequest('Invalid inspection parameters.')
-    report = inspect_dates(after=int(raw_after), category=category)
+    if category not in ('', *DATE_CATEGORIES):
+        return HttpResponseBadRequest('Invalid inspection parameters.')
+    report = inspect_dates(after=after, category=category)
     return render(request, 'staff/source_date_inspection.html', {
         'page_title': 'پیمایش تاریخ ادعاها | داروبانک', 'description': 'بازرسی محدود تاریخ‌های اعلام‌شده.',
         'noindex': True, 'private_staff': True, 'report': report,

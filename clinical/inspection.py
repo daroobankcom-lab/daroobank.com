@@ -1,9 +1,9 @@
 """Bounded technical clues for synthetic drafts, not evidence verification."""
-from .evidence import evidence_state
+from .evidence import MAX_INSPECTION_DRAFTS, inspection_evidence_statuses
 from .models import ClinicalDraft
 from .services import valid_draft
 
-BATCH_SIZE = 50
+BATCH_SIZE = MAX_INSPECTION_DRAFTS
 MAX_PK = 9_223_372_036_854_775_807
 CATEGORIES = ('available', 'draft_invalid', 'evidence_invalid', 'evidence_over_limit')
 
@@ -19,12 +19,14 @@ def inspect_drafts(*, after=0, category=''):
         raise InvalidInspection
     drafts = list(ClinicalDraft.objects.select_related('parent').filter(pk__gt=after).order_by('pk')[:BATCH_SIZE + 1])
     batch = drafts[:BATCH_SIZE]
+    valid = [draft for draft in batch if valid_draft(draft)]
+    statuses = inspection_evidence_statuses(valid)
     rows = []
     for draft in batch:
-        if not valid_draft(draft):
+        if draft.pk not in statuses:
             status = 'draft_invalid'
         else:
-            evidence = evidence_state(draft)['status']
+            evidence = statuses[draft.pk]
             status = {'available': 'available', 'invalid': 'evidence_invalid', 'over_limit': 'evidence_over_limit'}[evidence]
         if not category or status == category:
             rows.append({'id': draft.pk, 'status': status})

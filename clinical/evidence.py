@@ -5,6 +5,7 @@ from datetime import date
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Prefetch, prefetch_related_objects
 
 from .models import ClinicalDraft, ClinicalReferenceAssertion
 from .services import (ADD, HASH, REFERENCE_FIELDS, VIEW, DraftConflict, DraftError, require_staff,
@@ -12,6 +13,7 @@ from .services import (ADD, HASH, REFERENCE_FIELDS, VIEW, DraftConflict, DraftEr
 
 ASSERTION_FIELDS = REFERENCE_FIELDS + ('relation',)
 MAX_REFERENCES = 10
+MAX_INSPECTION_DRAFTS = 50
 
 
 def validate_reference(data):
@@ -49,15 +51,22 @@ def valid_reference(item, draft):
         return False
 
 
+def _check_assertions(draft, items):
+    """Apply the shared cap and per-assertion checks before looking up recorders."""
+    if len(items) > MAX_REFERENCES:
+        return 'over_limit', set()
+    if any(not valid_reference(item, draft) or type(item.recorded_by_id) is not int or item.recorded_by_id <= 0 for item in items):
+        return 'invalid', set()
+    return 'available', {item.recorded_by_id for item in items}
+
+
 def evidence_state(draft):
     """Return at most ten validated assertions, not evidence verification."""
     # Do not use an inner join: a corrupted missing recorder must not hide an assertion.
     items = list(draft.additional_references.order_by('pk')[:MAX_REFERENCES + 1])
-    if len(items) > MAX_REFERENCES:
-        return {'status': 'over_limit'}
-    if any(not valid_reference(item, draft) or type(item.recorded_by_id) is not int or item.recorded_by_id <= 0 for item in items):
-        return {'status': 'invalid'}
-    recorder_ids = {item.recorded_by_id for item in items}
+    status, recorder_ids = _check_assertions(draft, items)
+    if status != 'available':
+        return {'status': status}
     recorders = get_user_model().objects.in_bulk(recorder_ids) if recorder_ids else {}
     if set(recorders) != recorder_ids:
         return {'status': 'invalid'}
@@ -69,6 +78,40 @@ def evidence_state(draft):
     snapshots = [{'id': item.pk, 'recorded_by_id': item.recorded_by_id, 'payload_sha256': item.payload_sha256,
                   'reference': serialize(reference_data(item))} for item in items]
     return {'status': 'available', 'items': items, 'fingerprint': fingerprint, 'snapshot': snapshots}
+
+
+def inspection_evidence_statuses(drafts):
+    """Batch status-only checks for at most 50 already-valid, distinct drafts.
+
+    Per-parent sliced prefetch uses a PostgreSQL window: at most 11 assertions
+    per draft reach Python, including the over-limit sentinel. Do not join to
+    recorders: an absent recorder must remain visible as an invalid assertion.
+    This diagnostic is read-only and is not a replacement for evidence_state
+    in write/review workflows.
+    """
+    if (len(drafts) > MAX_INSPECTION_DRAFTS or any(draft.pk is None or draft._state.adding for draft in drafts)
+            or len({draft.pk for draft in drafts}) != len(drafts)):
+        raise ValueError('Expected at most 50 distinct persisted drafts')
+    if not drafts:
+        return {}
+    # prefetch_related_objects skips an existing to_attr; never reuse stale rows
+    # if the same model instances happen to be passed to a later inspection.
+    for draft in drafts:
+        if hasattr(draft, '_inspection_references'):
+            del draft._inspection_references
+    prefetch_related_objects(drafts, Prefetch(
+        'additional_references',
+        queryset=ClinicalReferenceAssertion.objects.order_by('pk')[:MAX_REFERENCES + 1],
+        to_attr='_inspection_references',
+    ))
+    results, needed = {}, set()
+    for draft in drafts:
+        status, recorder_ids = _check_assertions(draft, draft._inspection_references)
+        results[draft.pk] = (status, recorder_ids)
+        needed.update(recorder_ids)
+    recorders = get_user_model().objects.in_bulk(needed) if needed else {}
+    return {pk: ('invalid' if status == 'available' and not ids.issubset(recorders) else status)
+            for pk, (status, ids) in results.items()}
 
 
 def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_evidence_hash):

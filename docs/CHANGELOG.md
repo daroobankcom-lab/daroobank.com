@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — batch clinical technical inspection queries
+
+**Changes:** Replaced per-draft reference and recorder lookups in the clinical scan with a per-draft PostgreSQL window and bulk recorder lookup, retaining the existing shared reference/cap checks and over-limit precedence. The diagnostic now runs at most three SELECTs for 50 drafts and fetches at most 11 assertions per valid draft; the write/review workflow retains its individual state and snapshots. Added boundary, reused-instance, missing-recorder and equivalence tests.
+
+**Limits:** This is not a consistent snapshot, and fewer returned rows/queries do not bound database work or establish clinical, source or audit validity. PostgreSQL query performance on production data is unmeasured; this remains a synthetic development diagnostic.
+
 ## 2026-11-22 — synthetic clinical technical inspection
 
 **Changes:** Added a private, view-permission-only, forward-only inspection of up to 50 draft versions per section with page-local status filtering. Reuses current draft/immediate-parent and bounded supplementary-reference checks, shows only IDs and fixed statuses, and offers non-reflecting invalid-input recovery. PostgreSQL and synthetic Chromium tests cover validation, permissions, bounded queries, paging, privacy and selected accessibility checks.

@@ -3,6 +3,7 @@ import json
 from django.core.management.base import BaseCommand, CommandError
 from pricing.importer import match_fields_valid, suggest_product
 from pricing.models import PriceCandidate
+from pricing.reviews import ReviewConflict, ensure_candidate_integrity
 
 
 class Command(BaseCommand):
@@ -21,6 +22,14 @@ class Command(BaseCommand):
             records = records.filter(match_status=options['status'])
         data = []
         for item in records[:limit]:
+            try:
+                ensure_candidate_integrity(item)
+            except ReviewConflict:
+                # Do not echo or match an inconsistent staged payload. This local
+                # diagnostic does not establish source rights or authenticity.
+                data.append({'id': item.pk, 'review_required': True, 'payload_status': 'invalid',
+                             'current_suggestion': {'match_status': 'invalid', 'suggested_product_id': None}})
+                continue
             if match_fields_valid(item.source_fields):
                 current_status, current_product = suggest_product(item.source_fields)
             else:
@@ -28,6 +37,7 @@ class Command(BaseCommand):
             data.append({
                 'id': item.pk,
                 'review_required': True,
+                'payload_status': 'consistent',
                 'match_status': item.match_status,
                 'suggested_product_id': item.suggested_product_id,
                 'current_suggestion': {

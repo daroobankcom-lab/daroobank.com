@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — price candidate CLI consistency check
+
+**Changes:** The local listing now checks stored price payload/derived values before emitting full fields or computing a current suggestion. Inconsistent rows receive a reduced JSON shape and `payload_status: invalid`; consistent rows receive `payload_status: consistent`. The stored-status filter and row limit are unchanged. Synthetic tests cover malformed and altered payloads, filtering and coherent recomputation.
+
+**Limits:** This is not a confidentiality, authenticity, source-rights or review-eligibility check; coherent alteration and sensitive content can still pass. Local CLI access is not controlled by web authorization. See ADR 0062.
+
 ## 2026-11-23 — identity lineage cursor depth bound
 
 **Changes:** Identity-lineage continuation rejects a signed depth greater than the positive ID gap between anchor and current record. Synthetic tests reproduce the previously accepted impossible depth, verify a private error and check all four identity kinds.

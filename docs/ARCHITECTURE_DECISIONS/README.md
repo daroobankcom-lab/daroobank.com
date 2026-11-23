@@ -67,6 +67,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0066: source claim write conflicts](0066-source-claim-write-conflicts.md) — development-only implementation, 23 November 2026.
 
+- [0067: source review snapshot inspection](0067-source-review-inspection.md) — development-only implementation, 23 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

@@ -14,6 +14,7 @@ from daroobank.scan_responses import invalid_scan_response
 from .date_inspection import DATE_CATEGORIES, MAX_PK, inspect_dates
 from .forms import SourceClaimForm, SourceReviewForm
 from .models import SourceClaim, SourceClaimReview
+from .review_inspection import (CATEGORIES as REVIEW_CATEGORIES, ReviewInspectionNotFound, inspect_reviews)
 from .services import (ADD, FIELDS, REVIEW, VIEW, ClaimConflict, ClaimError, ReviewConflict,
                        date_label, record_claim, require_staff, review_claim)
 
@@ -73,6 +74,32 @@ def date_inspection(request):
     report = inspect_dates(after=after, category=category)
     return render(request, 'staff/source_date_inspection.html', {
         'page_title': 'پیمایش تاریخ ادعاها | داروبانک', 'description': 'بازرسی محدود تاریخ‌های اعلام‌شده.',
+        'noindex': True, 'private_staff': True, 'report': report,
+    })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def review_inspection(request, pk):
+    require_staff(request.user, VIEW)
+    category = request.GET.get('category', '')
+    try:
+        after = parse_scan_after(request.GET.get('after', '0'), maximum=MAX_PK)
+    except ValueError:
+        after = None
+    if after is None or category not in ('', *REVIEW_CATEGORIES):
+        # Do not offer an anchor-specific restart for a nonexistent claim.
+        get_claim(pk)
+        return render(request, 'staff/source_review_inspection_error.html', {
+            'page_title': 'ورودی بازرسی نامعتبر | داروبانک', 'description': 'ورودی نامعتبر.',
+            'noindex': True, 'private_staff': True, 'claim_id': pk,
+        }, status=400)
+    try:
+        report = inspect_reviews(actor=request.user, claim_id=pk, after=after, category=category)
+    except ReviewInspectionNotFound:
+        raise Http404('Claim not found')
+    return render(request, 'staff/source_review_inspection.html', {
+        'page_title': 'بازرسی بازبینی ادعا | داروبانک', 'description': 'بازرسی محدود بازبینی‌های ساختگی.',
         'noindex': True, 'private_staff': True, 'report': report,
     })
 

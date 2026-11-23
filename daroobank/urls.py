@@ -34,6 +34,7 @@ urlpatterns = [
     path('staff/sources/', source_staff_views.claims, name='staff_sources'),
     path('staff/sources/dates/', source_staff_views.date_inspection, name='staff_source_date_inspection'),
     path('staff/sources/new/', source_staff_views.create, name='staff_source_create'),
+    path('staff/sources/<int:pk>/reviews/inspection/', source_staff_views.review_inspection, name='staff_source_review_inspection'),
     path('staff/sources/<int:pk>/review/', source_staff_views.review, name='staff_source_review'),
     path('staff/sources/<int:pk>/', source_staff_views.detail, name='staff_source_detail'),
     path('staff/catalog/identity/', identity_views.listing, name='staff_identity_list'),

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — source review snapshot inspection
+
+**Changes:** Authorized development staff can scan up to 50 source-review records per section for structural and payload consistency without displaying snapshot content, reasons, accounts, or hashes. Filters operate within the scanned section and malformed inputs receive private non-reflecting recovery. Synthetic database and Chromium checks cover permissions, bounded pagination, keyboard access, and non-snapshot behavior.
+
+**Limits:** Coherent rewrites can pass; this is not an authenticity, source-rights, account-existence, qualification or completeness check. Reads are not a snapshot; see ADR 0067.
+
 ## 2026-11-23 — source claim creation conflict handling
 
 **Changes:** Source-claim creation translates selected PostgreSQL write conflicts after rollback, and the staff form returns a private HTTP 409 rather than a raw database failure. Tests include a real unique-insert lock timeout at the service and HTTP boundaries, plus simulated selected failures after insertion and explicit replay preserving the original recorder.

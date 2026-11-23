@@ -162,12 +162,16 @@ async function checkSkipLink(page, label, selector, timeout = 5000) {
   await page.keyboard.press('Tab');
   assert(await page.locator('.skip-link').evaluate(el => el === document.activeElement), `${label}: initial focus`);
   assert.equal(await page.locator('.skip-link').getAttribute('href'), '#main', `${label}: target`);
-  assert(await page.locator('.skip-link').evaluate(el => {
+  const visibility = await page.locator('.skip-link').evaluate(el => {
     const rect = el.getBoundingClientRect(), css = getComputedStyle(el);
-    return el.matches(':focus-visible') && css.visibility === 'visible' && css.display !== 'none' &&
-      Number(css.opacity) > 0 && rect.width > 0 && rect.height > 0 && rect.top >= 0 &&
-      rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth;
-  }), `${label}: visible focus`);
+    return {focusVisible: el.matches(':focus-visible'), visibility: css.visibility, display: css.display,
+      opacity: Number(css.opacity), width: rect.width, height: rect.height, top: rect.top, bottom: rect.bottom,
+      left: rect.left, right: rect.right, viewportWidth: innerWidth, viewportHeight: innerHeight};
+  });
+  assert(visibility.focusVisible && visibility.visibility === 'visible' && visibility.display !== 'none' &&
+      visibility.opacity > 0 && visibility.width > 0 && visibility.height > 0 && visibility.top >= 0 &&
+      visibility.bottom <= visibility.viewportHeight && visibility.left >= 0 && visibility.right <= visibility.viewportWidth,
+      `${label}: visible focus ${JSON.stringify(visibility)}`);
   await checkKeyboardFocus(page, '.skip-link', label, '.skip-link');
   const pathname = new URL(page.url()).pathname;
   try {

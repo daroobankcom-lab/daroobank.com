@@ -227,3 +227,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Identity write error translation
 
 `catalog/test_identity_write_conflicts.py` covers selected actual PostgreSQL lock timeouts across eight direct and private HTTP writers, one arranged deadlock, a serialization failure with a rolled-back outer transaction, a nested savepoint timeout, injected SQLSTATE mappings and unrelated errors. These are selected schedules; tests do not set application lock timeouts or establish retry, throughput or freedom from other database failures. See [ADR 0042](ARCHITECTURE_DECISIONS/0042-identity-write-concurrency-errors.md).
+
+## Skip-link focus diagnostics
+
+CI run 45171291395 failed the forced-colors home skip-link visibility assertion; its job log was unavailable during investigation. The assertion now reports fixed computed visibility and geometry values (no page text, field values or URLs) on failure, while keeping the same bounds and negative tests. The failure's cause is not established and should not be conflated with earlier skip-link failures. Forced-color emulation does not establish support on real devices.

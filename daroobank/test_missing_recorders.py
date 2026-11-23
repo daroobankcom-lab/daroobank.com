@@ -75,7 +75,7 @@ class MissingRecorderTests(TestCase):
             listing = self.client.get(reverse('staff_sources'))
             self.assertEqual(listing.context['page'].paginator.count, 1)
             self.assertContains(listing, reverse('staff_source_detail', args=[self.claim.pk]))
-            self.assertContains(listing, 'در این فهرست وجود حساب ثبت‌کننده بررسی نمی‌شود')
+            self.assertContains(listing, 'حساب ثبت‌کننده در دسترس نیست')
             response = self.client.post(reverse('staff_source_review', args=[self.claim.pk]), self.source_review())
             self.assertEqual(response.status_code, 409)
             self.assertContains(response, 'حساب ثبت‌کننده در دسترس نیست', status_code=409)

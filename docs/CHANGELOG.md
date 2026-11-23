@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — source queue recorder-presence clue
+
+**Changes:** The source queue now uses a single page-local account lookup and flags currently missing recorders while retaining the claim and independent date status. Synthetic tests cover privacy, inactive accounts, page bounds, the empty result and separate reads; Chromium exercises the explanatory text.
+
+**Limits:** Existence is not identity, activity, authorization or source-rights verification, and the unlocked reads do not form a snapshot. Date inspection retains its separate behavior. See ADR 0057.
+
 ## 2026-11-23 — clinical inspection author-presence clue
 
 **Changes:** The bounded clinical scan now reports a separate current-author-missing status before checking supplementary references. A page-local account lookup adds at most one SELECT, and the private page offers a filter and explains the limited check. Synthetic tests cover precedence, account absence, pagination, privacy and the unexamined parent author.

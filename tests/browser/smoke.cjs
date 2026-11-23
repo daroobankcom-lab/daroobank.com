@@ -554,6 +554,9 @@ async function run() {
       await checkLayout(page, `product review history ${width}`);
       if (width === 390) await auditAccessibility(page, 'product review history');
       await page.goto(base + '/staff/sources/');
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود فعلی حساب ثبت‌کننده فقط برای ادعاهای همین صفحه/);
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود حساب به معنی فعال بودن یا احراز صلاحیت نیست/);
+      assert(!(await page.locator('main').innerText()).includes('حساب ثبت‌کننده در دسترس نیست'));
       await checkLayout(page, `source date summary ${width}`);
       if (width === 390) {
         await auditAccessibility(page, 'source date summary');

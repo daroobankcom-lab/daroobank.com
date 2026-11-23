@@ -41,7 +41,11 @@ def claims(request):
     # This summary is only for the current page, not a database-wide count.
     today = timezone.localdate()
     date_counts = dict.fromkeys(('expired', 'future', 'within_dates', 'unknown', 'invalid'), 0)
-    for claim in page.object_list:
+    page_claims = list(page.object_list)
+    recorders = (current_accounts([claim.recorded_by_id for claim in page_claims], using=page_claims[0]._state.db)
+                 if page_claims else {})
+    for claim in page_claims:
+        claim.recorder_missing = claim.recorded_by_id not in recorders
         claim.date_status = date_label(claim, today=today)
         date_counts[claim.date_status] += 1
     return render(request, 'staff/source_claims.html', {

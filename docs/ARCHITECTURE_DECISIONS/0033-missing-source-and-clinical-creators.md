@@ -1,6 +1,6 @@
 # ADR 0033: current creator-account presence in source and clinical workflows
 
-Status: development-only, 22 November 2026. Narrows the missing-parent-author limitation noted in [ADR 0031](0031-clinical-detail-review-comparisons.md) and [ADR 0032](0032-reviewer-lookup-in-intake-history.md) for the specific source and clinical paths below, not for other domains or ancestry. The clinical scan was subsequently extended by [ADR 0056](0056-clinical-inspection-author-presence.md).
+Status: development-only, 22 November 2026. Narrows the missing-parent-author limitation noted in [ADR 0031](0031-clinical-detail-review-comparisons.md) and [ADR 0032](0032-reviewer-lookup-in-intake-history.md) for the specific source and clinical paths below, not for other domains or ancestry. The clinical scan was subsequently extended by [ADR 0056](0056-clinical-inspection-author-presence.md) and the source queue by [ADR 0057](0057-source-queue-recorder-presence.md).
 
 ## Problem and decision
 

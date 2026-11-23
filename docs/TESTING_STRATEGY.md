@@ -199,3 +199,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Missing receipt actor accounts
 
 `ingestion/test_missing_receipt_actors.py` uses restored, synthetic deferred-FK corruption to test product/price receipt visibility, privacy, permissions, legacy manifests, diagnostic boundaries, escaping, inactive accounts, page-local lookup and a selected stale-read bypass. Chromium exercises ordinary receipt pages and warnings at four widths. These checks do not establish receipt authenticity, concurrent deletion behavior or production readiness; see [ADR 0035](ARCHITECTURE_DECISIONS/0035-missing-receipt-actors.md).
+
+## Identity package missing reviewers
+
+`catalog/test_identity_missing_reviewers.py` uses synthetic deferred-FK corruption to test missing review accounts, hidden details, cursors, stale/fresh HTTP submissions, later corrections, permissions and privacy, inactive accounts, bounded lookup, selected stale reads and a graph-creator check boundary. Chromium covers normal identity views and warnings at four widths. These cases do not authenticate reviewers or demonstrate all concurrent schedules; see [ADR 0036](ARCHITECTURE_DECISIONS/0036-identity-reviewer-lookup.md).

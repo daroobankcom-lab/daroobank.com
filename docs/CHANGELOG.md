@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — identity package review account display
+
+**Changes:** Identity package history and correction pages retain reviews but suppress details when the current reviewer account is missing, using a bounded page-local lookup. Cursor positions and real latest-review versions remain intact; missing prior accounts alone do not block later review or correction. Identity workspace and lineage pages explicitly warn that graph/link creator existence is not checked. Synthetic tests cover permissions, missing reviewers, pagination, fresh/stale submissions, account/graph boundaries and stale reads.
+
+**Limits:** Separate reads are not a snapshot and an existing account does not establish historical identity, reviewer qualification or graph validity. Graph creator existence is still not enforced; see ADR 0036.
+
 ## 2026-11-22 — missing receipt actor accounts
 
 **Changes:** Permission-scoped receipt lists and details retain receipts with a missing current actor and show a notice, with one page-local account lookup rather than an inner join. Related-receipt and manifest-inspection pages state that they do not check receipt actors. Synthetic tests cover orphaned product/price receipts, privacy and domain permissions, legacy data, pagination/query counts and stale reads; Chromium exercises ordinary pages at four widths.

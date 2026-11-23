@@ -5,6 +5,8 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.account_checks import current_accounts
+
 from .identity import (
     ADD, VIEW, REVIEW, MAX_ID, INGREDIENT_FIELDS, FORMULATION_FIELDS, PRODUCT_FIELDS, PACKAGE_FIELDS, COMPONENT_FIELDS,
     IdentityConflict, IdentityError, create_ingredient, create_formulation, create_product, create_package,
@@ -160,7 +162,9 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
             # Use the newest review actually rendered, never a later unseen insert.
             latest_shown = reviews[0].pk if reviews else 0
             review_form = IdentityReviewForm(initial={'expected_review': latest_shown, 'expected_graph_hash': graph_hash})
+        reviewers = current_accounts([review.reviewer_id for review in reviews], using=queryset.db)
         for review in reviews:
+            review.display_reviewer = reviewers.get(review.reviewer_id)
             _check_review(review, obj.pk, graph_hash)
     return render(request, 'staff/identity_detail.html', {'page_title': 'جزئیات هویت ساختگی | داروبانک',
         'description': 'زنجیره ادعایی کاتالوگ.', 'private_staff': True, 'noindex': True, 'kind': kind,
@@ -232,6 +236,7 @@ def revise_component(request, kind, pk):
 def _latest_review_for_revision(package, graph_hash):
     item = package.reviews.order_by('-pk').first()
     if item:
+        item.display_reviewer = current_accounts([item.reviewer_id], using=item._state.db).get(item.reviewer_id)
         _check_review(item, package.pk, graph_hash)
     return item
 

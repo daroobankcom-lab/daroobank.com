@@ -633,8 +633,15 @@ async function run() {
       assert.equal(response.status(), 200);
       await checkLayout(page, `identity form ${width}`);
       if (width === 390) await auditAccessibility(page, 'identity form');
+      response = await page.goto(base + `/staff/catalog/identity/package/${ids.package}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /وجود حساب ثبت‌کنندگان زنجیره و پیوندهای اصلاح در این بررسی کنترل نمی‌شود/);
+      assert.match(await page.locator('main').innerText(), /وجود فعلی حساب بازبین، هویت تاریخی یا صلاحیت او را اثبات نمی‌کند/);
+      await checkLayout(page, `identity package detail ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity package detail');
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);
       assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /وجود حساب ثبت‌کنندگان زنجیره و پیوندهای اصلاح در این بررسی کنترل نمی‌شود/);
       assert.match(response.headers()['x-robots-tag'], /noindex/);
       await checkLayout(page, `lineage ${width}`);
       if (width === 390) await auditAccessibility(page, 'lineage');

@@ -3,7 +3,7 @@
 {% block content %}<section class="staff-section"><div class="container">
 <p><a href="{% url 'staff_identity_detail' kind parent.pk %}">بازگشت به رکورد پیشین ←</a></p><h1>نسخه اصلاحی {{ label }} ساختگی · {{ parent.pk }}</h1>
 <div class="staff-alert">فقط داده ساختگی و غیرمحرمانه. این پیوند ادعای اصلاح است، نه اثبات هویت، معادل بودن یا تأیید. رکورد پیشین و وابستگانش تغییر نمی‌کنند؛ شاخه‌های موازی ممکن‌اند و هیچ شاخه‌ای خودکار انتخاب نمی‌شود.
-{% if kind == 'formulation' %}مواد و ترتیب آن‌ها ثابت می‌ماند؛ برای ترکیب دیگر یک فرمولاسیون مستقل ثبت کنید.{% elif kind == 'product' %}فرمولاسیون ثابت می‌ماند؛ برای فرمولاسیون دیگر یک فرآورده مستقل ثبت کنید.{% endif %}</div>
+{% if kind == 'formulation' %}مواد و ترتیب آن‌ها ثابت می‌ماند؛ برای ترکیب دیگر یک فرمولاسیون مستقل ثبت کنید.{% elif kind == 'product' %}فرمولاسیون ثابت می‌ماند؛ برای فرمولاسیون دیگر یک فرآورده مستقل ثبت کنید.{% endif %} وجود حساب ثبت‌کنندگان زنجیره و پیوندهای اصلاح در این مسیر کنترل نمی‌شود.</div>
 {% if graph %}<p>رکورد پیشین: {% if kind == 'ingredient' %}{{ graph.name_fa }}{% else %}{{ graph.name }}{% endif %} · <a href="{% url 'staff_identity_detail' kind parent.pk %}">مشاهده جزئیات پیشین</a></p>
 {% if conflict %}<div class="staff-alert">اصلاح ثبت نشد. <a href="{% url 'staff_identity_revise_component' kind parent.pk %}">صفحه را دوباره بارگذاری کنید</a> و وضعیت فعلی را بررسی کنید؛ متن فرم ذخیره نشده است.</div>
 {% else %}<div class="staff-panel"><form method="post" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}{% if field.is_hidden %}{{ field }}{{ field.errors }}{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endif %}{% endfor %}

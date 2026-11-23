@@ -10,6 +10,7 @@ from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
 from sources.services import related_claims
 from .inspection import CATEGORIES, MAX_PK, inspect_drafts
+from .lineage import InvalidLineageCursor, LineageNotFound, inspect_lineage
 from .forms import DraftForm, ReferenceForm, RevisionForm, ReviewForm
 from .evidence import ASSERTION_FIELDS, add_reference, evidence_state, reviewed_evidence
 from .models import ClinicalDraft, ClinicalDraftReview
@@ -147,6 +148,24 @@ def detail_response(request, draft, *, form=None, status=200):
 def detail(request, pk):
     require_staff(request.user, VIEW)
     return detail_response(request, get_draft(pk))
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def lineage(request, pk):
+    try:
+        report = inspect_lineage(actor=request.user, anchor_id=pk, cursor=request.GET.get('cursor', ''))
+    except LineageNotFound:
+        raise Http404('Draft not found')
+    except InvalidLineageCursor:
+        return render(request, 'staff/clinical_lineage_error.html', {
+            'page_title': 'ادامه بازرسی نامعتبر | داروبانک', 'description': 'درخواست بازرسی معتبر نیست.',
+            'noindex': True, 'private_staff': True, 'anchor_id': pk,
+        }, status=400)
+    return render(request, 'staff/clinical_lineage.html', {
+        'page_title': 'بازرسی نسخه‌های پیشین | داروبانک', 'description': 'مسیر نسخه‌های پیشین ساختگی.',
+        'noindex': True, 'private_staff': True, 'report': report,
+    })
 
 
 @login_required(login_url='staff_login')

@@ -15,7 +15,7 @@ from django.utils import timezone
 from catalog.identity import digest, ingredient_snapshot, revise_identity
 from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresentation
 from catalog.test_identity import ALL, INGREDIENT, build, user
-from clinical.services import create_draft
+from clinical.services import create_draft, draft_data
 from sources.services import record_claim
 from tools.browser_test_diagnostics import browser_failure_annotation
 
@@ -37,13 +37,17 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                                     codename__in=['view_sourceclaim', 'add_sourceclaim']))
         author.user_permissions.add(*Permission.objects.filter(content_type__app_label='clinical',
                                     codename__in=['view_clinicaldraft', 'add_clinicaldraft']))
-        create_draft(actor=author, data={
+        clinical_leaf = create_draft(actor=author, data={
             'subject': 'موضوع ساختگی مرورگر', 'audience': 'patient', 'title': 'عنوان خصوصی مرورگر',
             'statement': 'متن خصوصی و ساختگی برای آزمون مرورگر', 'reference_title': 'مرجع فرضی',
             'reference_url': 'https://example.org/browser', 'reference_location': 'بخش فرضی',
             'reference_author': '', 'reference_version': '', 'reference_published_on': None,
             'reference_accessed_on': None,
         })
+        for i in range(21):
+            clinical_leaf = create_draft(actor=author, data={**draft_data(clinical_leaf), 'title': f'نسخه خصوصی مرورگر {i}'},
+                parent_id=clinical_leaf.pk, expected_parent_hash=clinical_leaf.payload_sha256,
+                change_reason='اصلاح ساختگی برای آزمون مرورگر')
         record_claim(actor=author, data={
             'source_name': 'منبع ساختگی مرورگر', 'source_url': 'https://example.org/fixture',
             'owner': 'مالک فرضی', 'evidence_url': 'https://example.org/evidence', 'evidence_note': '',
@@ -65,7 +69,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG', 'TMPDIR') if key in os.environ}
         env.update(BROWSER_BASE_URL=self.live_server_url, BROWSER_AUTHOR='browser-author', BROWSER_REVIEWER='browser-reviewer',
                    BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
-                   BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk))
+                   BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
+                   BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk))
         try:
             result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
                                     capture_output=True, text=True, timeout=180)

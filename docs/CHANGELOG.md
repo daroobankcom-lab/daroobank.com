@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — synthetic clinical parent-path inspection
+
+**Changes:** Added a private, permission-checked, read-only inspector for up to 20 immediate-parent links per section, including restartable, signed, time-limited continuation and a generic non-reflecting cursor error. It checks observed payloads and seams, stops on inconsistencies and shows IDs only. PostgreSQL and synthetic Chromium tests cover paths, boundaries, stale/malformed cursors, permissions, concurrent-change seams and selected accessibility checks.
+
+**Limits:** The path is not a snapshot or complete history; earlier links, reviews, authors and references are not revalidated on continuation. Hash consistency is not authenticity, source rights or clinical approval. Tokens can appear in logs; this remains development-only and axe contrast inconclusives require manual review.
+
 ## 2026-11-22 — batch clinical technical inspection queries
 
 **Changes:** Replaced per-draft reference and recorder lookups in the clinical scan with a per-draft PostgreSQL window and bulk recorder lookup, retaining the existing shared reference/cap checks and over-limit precedence. The diagnostic now runs at most three SELECTs for 50 drafts and fetches at most 11 assertions per valid draft; the write/review workflow retains its individual state and snapshots. Added boundary, reused-instance, missing-recorder and equivalence tests.

@@ -24,3 +24,5 @@ Record future decisions with context, alternatives, consequences and status. Sup
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.
+
+- [0018: synthetic clinical draft parent-path inspection](0018-clinical-draft-lineage.md) — development-only implementation, 22 November 2026.

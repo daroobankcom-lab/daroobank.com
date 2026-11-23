@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -422,14 +422,40 @@ async function run() {
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '.staff-filter button', `clinical scan submit ${width}`, '.staff-section');
       await Promise.all([page.waitForURL('**/staff/clinical/inspection/?after=0&category=available'), page.keyboard.press('Enter')]);
-      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
-      assert.equal(await page.getByRole('link', {name: 'جزئیات پیش‌نویس'}).count(), 1);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 22/);
+      assert.equal(await page.getByRole('link', {name: 'جزئیات پیش‌نویس'}).count(), 22);
       assert(!(await page.locator('main').innerText()).includes('عنوان خصوصی مرورگر'));
       await checkLayout(page, `clinical scan ${width}`);
       if (width === 390) {
         await auditAccessibility(page, 'clinical scan');
         await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical scan status');
       }
+      await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
+      await page.getByRole('link', {name: 'بازرسی مسیر نسخه‌های پیشین ←'}).click();
+      const clinicalLineage = `/staff/clinical/${ids.clinical_leaf}/lineage/`;
+      assert.equal(new URL(page.url()).pathname, clinicalLineage);
+      assert.equal(await page.locator('.staff-panel').count(), 20);
+      assert(!(await page.locator('main').innerText()).includes('نسخه خصوصی مرورگر'));
+      await checkLayout(page, `clinical lineage ${width}`);
+      if (width === 390) await auditAccessibility(page, 'clinical lineage');
+      await page.getByRole('link', {name: 'بررسی بخش بعدی ←'}).focus();
+      await Promise.all([page.waitForURL('**/lineage/?cursor=*'), page.keyboard.press('Enter')]);
+      assert.equal(await page.locator('.staff-panel').count(), 1);
+      assert.match(await page.locator('main').innerText(), /گام 21/);
+      assert.match(await page.locator('main').innerText(), /والدی ثبت نشده/);
+      const lineageParams = new URLSearchParams({cursor: 'clinical-canary<script>'});
+      response = await page.goto(base + clinicalLineage + '?' + lineageParams);
+      assert.equal(response.status(), 400);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.equal(response.headers()['referrer-policy'], 'same-origin');
+      assert(!(await page.locator('body').innerText()).includes('clinical-canary'));
+      await checkLayout(page, `clinical lineage error ${width}`);
+      if (width === 390) await auditAccessibility(page, 'clinical lineage error');
+      const restartLineage = page.getByRole('link', {name: 'شروع دوباره بازرسی ←'});
+      assert.equal(await restartLineage.getAttribute('href'), clinicalLineage);
+      await restartLineage.focus();
+      await Promise.all([page.waitForURL(url => url.pathname === clinicalLineage && url.search === ''), page.keyboard.press('Enter')]);
+      assert.equal(await page.locator('.staff-panel').count(), 20);
       await page.goto(base + '/staff/sources/dates/');
       await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       await page.getByRole('link', {name: 'ورود به بازرسی کاتالوگ'}).click();

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — inactive-user backend login edge
+
+**Changes:** If an authentication backend returns an inactive user, the staff form now clears its cached identity and returns the same generic invalid-login error as bad credentials. Synthetic tests override the backend to exercise this path, session behavior and independent destination permissions.
+
+**Limits:** The default backend already rejects inactive users, and no HTTP login bypass was demonstrated. Custom backends and production authentication still need independent review; this adds no MFA or throttling. See ADR 0060.
+
 ## 2026-11-23 — synthetic stream and time-window regression coverage
 
 **Changes:** CSV tests compare fragmented reads and replay manifest membership across multiple chunk sizes and invalid tails. A seeded, independent UTC-window enumeration checks returned plans across ten time zones and selected transition dates; a larger 50,000-sample local probe found no returned-plan mismatch.

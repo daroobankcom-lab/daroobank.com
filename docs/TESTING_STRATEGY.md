@@ -132,6 +132,10 @@ When the isolated synthetic browser subprocess exits unsuccessfully under GitHub
 
 `catalog/test_search_invalid_query.py` checks that NUL and surrogate code points in the retained query prefix fail before any database query; HTML and API return HTTP 400 without reflecting the bad input, including HEAD and an invalid cursor. It checks the 120-character boundary and successful responses for selected other Unicode inputs. API contract tests check the new error shape. Synthetic Chromium tests exercise an encoded NUL, the blank recovery form and resubmission at four widths, with axe at 390. These cases are not exhaustive Unicode testing, a security audit or access-log redaction. Search URLs may still be logged. See [API design](API_DESIGN.md#development-endpoint-example).
 
+## Inactive-user authentication backend edge
+
+`daroobank/test_staff_auth_inactive_backend.py` uses Django's permissive backend only under a test override to verify inactive users do not survive in the rejected staff form's cache or receive a session, generic errors are consistent, and destination checks still apply to active or already-authenticated inactive accounts. It does not exercise every custom backend or provide MFA, throttling, monitoring or production assurance; see [ADR 0060](ARCHITECTURE_DECISIONS/0060-inactive-backend-staff-login.md).
+
 ## Bounded CSV input reads
 
 `daroobank/test_bounded_read.py` exercises short binary chunks, split UTF-8, exact/over byte limits, empty or malformed/nonblocking responses, closed files and the read-call cap. `ingestion/test_short_reads.py` reproduces the earlier partial-prefix bug for both parsers, compares parser and replay outcomes across fragmented reads, and checks invalid CSV/UTF-8 tails or read failures do not create partial candidates or receipts; it also exercises HTTP privacy and price CLI error reporting. Injected streams are synthetic, empty bytes are trusted as EOF, and tests cannot prove file authenticity, prevent a blocking read or establish production availability. See [ADR 0059](ARCHITECTURE_DECISIONS/0059-csv-short-read-boundary.md).

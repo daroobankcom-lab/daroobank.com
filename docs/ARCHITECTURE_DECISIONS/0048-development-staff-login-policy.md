@@ -1,6 +1,6 @@
 # ADR 0048: development staff login policy
 
-Status: development implementation, 23 November 2026.
+Status: development implementation, 23 November 2026; the inactive-user backend edge was extended in [ADR 0060](0060-inactive-backend-staff-login.md).
 
 ## Context and decision
 

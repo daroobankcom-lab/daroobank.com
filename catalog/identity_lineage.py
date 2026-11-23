@@ -62,7 +62,9 @@ def _decode(token, kind, anchor_id, anchor_hash):
                 or data['kind'] != kind or type(data['anchor']) is not int or data['anchor'] != anchor_id
                 or not _id(data['current']) or data['current'] >= anchor_id
                 or type(data['depth']) is not int or not PAGE_SIZE <= data['depth'] <= MAX_ID
-                or data['depth'] % PAGE_SIZE != 0
+                # Every valid parent ID is strictly less than its child ID.
+                # This necessary bound does not prove the skipped path exists.
+                or data['depth'] > anchor_id - data['current'] or data['depth'] % PAGE_SIZE != 0
                 or not isinstance(data['anchor_graph'], str) or not _HASH.fullmatch(data['anchor_graph'])
                 or not isinstance(data['current_graph'], str) or not _HASH.fullmatch(data['current_graph'])
                 or not constant_time_compare(data['anchor_graph'], _fingerprint(anchor_hash))):

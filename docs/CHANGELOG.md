@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — identity lineage cursor depth bound
+
+**Changes:** Identity-lineage continuation rejects a signed depth greater than the positive ID gap between anchor and current record. Synthetic tests reproduce the previously accepted impossible depth, verify a private error and check all four identity kinds.
+
+**Limits:** This necessary arithmetic bound does not prove that any skipped links existed or remain unchanged. Signing-key holders can still produce plausible cursors; see ADR 0061.
+
 ## 2026-11-23 — clinical scan guide correction
 
 **Changes:** Corrected the development guide's clinical scan sequence, author-presence precedence and maximum four service SELECTs to match ADR 0056 and the existing implementation. The prior guide text was stale; no application behavior changed.

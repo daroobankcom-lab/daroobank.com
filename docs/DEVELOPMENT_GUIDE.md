@@ -363,7 +363,7 @@ From a private ingredient, formulation or product detail, staff with identity vi
 
 ## Inspect a synthetic correction path
 
-From an identity record detail, authorized staff can open the read-only parent-path inspector. It examines up to 20 immediate links per section and stops if a graph or link is inconsistent; use the next link for an older section. No recorded parent does not prove origin or completeness. A stale/expired cursor requires starting again. Data may change between pages and earlier links are not rechecked; this is not a review or proof of correctness. See [ADR 0015](ARCHITECTURE_DECISIONS/0015-synthetic-lineage-inspection.md).
+From an identity record detail, authorized staff can open the read-only parent-path inspector. It examines up to 20 immediate links per section and stops if a graph or link is inconsistent; use the next link for an older section. No recorded parent does not prove origin or completeness. A stale/expired cursor requires starting again; a signed cursor claiming more steps than the ID gap also fails. This necessary arithmetic check does not verify the skipped path. Data may change between pages and earlier links are not rechecked; this is not a review or proof of correctness. See [ADR 0015](ARCHITECTURE_DECISIONS/0015-synthetic-lineage-inspection.md) and [ADR 0061](ARCHITECTURE_DECISIONS/0061-identity-lineage-depth-bound.md).
 
 
 ### Optional isolated browser smoke test

@@ -1,6 +1,6 @@
 # ADR 0015: Bounded inspection of synthetic correction ancestry
 
-Status: development-only, 2026-11-22.
+Status: development-only, 2026-11-22. Continuation depth validation is narrowed by [ADR 0061](0061-identity-lineage-depth-bound.md).
 
 ## Decision
 

@@ -11,9 +11,11 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
+from . import identity_lineage
 from .identity import (digest, ingredient_snapshot, formulation_snapshot, product_snapshot, package_snapshot,
                        revise_identity, revise_package, create_ingredient)
-from .identity_lineage import (CURSOR_SALT, CURSOR_MAX_AGE, PAGE_SIZE, InvalidLineageCursor, LineageNotFound, inspect_lineage)
+from .identity_lineage import (CURSOR_SALT, CURSOR_MAX_AGE, PAGE_SIZE, InvalidLineageCursor, LineageNotFound,
+                               _decode, _fingerprint, inspect_lineage)
 from .models import (IngredientDraft, IngredientRevision, IdentityPackageReview, IdentityPackageRevision,
                      FormulationRevision, ProductRevision, ProductPresentation, IdentityProductDraft)
 from .test_identity import ALL, INGREDIENT, FORM, PRODUCT, PACKAGE, build, user
@@ -130,6 +132,41 @@ class IdentityLineageTests(TestCase):
         IngredientDraft.objects.filter(pk=current_id).update(name_fa='ناسازگاری محرمانه')
         with self.assertRaises(InvalidLineageCursor):
             inspect_lineage(actor=self.viewer, kind='ingredient', anchor_id=anchor.pk, cursor=token)
+
+    def test_validly_signed_impossible_depth_is_rejected_before_continuation_lookup(self):
+        chain = self.ingredient_chain(PAGE_SIZE + 1)
+        anchor = chain[-1]
+        token = inspect_lineage(actor=self.viewer, kind='ingredient', anchor_id=anchor.pk)['next_cursor']
+        data = signing.loads(token, salt=CURSOR_SALT)
+        self.assertEqual(data['depth'], PAGE_SIZE)
+        self.assertLess(anchor.pk - data['current'], PAGE_SIZE * 2)
+        forged = signing.dumps({**data, 'depth': PAGE_SIZE * 2}, salt=CURSOR_SALT)
+        with patch('catalog.identity_lineage.safe_snapshot', wraps=identity_lineage.safe_snapshot) as snapshot:
+            with self.assertRaises(InvalidLineageCursor):
+                inspect_lineage(actor=self.viewer, kind='ingredient', anchor_id=anchor.pk, cursor=forged)
+            snapshot.assert_called_once()  # anchor only; no continuation graph fetch
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse('staff_identity_lineage', args=['ingredient', anchor.pk]), {'cursor': forged})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
+        self.assertNotContains(response, forged, status_code=400)
+        # The original legitimately issued continuation remains usable.
+        self.assertEqual(inspect_lineage(actor=self.viewer, kind='ingredient', anchor_id=anchor.pk,
+                                         cursor=token)['status'], 'no_parent')
+
+    def test_depth_bound_applies_to_all_types_but_is_not_path_proof(self):
+        graph_hash = 'a' * 64
+        for kind in ('ingredient', 'formulation', 'product', 'package'):
+            data = {'kind': kind, 'anchor': 200, 'anchor_graph': _fingerprint(graph_hash),
+                    'current': 150, 'current_graph': 'b' * 64, 'depth': 40}
+            with self.subTest(kind=kind):
+                # An arithmetically possible depth is not evidence that the path exists.
+                token = signing.dumps(data, salt=CURSOR_SALT)
+                self.assertEqual(_decode(token, kind, 200, graph_hash), (150, 'b' * 64, 40))
+                impossible = signing.dumps({**data, 'depth': 60}, salt=CURSOR_SALT)
+                with self.assertRaises(InvalidLineageCursor):
+                    _decode(impossible, kind, 200, graph_hash)
 
     def test_expired_cursor_and_coherent_anchor_change_are_stale(self):
         chain = self.ingredient_chain(PAGE_SIZE + 1)

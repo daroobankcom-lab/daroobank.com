@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — selected clinical latest-review lock
+
+**Changes:** Clinical triage locks the latest existing review row while checking its prior-ID token. Synthetic PostgreSQL tests cover competing updates/deletions, an earlier deletion, outer transaction lifetime and selected non-guarantees; the private page clarifies that this is not full history validation.
+
+**Limits:** Only the latest existing row is locked, only its ID is checked, deferred bypass inserts and later changes remain possible, and additional locks may wait or deadlock. No retry or clinical approval is added; see ADR 0049.
+
 ## 2026-11-23 — development staff login policy
 
 **Changes:** The development staff login form rejects authenticated nonstaff accounts using the same visible error as invalid credentials, without creating a new authenticated session. Staff with no domain permission can still sign in but are denied domain access; tests cover subsequent demotion and an existing session.

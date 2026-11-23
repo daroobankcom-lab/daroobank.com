@@ -161,6 +161,15 @@ def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change
                                             change_reason=change_reason, payload_sha256=digest)
 
 
+def _lock_latest_review(draft):
+    """Lock the latest existing review ID; absent and future rows remain unlocked."""
+    using = draft._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest-review locking requires an atomic writer transaction.')
+    return (ClinicalDraftReview.objects.using(using).filter(draft_id=draft.pk)
+            .order_by('-pk').select_for_update().only('pk').first())
+
+
 def review_draft(*, actor, draft_id, decision, reason, expected_review, expected_hash, expected_evidence_hash=None):
     require_staff(actor, VIEW, REVIEW)
     if (type(draft_id) is not int or not 1 <= draft_id <= MAX_PK
@@ -185,7 +194,7 @@ def review_draft(*, actor, draft_id, decision, reason, expected_review, expected
         if ((expected_evidence_hash is None and evidence['items'])
                 or (expected_evidence_hash is not None and expected_evidence_hash != evidence['fingerprint'])):
             raise DraftConflict('ارجاع‌های تکمیلی تغییر کرده‌اند؛ صفحه را تازه کنید.')
-        latest = draft.reviews.order_by('-pk').first()
+        latest = _lock_latest_review(draft)
         if (latest.pk if latest else 0) != expected_review:
             raise DraftConflict('بازبینی جدیدی ثبت شده؛ صفحه را تازه کنید.')
         return ClinicalDraftReview.objects.create(draft=draft, reviewer=actor, decision=decision, reason=reason.strip(),

@@ -2,6 +2,31 @@ from django.conf import settings
 from django.http import HttpResponseNotFound
 
 
+class PublicReadPrivacyHeadersMiddleware:
+    """Apply privacy headers to resolved public reads, including CSRF/405 errors.
+
+    Runs outside CommonMiddleware and CsrfViewMiddleware so their responses for
+    these resolved views receive the same policy. Unresolved requests, redirects
+    before URL resolution and responses from an upstream proxy are outside scope.
+    """
+
+    view_names = frozenset({
+        'search', 'search_api', 'presentation_detail', 'presentation_api', 'openapi_document',
+    })
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        match = getattr(request, 'resolver_match', None)
+        if match is not None and match.url_name in self.view_names:
+            response['Cache-Control'] = 'no-store'
+            response['Referrer-Policy'] = 'no-referrer'
+            response['X-Robots-Tag'] = 'noindex, follow'
+        return response
+
+
 class StaffPrivacyHeadersMiddleware:
     """Prevent caching and indexing of all staff responses, including errors."""
 

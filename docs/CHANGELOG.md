@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — public-read error privacy headers
+
+**Changes:** A narrowly scoped response middleware applies `no-store`, `no-referrer` and `noindex` to resolved search, presentation detail and OpenAPI views, including Django's 405 and CSRF 403 responses. Existing view-level headers and allowed methods remain unchanged. PostgreSQL-backed tests cover GET/HEAD, selected 400/404/500 errors, unsafe methods with and without CSRF, method `Allow`, and unrelated staff/public policy isolation.
+
+**Limits:** The policy does not cover unresolved requests, redirects before URL resolution or upstream responses; URLs can still appear in access logs. Debug error pages can expose request data. No rate limiting, logging redaction or production security review is added.
+
 ## 2026-11-22 — synthetic browser CI diagnostics
 
 **Changes:** Failed isolated Chromium subprocesses in GitHub Actions now add a compact error annotation with an exit outcome, fixed heuristic category and optional smoke-test source line; timeouts are also noted. Offline tests check the summary and exclusion of arbitrary sample error text. Existing failure output and failure status are unchanged; no automatic retry is added.

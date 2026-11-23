@@ -19,6 +19,7 @@ if DEBUG:
 INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing', 'sources', 'ingestion', 'clinical']
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'daroobank.middleware.PublicReadPrivacyHeadersMiddleware',
     'daroobank.middleware.StaffPrivacyHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

@@ -1,0 +1,13 @@
+# ADR 0006: bounded clinical reference assertions and review snapshots
+
+Status: development-only implementation, 22 November 2026; extends [ADR 0005](0005-clinical-draft-triage.md).
+
+## Decision
+
+Keep the original primary asserted citation on each draft version. Permit up to ten separately recorded supplementary reference assertions per version with title, URL, exact location, optional author/version/dates and an asserted relationship (supports, contradicts, context or unclear). These are user assertions, not retrieved evidence or judgments of evidence quality. A user with the existing clinical view/add permissions can submit one; identical assertion payloads on the same draft are deduplicated without changing the original recorder. An explicitly different relation is a different assertion. The UI and service check a sequential optimistic fingerprint of the current supplementary set, and fail closed on invalid stored records or over-limit data. Insertion and preliminary review lock the draft in a transaction; PostgreSQL locks that draft row, but this alone does not prove every concurrent workflow or protect direct writes.
+
+Reviewers must be different from both the draft author and every recorder of the current supplementary assertions. A review snapshot captures the bounded list of supplementary assertion data, IDs, recorder IDs, fingerprints and the set fingerprint along with the existing draft snapshot. A stale evidence-set or review version blocks review. A review created before this feature is marked as having no evidence-set snapshot; one whose set differs from the current set is labeled changed, not automatically updated or invalidated. Equality means only that the fingerprint matches, not that evidence has been verified or approved. Additional references are version-specific and are not automatically copied to a child revision.
+
+## Limits
+
+Nothing fetches sources, determines if they support/contradict a statement, verifies access dates or licensing, verifies reviewer credentials, establishes source independence, issues a clinical approval or publishes. The field cannot enforce atomic statements and draft identities are unlinked. Set fingerprints bind recorder IDs but not timestamps; assertion payload hashes omit actor/time. Neither is a signature; database writers can bypass model guards or fabricate snapshots. The ten-item limit and sequential stale checks are application controls, not a guarantee against concurrent writes or bulk ORM/SQL. Historical review snapshots are not backfilled. The UI is DEBUG-only and only synthetic data should be used. Real medical use requires a full evidence workflow, clinical and legal review, durable audit, retention controls and production-tested concurrency/security.

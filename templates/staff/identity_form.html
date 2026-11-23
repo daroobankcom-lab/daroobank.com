@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container"><p><a href="{% url 'staff_identity_list' %}?kind={{ kind }}">بازگشت ←</a></p>
+<h1>ثبت {{ label }} ساختگی</h1><div class="staff-alert">صرفاً داده ساختگی و غیرمحرمانه؛ منبع ادعایی بررسی نمی‌شود. نشانی منبع باید HTTPS و بدون رمز، پارامتر یا قطعه باشد. برای ایجاد زنجیره شناسه رکورد مرحله قبل را وارد کنید.</div>
+<div class="staff-panel"><form method="post" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}
+{% for field in form %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endfor %}
+{% if has_parts %}<h2>یک تا پنج ماده، به ترتیب دلخواه</h2>{{ parts.management_form }}{{ parts.non_form_errors }}{% if not parts.forms %}<p>برای بازیابی فرم اجزا <a href="{% url 'staff_identity_create' 'formulation' %}">صفحه ثبت را دوباره باز کنید</a>؛ اطلاعات واردشده ذخیره نشده است.</p>{% endif %}{% for part in parts %}<fieldset><legend>ماده {{ forloop.counter }}</legend>{{ part.non_field_errors }}{% for field in part %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endfor %}</fieldset>{% endfor %}{% endif %}
+<button class="staff-button" type="submit">ثبت پیش‌نویس</button></form></div></div></section>{% endblock %}

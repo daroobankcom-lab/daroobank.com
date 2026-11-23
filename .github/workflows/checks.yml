@@ -1,0 +1,163 @@
+name: Development checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  django:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: daroobank_ci
+          POSTGRES_USER: runner_${{ github.run_id }}
+          POSTGRES_PASSWORD: ci_${{ github.run_id }}_${{ github.run_attempt }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DAROOBANK_DEBUG: '1'
+      POSTGRES_DB: daroobank_ci
+      POSTGRES_USER: runner_${{ github.run_id }}
+      POSTGRES_PASSWORD: ci_${{ github.run_id }}_${{ github.run_attempt }}
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Check direct runtime pins
+        run: python -m tools.verify_runtime_lock
+      - name: Install dependencies
+        run: python -m pip install --require-hashes -r requirements.txt
+      - name: Reject an incorrect artifact hash
+        run: |
+          printf 'Django==5.2.19 --hash=sha256:%064d\n' 0 > "$RUNNER_TEMP/bad-hash.txt"
+          if python -m pip download --no-cache-dir --no-deps --require-hashes -r "$RUNNER_TEMP/bad-hash.txt" -d "$RUNNER_TEMP/bad-hash-download" > "$RUNNER_TEMP/bad-hash.log" 2>&1; then
+            echo '::error::An incorrect artifact hash was accepted.'
+            exit 1
+          fi
+          if ! grep -q 'THESE PACKAGES DO NOT MATCH THE HASHES' "$RUNNER_TEMP/bad-hash.log"; then
+            cat "$RUNNER_TEMP/bad-hash.log"
+            echo '::error::The negative hash test failed for an unexpected reason.'
+            exit 1
+          fi
+      - name: Check dependencies and configuration
+        run: |
+          python -m pip check
+          python -m tools.wait_for_database
+          python manage.py migrate --noinput
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+      - name: Run synthetic tests on PostgreSQL
+        run: python manage.py test -v 1 --noinput
+      - name: Audit resolved Python application dependencies
+        run: |
+          python -m venv "$RUNNER_TEMP/dependency-audit"
+          "$RUNNER_TEMP/dependency-audit/bin/python" -m pip install 'pip-audit==2.10.1'
+          "$RUNNER_TEMP/dependency-audit/bin/pip-audit" --strict --vulnerability-service pypi --progress-spinner off -r requirements.txt
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/browser/package-lock.json
+      - name: Install browser test dependencies
+        run: npm ci --prefix tests/browser --ignore-scripts
+      - name: Audit browser test dependencies
+        run: npm audit --prefix tests/browser --audit-level=info
+      - name: Run isolated synthetic Chromium tests
+        env:
+          DAROOBANK_BROWSER_TESTS: '1'
+        run: python manage.py test daroobank.test_browser --settings=daroobank.browser_test_settings -v 1 --noinput
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DAROOBANK_DEBUG: '1'
+      DAROOBANK_SECRET_KEY: ci_key_${{ github.run_id }}_${{ github.run_attempt }}
+      DAROOBANK_ALLOWED_HOSTS: localhost,127.0.0.1
+      POSTGRES_DB: daroobank_ci
+      POSTGRES_USER: runner_${{ github.run_id }}
+      POSTGRES_PASSWORD: ci_${{ github.run_id }}_${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+      - name: Prepare synthetic build-context probes
+        run: |
+          mkdir -p .cache/context-probe backups/context-probe node_modules/context-probe tests/browser/node_modules/context-probe
+          printf 'synthetic probe\n' > .cache/context-probe/sentinel
+          printf 'synthetic probe\n' > backups/context-probe/sentinel
+          printf 'synthetic probe\n' > node_modules/context-probe/sentinel
+          printf 'synthetic probe\n' > tests/browser/node_modules/context-probe/sentinel
+          printf 'synthetic probe\n' > .cache/context-probe/.env.example
+          printf 'synthetic probe\n' > backups/context-probe/.env.example
+          printf 'synthetic probe\n' > node_modules/context-probe/.env.example
+          printf 'synthetic probe\n' > tests/browser/node_modules/context-probe/.env.example
+          printf 'CI_CONTEXT_PROBE=synthetic\n' > .env
+          printf 'synthetic probe\n' > .env.local
+          printf 'synthetic probe\n' > tests/browser/.env.local
+          printf 'synthetic example\n' > tests/browser/.env.example
+          printf 'synthetic probe\n' > context-probe.dump
+          printf 'synthetic probe\n' > tests/browser/context-probe.backup
+          git check-ignore --no-index -q .env.local
+          git check-ignore --no-index -q tests/browser/.env.local
+          git check-ignore --no-index -q node_modules/context-probe/sentinel
+          git check-ignore --no-index -q tests/browser/node_modules/context-probe/sentinel
+          git check-ignore --no-index -q context-probe.dump
+          git check-ignore --no-index -q tests/browser/context-probe.backup
+          ! git check-ignore --no-index -q .env.example
+          ! git check-ignore --no-index -q tests/browser/.env.example
+      - name: Validate and start development stack
+        run: |
+          docker compose config --quiet
+          docker compose up --build -d --wait --wait-timeout 120
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/ > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/ > /dev/null
+          docker compose exec -T web python manage.py migrate --check
+          docker compose exec -T web python -m tools.wait_for_database
+          docker compose exec -T -e POSTGRES_DB="daroobank_absent_${GITHUB_RUN_ID}" web python -c "from tools.wait_for_database import wait_for_database; assert not wait_for_database(timeout=0)"
+          docker compose exec -T web python manage.py shell -c "from django.db import connection; assert connection.vendor == 'postgresql'"
+          docker compose exec -T web python -c "from pathlib import Path; missing = ['.git', '.env', '.env.local', '.cache/context-probe/sentinel', 'backups/context-probe/sentinel', 'node_modules/context-probe/sentinel', 'tests/browser/node_modules/context-probe/sentinel', 'tests/browser/.env.local', 'context-probe.dump', 'tests/browser/context-probe.backup', '.cache/context-probe/.env.example', 'backups/context-probe/.env.example', 'node_modules/context-probe/.env.example', 'tests/browser/node_modules/context-probe/.env.example']; found = [p for p in missing if Path(p).exists()]; assert not found, f'excluded paths copied into image: {found}'; assert Path('.env.example').is_file() and Path('tests/browser/.env.example').is_file(), 'example templates missing'"
+          docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE TABLE ci_volume_probe (value integer NOT NULL); INSERT INTO ci_volume_probe VALUES (42);"
+      - name: Audit Python packages installed in development image
+        run: |
+          docker compose exec -T web python -m pip list --format=freeze > "$RUNNER_TEMP/image-packages.txt"
+          python -m venv "$RUNNER_TEMP/image-audit"
+          "$RUNNER_TEMP/image-audit/bin/python" -m pip install 'pip-audit==2.10.1'
+          set +e
+          "$RUNNER_TEMP/image-audit/bin/pip-audit" --strict --vulnerability-service pypi --progress-spinner off --no-deps --disable-pip --format=json -r "$RUNNER_TEMP/image-packages.txt" > "$RUNNER_TEMP/image-audit.json"
+          audit_status=$?
+          set -e
+          if [ "$audit_status" -ne 0 ]; then
+            if ! jq -r '.dependencies[] | select(.vulns | length > 0) | "::error::Image Python package \(.name) \(.version): \([.vulns[].id] | unique | join(", "))"' "$RUNNER_TEMP/image-audit.json"; then
+              echo "::error::Image package audit failed or advisory service unavailable; see job logs."
+            fi
+            exit "$audit_status"
+          fi
+      - name: Check volume survives normal shutdown
+        run: |
+          docker compose down
+          docker compose up -d --wait --wait-timeout 120
+          test "$(docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc 'SELECT value FROM ci_volume_probe')" = "42"
+          docker compose exec -T web python manage.py migrate --check
+      - name: Remove ephemeral CI resources
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,3 @@
+source_record_id,irc,manufacturer,strength,dosage_form,package_description,amount,currency,category,unit,effective_date,source_published_date
+synthetic-1,000000001,سازنده فرضی,100 mg,قرص,10 عدد,10000,RIAL,retail,package,,
+synthetic-2,000000002,سازنده فرضی,50 mg,کپسول,20 عدد,1250,TOMAN,retail,package,2026-01-01,

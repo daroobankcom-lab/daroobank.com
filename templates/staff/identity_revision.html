@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+<p><a href="{% url 'staff_identity_detail' 'package' parent.pk %}">بازگشت به بسته پیشین ←</a></p>
+<h1>نسخه اصلاحی بسته ساختگی {{ parent.pk }}</h1>
+<div class="staff-alert">این فقط ادعای اصلاح است، نه تأیید هویت یا معادل بودن. نسخه پیشین و بازبینی‌های آن تغییر نمی‌کنند یا به نسخه جدید منتقل نمی‌شوند. شاخه‌های موازی ممکن‌اند. فرآورده ثابت است؛ برای فرآورده دیگر بسته مستقلی ثبت کنید. فقط داده ساختگی و غیرمحرمانه وارد کنید.</div>
+{% if graph %}<div class="staff-panel"><p>بسته پیشین: {{ graph.description }} · فرآورده {{ graph.product_id }}</p><h2>آخرین بازبینی مقدماتی بسته پیشین</h2>{% if latest %}{% if latest.safe %}<p>{{ latest.get_decision_display }} · {{ latest.created_at }} · شناسه بازبین {{ latest.reviewer_id }}</p><p>{{ latest.reason }}</p>{% if not latest.is_current %}<p>تصویر بازبینی با زنجیره فعلی متفاوت است.</p>{% endif %}{% else %}<p>بازبینی ناسازگار است؛ جزئیات پنهان شد.</p>{% endif %}{% else %}<p>بازبینی‌ای ثبت نشده است.</p>{% endif %}<p><a href="{% url 'staff_identity_detail' 'package' parent.pk %}">مشاهده زنجیره و تاریخچه بسته پیشین</a></p></div>
+{% if latest and not latest.safe %}<div class="staff-alert">آخرین بازبینی ناسازگار است؛ ثبت نسخه اصلاحی تا روشن‌شدن وضعیت آن غیرفعال است.</div>
+{% elif conflict %}<div class="staff-alert">اصلاح ثبت نشد. <a href="{% url 'staff_identity_revise' parent.pk %}">صفحه را دوباره بارگذاری کنید</a> و زنجیره و بازبینی فعلی را بررسی کنید؛ متن فرم ذخیره نشده است.</div>
+{% else %}<div class="staff-panel"><form method="post" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}{% if field.is_hidden %}{{ field }}{{ field.errors }}{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endif %}{% endfor %}<button class="staff-button" type="submit">ثبت نسخه اصلاحی خصوصی</button></form></div>{% endif %}
+{% else %}<div class="staff-empty">بسته یا وابستگی آن ناسازگار است؛ اصلاح غیرفعال است.</div>{% endif %}
+</div></section>{% endblock %}

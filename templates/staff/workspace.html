@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+  <div class="staff-topline"><div><div class="kicker"><span></span> فضای داخلی · نسخه توسعه</div><h1>فضای کاری همکاران</h1><p>مسیرهای قابل دسترسی برای این حساب.</p></div><form method="post" action="{% url 'staff_logout' %}">{% csrf_token %}<button class="staff-logout" type="submit">خروج از حساب</button></form></div>
+  <div class="staff-alert">فقط داده‌های ساختگی استفاده کنید. این صفحه گزارش عملیات، تأیید محتوا یا مجوز انتشار نیست. هر بخش دسترسی را جداگانه بررسی می‌کند. «بدون بازبینی» یعنی هیچ رویداد بازبینی ثبت نشده؛ موارد ارجاع‌شده یا نیازمند بررسی بیشتر را شامل نمی‌شود.</div>
+  {% if links %}<nav aria-label="بخش‌های فضای کاری"><div class="staff-candidate-list">{% for link in links %}<article class="staff-candidate"><div><h2>{{ link.label }}</h2><p>{{ link.description }}</p></div><div><a class="staff-detail-link" href="{% url link.route %}">ورود به {{ link.label }} <span aria-hidden="true">←</span></a>{% if link.pending_filter %}<p><a class="staff-detail-link" href="{% url link.route %}?{{ link.pending_filter }}">بدون بازبینی: {{ link.label }} <span aria-hidden="true">←</span></a></p>{% endif %}</div></article>{% endfor %}</div></nav>{% else %}<div class="staff-empty"><h2>بخشی برای این حساب قابل نمایش نیست</h2><p>برای بررسی دسترسی‌ها با مسئول سامانه آزمایشی تماس بگیرید.</p></div>{% endif %}
+</div></section>{% endblock %}

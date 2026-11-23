@@ -1,0 +1,7 @@
+# ADR 0001: Modular monolith and initial stack
+
+- **Status:** Proposed, 2026-11-22; validate through an implementation spike and real workloads.
+- **Context:** Empty repository; Persian SSR, structured clinical and package data, audited staff workflows, Python-friendly ingestion, versioned mobile/institutional APIs and independently operated background processing. Source and deployment rights remain unknown.
+- **Decision:** Python/Django + Django REST Framework modular monolith; PostgreSQL authoritative database and initial normalized/trigram search; Django SSR with progressive enhancement; separate Celery workers and scheduler with Redis once needed. Use source adapters and manual import where authorized. Restrict public views to approved data. Use separate processes, not independent microservices, at first.
+- **Alternatives:** NestJS/TypeScript or ASP.NET Core backend; Next.js SSR or Razor UI; dedicated search engine, broker or vector store. See [comparison](../TECH_STACK_DECISIONS.md).
+- **Consequences:** Low operational overhead and quick editorial foundation, but Python CPU workloads require isolation and Django admin is not a substitute for a secure custom workflow. SSR reduces baseline JS but rich future UI may warrant another client. Redis and workers add operations only when used. PostgreSQL search must be benchmarked for Persian; later search extraction adds indexing/consistency overhead. External services communicate via versioned APIs, allowing extraction when operational evidence warrants it.

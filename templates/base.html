@@ -1,0 +1,43 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title }}</title>
+  <meta name="description" content="{{ description }}">
+  {% if canonical %}<link rel="canonical" href="{{ canonical }}">{% endif %}
+  {% if private_staff %}<meta name="robots" content="noindex,nofollow">{% elif noindex %}<meta name="robots" content="noindex,follow">{% endif %}
+  {% if canonical == 'https://daroobank.com/' %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"داروبانک","url":"https://daroobank.com/","inLanguage":"fa"}</script>{% endif %}
+  <meta name="theme-color" content="#f7fbf9">
+  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+  <link rel="preload" href="{% static 'fonts/Vazirmatn.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{% static 'css/site.css' %}">
+  {% block extra_styles %}{% endblock %}
+</head>
+<body>
+<a class="skip-link" href="#main">رفتن به محتوای اصلی</a>
+<header class="site-header">
+  <div class="header-inner container">
+    <a class="brand" href="{% url 'home' %}" aria-label="داروبانک DAROOBANK، صفحه اصلی">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 4v24M4 16h24"/><path d="M11.2 20.8 20.8 11.2"/></svg></span>
+      <span><strong>داروبانک</strong><small>DAROO<span>BANK</span></small></span>
+    </a>
+    <nav class="main-nav" aria-label="ناوبری اصلی">
+      <a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}aria-current="page"{% endif %}>خانه</a>
+      <a href="{% url 'search' %}" {% if request.resolver_match.url_name == 'search' %}aria-current="page"{% endif %}>جست‌وجوی دارو</a>
+      <a href="{% url 'prices' %}" {% if request.resolver_match.url_name == 'prices' %}aria-current="page"{% endif %}>قیمت دارو</a>
+      <a href="{% url 'about' %}" {% if request.resolver_match.url_name == 'about' %}aria-current="page"{% endif %}>درباره ما</a>
+    </nav>
+    <a class="header-cta" href="{% url 'search' %}"><span>جست‌وجوی دارو</span><span aria-hidden="true">←</span></a>
+  </div>
+</header>
+<main id="main">{% if private_staff and staff_portal_enabled and request.user.is_authenticated and request.user.is_active and request.user.is_staff and request.resolver_match.url_name != 'staff_workspace' %}<div class="container"><a class="staff-detail-link" href="{% url 'staff_workspace' %}">فضای کاری همکاران ←</a></div>{% endif %}{% block content %}{% endblock %}</main>
+<footer class="site-footer">
+  <div class="container footer-top">
+    <div class="footer-brand"><a class="brand" href="{% url 'home' %}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 4v24M4 16h24"/><path d="M11.2 20.8 20.8 11.2"/></svg></span><span><strong>داروبانک</strong><small>DAROOBANK</small></span></a><p>در مسیر ساخت مرجعی روشن و مسئولانه برای اطلاعات دارویی.</p></div>
+    <div><h3>دسترسی سریع</h3><a href="{% url 'search' %}">جست‌وجوی دارو</a><a href="{% url 'prices' %}">قیمت دارو</a><a href="{% url 'about' %}">درباره داروبانک</a>{% if staff_portal_enabled %}<a href="{% url 'staff_login' %}">ورود همکاران</a>{% endif %}</div>
+    <div><h3>یادآوری مهم</h3><p>اطلاعات این وب‌سایت جایگزین مشورت با پزشک یا داروساز نیست.</p></div>
+  </div>
+  <div class="container footer-bottom"><span>داروبانک · سامانه در حال توسعه</span><span lang="en" dir="ltr">DAROOBANK.COM</span></div>
+</footer>
+</body></html>

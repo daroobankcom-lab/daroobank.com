@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+  <div class="staff-topline"><div><a class="staff-back" href="{% url 'staff_clinical_detail' draft.pk %}">→ بازگشت به پیش‌نویس {{ draft.pk }}</a><div class="kicker"><span></span> ارجاع تکمیلی ساختگی</div><h1>ثبت ارجاع تکمیلی</h1><p>فقط برای همین نسخه؛ هیچ منبعی دریافت نمی‌شود.</p></div></div>
+  <div class="staff-alert">عنوان، تاریخ، محل و رابطه صرفاً ادعا هستند؛ پشتیبانی یا تناقض از نظر علمی بررسی نمی‌شود. فقط اطلاعات ساختگی، غیرمحرمانه و بدون مشخصات بیمار وارد کنید. ارجاع جدید به نسخه‌های دیگر منتقل نمی‌شود.</div>
+  <div class="staff-panel"><form method="post" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}
+    {% for field in form %}{% if field.is_hidden %}{{ field }}{{ field.errors }}{% elif field.name == 'synthetic_ack' %}<label class="staff-checkbox">{{ field }} <span>{{ field.label }}</span></label>{{ field.errors }}{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endif %}{% endfor %}
+    <button class="staff-button" type="submit">ثبت ادعای ارجاع</button></form></div>
+</div></section>{% endblock %}

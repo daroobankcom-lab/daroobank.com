@@ -1,0 +1,16 @@
+.venv/
+.cache/
+__pycache__/
+*.py[cod]
+/backups/
+.env
+.env.*
+!.env.example
+staticfiles/
+
+# Do not commit database backups.
+*.dump
+*.backup
+
+# Local JavaScript dependencies, including isolated browser tests.
+node_modules/

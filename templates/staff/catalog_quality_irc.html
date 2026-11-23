@@ -1,0 +1,13 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+  <div class="staff-topline"><div><div class="kicker"><span></span> کاتالوگ داخلی · فقط خواندنی</div><h1>سرنخ‌های IRC برای شناسه {{ report.anchor_id }}</h1><p>نمایش شناسه‌های هم‌نمایه در همه بخش‌های کاتالوگ، شامل رکوردهای منتشرنشده.</p></div><form method="post" action="{% url 'staff_logout' %}">{% csrf_token %}<button class="staff-logout" type="submit">خروج از حساب</button></form></div>
+  <p><a class="staff-detail-link" href="{% url 'staff_catalog_quality' %}">بازگشت به بازرسی کاتالوگ ←</a></p>
+  <div class="staff-alert">این سرنخ‌ها اثبات هویت یا معادل بودن، مجوز، صحت بالینی، یکتایی یا کامل بودن نیستند. نمایه‌های خراب ممکن است رکوردهای مرتبط را پنهان کنند؛ بین بخش‌ها داده‌ها ممکن است تغییر کنند. هیچ اطلاعاتی اصلاح یا منتشر نمی‌شود.</div>
+  {% if report.status == 'empty' %}<div class="staff-empty"><p>برای این شناسه IRC قابل جست‌وجویی ثبت نشده است؛ نبود نتیجه به معنی یکتایی نیست.</p></div>
+  {% elif report.status == 'invalid' %}<div class="staff-empty"><p>IRC یا نمایه این شناسه ناسازگار است؛ بررسی متوقف شد.</p></div>
+  {% else %}<p>بررسی‌شده در این بخش: {{ report.scanned }} · نمایه همخوان: {{ report.consistent }} · نمایه ناسازگار: {{ report.inconsistent }}</p>
+    {% if report.rows %}<div class="staff-candidate-list">{% for item in report.rows %}<article class="staff-candidate"><div><h2>شناسه داخلی {{ item.id }}</h2><p>{% if item.status == 'consistent' %}IRC و نمایه فعلی همخوان‌اند؛ هویت تأیید نشده است.{% else %}IRC یا نمایه ناسازگار است؛ این رکورد سرنخ تأییدشده نیست.{% endif %}</p></div>{% if item.status == 'consistent' %}<a class="staff-detail-link" href="{% url 'staff_catalog_quality_irc' item.id %}">بررسی این شناسه ←</a>{% endif %}</article>{% endfor %}</div>{% else %}<div class="staff-empty"><p>در بخش فعلی سرنخی یافت نشد؛ نبود نتیجه به معنی یکتایی نیست.</p></div>{% endif %}
+    {% if report.next_cursor %}<nav class="staff-pagination" aria-label="بخش‌های سرنخ IRC"><a href="?cursor={{ report.next_cursor|urlencode }}">بررسی بخش بعد ←</a></nav>{% endif %}
+  {% endif %}
+</div></section>{% endblock %}

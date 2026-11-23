@@ -1,0 +1,5 @@
+<section class="staff-panel"><h2>فرآورده · شناسه {{ product.id }}</h2>
+<p>نام: {{ product.name }}{% if product.brand %} · نام تجاری: {{ product.brand }}{% endif %} · سازنده ادعایی: {{ product.manufacturer }}</p>
+<p>منبع ادعایی: {{ product.source_name }} · <span dir="ltr">{{ product.source_url }}</span></p>
+<p>شناسه ثبت‌کننده: {{ product.recorded_by_id }}{% if not historical %} · <a href="{% url 'staff_identity_detail' 'product' product.id %}">جزئیات فرآورده</a>{% endif %}</p></section>
+{% include 'staff/identity/formulation.html' with formulation=product.formulation historical=historical only %}

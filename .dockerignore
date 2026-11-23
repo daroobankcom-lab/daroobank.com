@@ -1,0 +1,22 @@
+# Environment files may contain secrets; example templates remain visible.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Keep excluded directories last so template exceptions cannot reinclude them.
+.git
+.venv
+.cache
+backups
+node_modules
+**/node_modules
+__pycache__
+*.pyc
+staticfiles
+*.dump
+**/*.dump
+*.backup
+**/*.backup

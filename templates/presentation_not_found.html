@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="section"><div class="container"><div class="empty-state spacious">
+  <span class="empty-icon" aria-hidden="true">⌕</span>
+  <h1>صفحه فرآورده در دسترس نیست</h1>
+  <p>این صفحه پیدا نشد یا برای نمایش عمومی در دسترس نیست. نبود صفحه به معنی نبود، ایمنی یا وضعیت تأیید فرآورده نیست.</p>
+  <a class="button-outline" href="{% url 'search' %}">بازگشت به جست‌وجو ←</a>
+</div></div></section>
+{% endblock %}

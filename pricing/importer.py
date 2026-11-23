@@ -5,6 +5,7 @@ import io
 import json
 import re
 import unicodedata
+from collections import OrderedDict
 from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
@@ -21,6 +22,7 @@ MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 5000
 MAX_RIAL = 9_223_372_036_854_775_807
 MAX_MATCH_CANDIDATES = 100
+MAX_CACHED_IRCS = 8
 IDENTITY_FIELDS = ('irc', 'manufacturer', 'strength', 'dosage_form', 'package_description')
 FIELDS = (
     'source_record_id', 'irc', 'manufacturer', 'strength', 'dosage_form',
@@ -149,27 +151,45 @@ def match_fields_valid(row):
     return len(normalize_search(row['irc'])) <= 80
 
 
+def _load_irc_index(irc, *, lock=False):
+    """Index at most 100 candidates for one IRC; None means over the cap."""
+    possibilities = ProductPresentation.objects.filter(irc_normalized=irc).order_by('pk')
+    if lock:
+        possibilities = possibilities.select_for_update()
+    possibilities = list(possibilities[:MAX_MATCH_CANDIDATES + 1])
+    # Too many records must not become a false unique suggestion or false negative.
+    if len(possibilities) > MAX_MATCH_CANDIDATES:
+        return None
+    index = {}
+    for product in possibilities:
+        # A stale stored projection must not become a match.
+        if normalize_search(product.irc) != irc:
+            continue
+        identity = (irc, *(normalize_search(getattr(product, field)) for field in IDENTITY_FIELDS[1:]))
+        # A second identical match makes that identity ambiguous, even if more follow.
+        if identity in index:
+            index[identity] = None
+        else:
+            index[identity] = product
+    return index
+
+
+def _match_index(identity, index):
+    if index is None:
+        return PriceCandidate.MATCH_AMBIGUOUS, None
+    if identity not in index:
+        return PriceCandidate.MATCH_UNMATCHED, None
+    product = index[identity]
+    return ((PriceCandidate.MATCH_SUGGESTED, product) if product is not None
+            else (PriceCandidate.MATCH_AMBIGUOUS, None))
+
+
 def suggest_product(row, *, lock=False):
     """Suggest only a unique exact presentation, conservatively bounded."""
     if not match_fields_valid(row):
         return PriceCandidate.MATCH_UNMATCHED, None
-    possibilities = ProductPresentation.objects.filter(irc_normalized=normalize_search(row['irc'])).order_by('pk')
-    if lock:
-        possibilities = possibilities.select_for_update()
-    # Too many records must not become a false unique suggestion or false negative.
-    possibilities = list(possibilities[:MAX_MATCH_CANDIDATES + 1])
-    if len(possibilities) > MAX_MATCH_CANDIDATES:
-        return PriceCandidate.MATCH_AMBIGUOUS, None
-    fields = IDENTITY_FIELDS[1:]
-    normalized = {field: normalize_search(row[field]) for field in IDENTITY_FIELDS}
-    matches = [p for p in possibilities if normalize_search(p.irc) == normalized['irc'] and all(
-        normalize_search(getattr(p, field)) == normalized[field] for field in fields
-    )]
-    if len(matches) == 1:
-        return PriceCandidate.MATCH_SUGGESTED, matches[0]
-    if len(matches) > 1:
-        return PriceCandidate.MATCH_AMBIGUOUS, None
-    return PriceCandidate.MATCH_UNMATCHED, None
+    identity = tuple(normalize_search(row[field]) for field in IDENTITY_FIELDS)
+    return _match_index(identity, _load_irc_index(identity[0], lock=lock))
 
 
 def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None, on_staged=None):
@@ -186,17 +206,24 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
     # Validate the whole file before any write; malformed input cannot partially stage.
     rows = parse_csv(path)
     counts = {'rows': len(rows), 'suggested': 0, 'ambiguous': 0, 'unmatched': 0, 'created': 0, 'duplicates': 0}
-    # Only validated rows reach this point. suggest_product uses precisely these
-    # normalized identity fields; retain one observation per key for this call.
-    # The catalog can change during the call, so these remain advisory, not a snapshot.
+    # Only validated rows reach this point. Both caches are per invocation and
+    # advisory: changing catalog data is not observed consistently during a call.
     suggestions = {}
+    irc_indexes = OrderedDict()
     with transaction.atomic():
         if commit:
             lock_source_stage('price', source_url)
         for row, currency, amount, effective, published in rows:
             identity = tuple(normalize_search(row[field]) for field in IDENTITY_FIELDS)
             if identity not in suggestions:
-                status, product = suggest_product(row)
+                irc = identity[0]
+                if irc not in irc_indexes:
+                    if len(irc_indexes) == MAX_CACHED_IRCS:
+                        irc_indexes.popitem(last=False)
+                    irc_indexes[irc] = _load_irc_index(irc)
+                else:
+                    irc_indexes.move_to_end(irc)
+                status, product = _match_index(identity, irc_indexes[irc])
                 suggestions[identity] = (status, product.pk if product else None)
             match_status, product_id = suggestions[identity]
             counts[match_status] += 1

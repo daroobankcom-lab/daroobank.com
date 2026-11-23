@@ -22,4 +22,4 @@ class Command(BaseCommand):
         mode = 'STAGED' if options['commit'] else 'DRY RUN'
         self.stdout.write(f"{mode}: " + ', '.join(f'{key}={value}' for key, value in counts.items()))
         self.stdout.write('No prices were published. Product matches are suggestions requiring human review.')
-        self.stdout.write('Repeated normalized identities reuse their first match in this run; concurrent catalog changes may be missed.')
+        self.stdout.write('Repeated identities and IRC candidate sets may reuse earlier observations in this run; concurrent catalog changes may be missed.')

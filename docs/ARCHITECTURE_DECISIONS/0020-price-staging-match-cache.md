@@ -1,6 +1,6 @@
 # ADR 0020: request-local matching observations for synthetic price CSV staging
 
-Status: development-only implementation, 22 November 2026; extends the matching rules in [ADR 0004](0004-intake-row-manifest.md).
+Status: development-only implementation, 22 November 2026; extended by [ADR 0021](0021-price-irc-candidate-cache.md). This records the earlier identity-cache behavior and extends the matching rules in [ADR 0004](0004-intake-row-manifest.md).
 
 ## Decision
 
@@ -10,6 +10,6 @@ Every input row still gets its own suggestion count and, for committed receipt-b
 
 ## Consequences and limits
 
-In a synthetic preview with 5,000 matching rows sharing one normalized identity, the matcher issues one catalog query instead of 5,000; this is an operation-count test, not a production performance benchmark. A file with 5,000 distinct identities can still issue 5,000 match queries. The row/key caps do not bound query work, memory bytes, lock waits, wall time or behavior under production load. Database indexes and matching rules still affect outcomes.
+In a synthetic preview with 5,000 matching rows sharing one normalized identity, the matcher issues one catalog query instead of 5,000; this is an operation-count test, not a production performance benchmark. Before ADR 0021, a file with 5,000 distinct identities could still issue 5,000 match queries; its IRC-level cache can reduce that when identities share IRCs. The row/key caps do not bound query work, memory bytes, lock waits, wall time or behavior under production load. Database indexes and matching rules still affect outcomes.
 
 The cache intentionally changes within-invocation freshness: if the catalog changes after the first observation, later rows with that key reuse the earlier result; distinct keys may be observed at different times. There is no catalog snapshot, authorization of sources, verification of identity or clinical/price approval. A candidate or receipt may therefore reflect a stale suggestion; reviewers should reassess; accepting a suggestion performs the existing fresh match check. Catalog changes, including concurrent deletion of a suggested product, can still cause transaction failure or rollback. Tests inject a same-transaction change to establish the intended cache semantics; they do not prove concurrency or crash safety. The web form and CLI warn about reuse. Only synthetic non-sensitive data should be used in the development portal.

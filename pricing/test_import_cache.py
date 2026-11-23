@@ -11,7 +11,7 @@ from django.utils import timezone
 from catalog.models import ProductPresentation
 from ingestion.models import ImportReceipt, ImportReceiptItem
 from ingestion.receipts import stage_price_with_receipt
-from pricing.importer import ImportValidationError, MAX_ROWS, stage_csv, suggest_product
+from pricing.importer import ImportValidationError, MAX_ROWS, _match_index, stage_csv, suggest_product
 from pricing.models import PriceCandidate
 from pricing.test_workflow import csv_bytes
 
@@ -41,7 +41,7 @@ class PriceImportCacheTests(TestCase):
                            'strength': '۵ mg', 'package_description': '۱۰ عدد',
                            'source_record_id': 'synthetic-2', 'amount': '200'}, self.row]
         expected = [suggest_product(row)[0] for row in rows]
-        with patch('pricing.importer.suggest_product', wraps=suggest_product) as lookup:
+        with patch('pricing.importer._match_index', wraps=_match_index) as lookup:
             result, receipt = stage_price_with_receipt(io.BytesIO(csv_bytes(rows)), 'منبع ساختگی',
                                     'https://example.org/source', actor=self.actor, rights_attested=True)
         self.assertEqual(lookup.call_count, 1)
@@ -66,7 +66,7 @@ class PriceImportCacheTests(TestCase):
         expected = [suggest_product(row)[0] for row in rows]
         self.assertEqual(expected, ['ambiguous', 'ambiguous', 'unmatched', 'unmatched', 'unmatched'])
         for _ in range(2):
-            with patch('pricing.importer.suggest_product', wraps=suggest_product) as lookup:
+            with patch('pricing.importer._match_index', wraps=_match_index) as lookup:
                 counts = self.stage(rows)
             self.assertEqual(lookup.call_count, 3)
             self.assertEqual([counts[s] for s in ['ambiguous', 'unmatched']], [2, 3])
@@ -79,7 +79,7 @@ class PriceImportCacheTests(TestCase):
                              ('dosage_form', 'شربت'), ('package_description', '20 عدد')]:
             rows.append({**self.row, field: value})
         rows.extend([dict(row) for row in rows])
-        with patch('pricing.importer.suggest_product', wraps=suggest_product) as lookup:
+        with patch('pricing.importer._match_index', wraps=_match_index) as lookup:
             counts = self.stage(rows)
         self.assertEqual(lookup.call_count, 6)
         self.assertEqual(counts['suggested'], 2)
@@ -100,7 +100,8 @@ class PriceImportCacheTests(TestCase):
 
     def test_many_distinct_keys_have_no_false_cache_hits(self):
         rows = [{**self.row, 'irc': str(i)} for i in range(MAX_ROWS)]
-        with patch('pricing.importer.suggest_product', return_value=('unmatched', None)) as lookup:
+        with patch('pricing.importer._match_index', return_value=('unmatched', None)), \
+             patch('pricing.importer._load_irc_index', return_value={}) as lookup:
             counts = self.stage(rows)
         self.assertEqual(lookup.call_count, MAX_ROWS)
         self.assertEqual(counts['unmatched'], MAX_ROWS)
@@ -108,7 +109,7 @@ class PriceImportCacheTests(TestCase):
     def test_oversized_ambiguous_set_is_cached_without_false_unique(self):
         for _ in range(100): ProductPresentation.objects.create(**self.product_data)
         rows = [self.row, {**self.row, 'source_record_id': 'other'}]
-        with patch('pricing.importer.suggest_product', wraps=suggest_product) as lookup:
+        with patch('pricing.importer._match_index', wraps=_match_index) as lookup:
             counts = self.stage(rows, commit=True)
         self.assertEqual(lookup.call_count, 1)
         self.assertEqual(counts['ambiguous'], 2)
@@ -122,7 +123,7 @@ class PriceImportCacheTests(TestCase):
         self.assertEqual(first['unmatched'], 1)
         self.assertEqual(candidate.match_status, 'unmatched')
         ProductPresentation.objects.create(**self.product_data)
-        with patch('pricing.importer.suggest_product', wraps=suggest_product) as lookup:
+        with patch('pricing.importer._match_index', wraps=_match_index) as lookup:
             result, receipt = stage_price_with_receipt(io.BytesIO(csv_bytes([self.row, self.row])), 'منبع ساختگی',
                                   'https://example.org/source', actor=self.actor, rights_attested=True)
         self.assertEqual(lookup.call_count, 1)
@@ -149,7 +150,7 @@ class PriceImportCacheTests(TestCase):
             if source_id == 'synthetic-2': raise ValueError('synthetic callback failure')
         with self.assertRaises(ValueError): self.stage(rows, commit=True, callback=fail)
         self.assertEqual(PriceCandidate.objects.count(), 0)
-        with patch('pricing.importer.suggest_product', wraps=suggest_product) as lookup:
+        with patch('pricing.importer._match_index', wraps=_match_index) as lookup:
             with self.assertRaises(ImportValidationError):
                 self.stage([self.row, {**self.row, 'currency': 'INVALID'}], commit=True)
         self.assertEqual(lookup.call_count, 0)

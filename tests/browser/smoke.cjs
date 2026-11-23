@@ -530,15 +530,17 @@ async function run() {
       await pricePage.locator('#id_source_url').fill('https://example.org/browser-price');
       const csv = 'source_record_id,irc,manufacturer,strength,dosage_form,package_description,amount,currency,category,unit,effective_date,source_published_date\n' +
         'browser-1,001,سازنده فرضی,1 mg,قرص,10 عدد,100,RIAL,retail,package,,\n' +
-        'browser-2,۰۰۱,سازنده فرضی,1 mg,قرص,10 عدد,200,RIAL,retail,package,,\n';
+        'browser-2,۰۰۱,سازنده فرضی,1 mg,قرص,10 عدد,200,RIAL,retail,package,,\n' +
+        'browser-3,001,سازنده فرضی,2 mg,قرص,10 عدد,300,RIAL,retail,package,,\n';
       await pricePage.locator('#id_csv_file').setInputFiles({name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(csv)});
       const [preview] = await Promise.all([
         pricePage.waitForResponse(r => r.url().endsWith('/staff/prices/import/') && r.request().method() === 'POST'),
         pricePage.locator('.staff-review-form button[type=submit]').click(),
       ]);
       assert.equal(preview.status(), 200);
-      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /ردیف‌ها: 2/);
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /ردیف‌ها: 3/);
       assert.match(await pricePage.locator('.staff-upload-result').innerText(), /پیشنهاد تطبیق: 2/);
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /بدون تطبیق: 1/);
       assert.match(await pricePage.locator('.staff-upload-result').innerText(), /هیچ قیمتی منتشر نشده/);
       await checkLayout(pricePage, `price preview result ${width}`);
       await priceContext.close();

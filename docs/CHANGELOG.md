@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — bounded per-IRC price matching reuse
+
+**Changes:** Added a per-invocation, eight-group LRU of bounded candidate indexes, so distinct price identities sharing an IRC can reuse one catalog query. Fresh matching and accept-review use the same matching logic, retaining conservative over-limit ambiguity and row locking. Tests compare the previous algorithm, exercise stale indexes, duplicate matches, the 100/101 boundary, eviction and changing catalog data; Chromium covers a synthetic multi-identity preview.
+
+**Limits:** Cached IRC groups can miss catalog changes across distinct identities; eviction can mix observations from different times with older per-identity results. This is not a snapshot, validation of product or source, or production benchmark. Cache group/row limits do not bound byte size, database work or time.
+
 ## 2026-11-22 — request-local price matching reuse
 
 **Changes:** Price CSV preview and staging now reuse one matching observation per normalized identity within each invocation, preserving per-row counts, receipts, source/payload deduplication and fresh detail and accept-suggestion review matching. The web form and CLI explain the reuse. Tests cover 5,000 repeated and distinct keys, all identity fields, ambiguous sets, replay, receipt outcomes, rollback and catalog changes between rows; synthetic Chromium exercises price preview at four widths.

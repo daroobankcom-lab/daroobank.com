@@ -52,7 +52,7 @@ class PriceImportTests(TestCase):
         output = io.StringIO()
         call_command('stage_price_csv', str(self.path), source_name='Synthetic', source_url='https://example.org', stdout=output)
         self.assertIn('DRY RUN', output.getvalue())
-        self.assertIn('Repeated normalized identities reuse their first match', output.getvalue())
+        self.assertIn('Repeated identities and IRC candidate sets may reuse earlier observations', output.getvalue())
         self.assertEqual(PriceCandidate.objects.count(), 0)
         with self.assertRaises(CommandError):
             call_command('stage_price_csv', str(self.path), source_name='Synthetic', source_url='https://example.org', commit=True, stdout=io.StringIO())

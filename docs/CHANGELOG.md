@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — skip-link diagnostic classification
+
+**Changes:** Restore privacy-preserving CI classification of the structured skip-link visibility assertion; report only fixed failure categories, not the diagnostic JSON. Test malformed and injected input. A separate local 100-context forced-colors probe passed.
+
+**Limits:** The earlier CI failure was not reproduced and its cause remains unknown; the probe is not a real-device accessibility test.
+
 ## 2026-11-23 — selected identity write concurrency errors
 
 **Changes:** After rollback, selected private identity writer boundaries convert PostgreSQL lock-not-available, deadlock and serialization SQLSTATEs to a generic conflict; private HTTP writers return 409. Actual synthetic PostgreSQL timeout, deadlock and serialization tests cover selected schedules.

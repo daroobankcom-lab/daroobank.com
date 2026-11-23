@@ -4,6 +4,8 @@ Full failure output still goes to the ordinary test log. Never copy arbitrary
 subprocess output, URLs, environment variables or assertion values into the
 annotation, which is visible separately from the log.
 """
+import json
+import math
 import re
 from itertools import islice
 
@@ -49,11 +51,44 @@ def _focus_failure(stderr):
     return None
 
 
+def _skip_visibility_failure(message):
+    """Classify a known skip assertion without echoing its untrusted JSON."""
+    label, separator, payload = message.partition(': visible focus ')
+    if not separator or len(payload) > 2048:
+        return None
+    known = _SKIP_MESSAGES.get(label + ': visible focus')
+    if not known:
+        return None
+    try:
+        state = json.loads(payload)
+    except (ValueError, RecursionError):
+        return None
+    numbers = ('opacity', 'width', 'height', 'top', 'bottom', 'left', 'right', 'viewportWidth', 'viewportHeight')
+    if (not isinstance(state, dict) or set(state) != set(numbers) | {'focusVisible', 'visibility', 'display'}
+            or type(state['focusVisible']) is not bool
+            or state['visibility'] not in ('visible', 'hidden', 'collapse')
+            or state['display'] not in ('none', 'inline', 'block', 'inline-block', 'flex', 'inline-flex',
+                                        'grid', 'inline-grid', 'contents', 'flow-root', 'table', 'inline-table',
+                                        'list-item', 'ruby')
+            or any(type(state[key]) not in (int, float) or abs(state[key]) > 1_000_000_000
+                   or not math.isfinite(state[key]) for key in numbers)):
+        return None
+    reasons = []
+    if not state['focusVisible']: reasons.append('focus indicator')
+    if state['visibility'] != 'visible' or state['display'] == 'none': reasons.append('hidden style')
+    if state['opacity'] <= 0: reasons.append('transparent')
+    if state['width'] <= 0 or state['height'] <= 0: reasons.append('empty bounds')
+    if (state['top'] < 0 or state['bottom'] > state['viewportHeight'] or state['left'] < 0
+            or state['right'] > state['viewportWidth']): reasons.append('outside viewport')
+    return (known[0], known[1], 'visible focus: ' + ', '.join(reasons)) if reasons else None
+
+
 def _skip_failure(stderr):
     for line in stderr.splitlines():
         for prefix in ('AssertionError [ERR_ASSERTION]: ', 'AssertionError: '):
             if line.startswith(prefix):
-                return _SKIP_MESSAGES.get(line[len(prefix):])
+                message = line[len(prefix):]
+                return _SKIP_MESSAGES.get(message) or _skip_visibility_failure(message)
     return None
 
 

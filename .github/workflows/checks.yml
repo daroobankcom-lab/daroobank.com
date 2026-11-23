@@ -65,13 +65,36 @@ jobs:
       - name: Install PostgreSQL client for isolated restore drill
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
-          pg_dump --version
-          pg_restore --version
+          sudo apt-get install -y postgresql-client-16
+          echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
+          /usr/lib/postgresql/16/bin/pg_dump --version
+          /usr/lib/postgresql/16/bin/pg_restore --version
       - name: Run isolated synthetic restore drill
         env:
           DAROOBANK_RESTORE_TESTS: '1'
-        run: python manage.py test daroobank.test_synthetic_restore --settings=daroobank.restore_test_settings -v 1 --noinput
+        run: |
+          set +e
+          python manage.py test daroobank.test_synthetic_restore --settings=daroobank.restore_test_settings -v 1 --noinput > "$RUNNER_TEMP/synthetic-restore-test.log" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/synthetic-restore-test.log"
+          if [ "$result" -ne 0 ]; then
+            # Fixed allowlisted categories only; no captured command output or credentials in annotations.
+            if grep -Fq 'Synthetic pg_dump failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at dump.'
+            elif grep -Fq 'Synthetic archive listing failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at archive listing.'
+            elif grep -Fq 'Synthetic restore failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at valid archive restore.'
+            elif grep -Fq 'Restored synthetic database check failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at Django check or migrations.'
+            elif grep -Fq 'Restored synthetic ORM graph verification failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at ORM verification.'
+            else
+              echo '::error::Synthetic restore drill failed in another phase; inspect the job log.'
+            fi
+            exit "$result"
+          fi
       - name: Audit resolved Python application dependencies
         run: |
           python -m venv "$RUNNER_TEMP/dependency-audit"

@@ -3,6 +3,7 @@ import os
 import runpy
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -11,6 +12,13 @@ from django.test import SimpleTestCase, override_settings
 
 from . import settings as base_settings
 from . import test_synthetic_restore as restore
+
+
+def load_test_settings(module):
+    # The active isolated settings can already be imported; re-execution here is intentional.
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message=r"'.*test_settings' found in sys.modules", category=RuntimeWarning)
+        return runpy.run_module(module)
 
 
 class RestoreDrillGuardTests(SimpleTestCase):
@@ -26,17 +34,19 @@ class RestoreDrillGuardTests(SimpleTestCase):
                 with self.assertRaises(ImproperlyConfigured):
                     call_command('test', 'daroobank.test_synthetic_restore_guard', **options)
 
-    def test_both_settings_use_isolated_runner_and_leave_base_database_unmodified(self):
+    def test_settings_use_isolated_runner_and_leave_base_database_unmodified(self):
         original = base_settings.DATABASES['default'].get('TEST')
-        for module in ('daroobank.restore_test_settings', 'daroobank.browser_test_settings'):
+        for module in ('daroobank.restore_test_settings', 'daroobank.browser_test_settings',
+                       'daroobank.synthetic_test_settings'):
             with self.subTest(module=module):
-                config = runpy.run_module(module)
+                config = load_test_settings(module)
                 self.assertEqual(config['TEST_RUNNER'], 'daroobank.isolated_test_runner.IsolatedTestRunner')
                 self.assertEqual(base_settings.DATABASES['default'].get('TEST'), original)
 
     def test_cli_abbreviations_are_rejected_before_test_database_setup(self):
         root = Path(__file__).resolve().parent.parent
-        for module in ('daroobank.restore_test_settings', 'daroobank.browser_test_settings'):
+        for module in ('daroobank.restore_test_settings', 'daroobank.browser_test_settings',
+                       'daroobank.synthetic_test_settings'):
             for flag in ('--keepdb', '--keep', '--parallel', '--para=2', '--parallel=1'):
                 with self.subTest(module=module, flag=flag):
                     result = subprocess.run(
@@ -46,6 +56,16 @@ class RestoreDrillGuardTests(SimpleTestCase):
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn('Isolated exercises require a fresh, non-parallel database.', result.stderr)
                     self.assertNotIn('Creating test database', result.stderr)
+
+    def test_general_synthetic_settings_make_new_scoped_names(self):
+        original = base_settings.DATABASES['default'].get('TEST')
+        first = load_test_settings('daroobank.synthetic_test_settings')
+        second = load_test_settings('daroobank.synthetic_test_settings')
+        first_name = first['DATABASES']['default']['TEST']['NAME']
+        second_name = second['DATABASES']['default']['TEST']['NAME']
+        self.assertRegex(first_name, r'^test_daroobank_synthetic_[0-9a-f]{32}$')
+        self.assertNotEqual(first_name, second_name)
+        self.assertEqual(base_settings.DATABASES['default'].get('TEST'), original)
 
     def test_restore_settings_make_new_scoped_names(self):
         original = base_settings.DATABASES['default'].get('TEST')

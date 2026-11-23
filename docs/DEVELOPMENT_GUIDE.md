@@ -22,7 +22,7 @@ export DAROOBANK_DEBUG=1
 .venv/bin/python -m tools.wait_for_database
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py runserver 127.0.0.1:8000
-.venv/bin/python manage.py test --noinput
+.venv/bin/python manage.py test --settings=daroobank.synthetic_test_settings --noinput
 .venv/bin/python manage.py makemigrations --check --dry-run
 ```
 
@@ -34,7 +34,7 @@ To update, review the direct and transitive versions and their dependency metada
 
 As an optional maintenance aid, `python -m tools.check_lock_metadata` compares both lock files' hash sets against the current PyPI release JSON for every listed version, including conditional packages, source distributions and yanked files. It needs network access to PyPI, makes no file changes or artifact downloads, and returns nonzero for a mismatch, unsupported lock syntax or registry failure. It reports both extra and missing hashes: a deliberate subset of release artifacts also reports a mismatch, as can later upstream additions or removals. Review the specific artifacts and release changes before updating a lock; do not copy new hashes blindly. The tool relies on PyPI's current metadata and TLS, not an independent trust root; it neither verifies downloaded bytes nor resolves dependencies, evaluates markers, confirms availability/compatibility, checks signatures or proves safety. Pip's hash-checked clean installation and other review remain necessary.
 
-The Django test runner creates and destroys a separate `test_` database; the configured role needs CREATEDB permission and must not share a test name with valuable data or concurrent runs. Do not point the runner at a production server. Tests and local data must be synthetic. `DAROOBANK_SECRET_KEY` is required when debug is off; host names are supplied by `DAROOBANK_ALLOWED_HOSTS`. Development preview accepts `.e2b.app`; production deployment is not configured or authorized.
+The Django test runner creates and destroys a separate `test_` database; the configured role needs CREATEDB permission. The opt-in synthetic test settings above assign a random name per invocation and reject `--keepdb` and Django `--parallel`; they reduce accidental name collisions between runs but do not prevent collisions or isolate other shared resources. Overriding the runner bypasses the guard; a crash may leave an orphan database. The ordinary default test settings still use a predictable shared name. Do not point either runner at a production or valuable server: a test runner can drop an existing colliding database. Tests and local data must be synthetic; see [ADR 0071](ARCHITECTURE_DECISIONS/0071-isolated-general-tests.md). `DAROOBANK_SECRET_KEY` is required when debug is off; host names are supplied by `DAROOBANK_ALLOWED_HOSTS`. Development preview accepts `.e2b.app`; production deployment is not configured or authorized.
 
 ## Actual layout
 

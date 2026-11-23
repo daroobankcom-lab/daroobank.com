@@ -270,6 +270,10 @@ CI run 45171291395 failed the forced-colors home skip-link visibility assertion;
 
 `sources/test_review_inspection.py` exercises actual synthetic reviews, malformed snapshots and metadata, cursor and filter boundaries, batch-local pagination, separate claims, permissions, private responses, missing reviewer accounts, bounded warm-cache query count, coherent tampering and a selected non-snapshot race. Chromium exercises the new scan at four widths, keyboard interaction and selected axe checks. Neither establishes source authorization, account existence, authenticity, complete history, bounded JSON bytes or production suitability; see [ADR 0067](ARCHITECTURE_DECISIONS/0067-source-review-inspection.md).
 
+## Isolated general PostgreSQL tests
+
+`daroobank.synthetic_test_settings` selects a fresh random test database name and the guarded runner that rejects reuse and Django parallel mode. `daroobank/test_synthetic_restore_guard.py` checks name generation, base-settings isolation and flag rejection, including parsed abbreviations. A local selected two-process probe ran PostgreSQL catalog tests in two distinct generated databases; both passed. Random names do not eliminate collisions, isolate other cluster resources or make a non-disposable server safe; abrupt termination may leave orphan databases. See [ADR 0071](ARCHITECTURE_DECISIONS/0071-isolated-general-tests.md).
+
 ## PostgreSQL catalog inspection
 
 `daroobank/test_postgresql_inspection.py` uses a disposable PostgreSQL database to create a real unvalidated constraint, disabled trigger and invalid index after a failed concurrent build, plus missing and non-table relations and missing or wrong-target foreign keys; it verifies fixed aggregate output, nonzero anomaly exit, cleanup, DEBUG gate and generic errors. An out-of-scope defect intentionally goes undetected. CI runs the read-only command after migration. These selected catalog states do not establish schema equivalence, data integrity, full corruption detection, security or production readiness; see [ADR 0070](ARCHITECTURE_DECISIONS/0070-postgresql-catalog-clues.md).

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — isolated general PostgreSQL test databases
+
+**Changes:** Opt-in general synthetic test settings assign a fresh random test database per invocation and reject reuse and Django parallel mode; CI uses them for the ordinary suite. A local two-process probe verified distinct databases and passing PostgreSQL catalog tests.
+
+**Limits:** This is probabilistic name isolation on an already disposable cluster, not a production safeguard; abrupt termination can leave orphaned databases. A previous overlapping run against the shared default database failed when one process removed it; see ADR 0071.
+
 ## 2026-11-23 — PostgreSQL catalog clues
 
 **Changes:** A development-only, read-only command reports aggregate counts of unresolved managed tables, non-table relations, missing model-declared single-column managed-table foreign keys, unvalidated constraints, unusable index states and disabled triggers. Synthetic PostgreSQL tests create actual selected defects, including a failed concurrent index build and a missing or wrong-target foreign key; CI runs the command after migrations.

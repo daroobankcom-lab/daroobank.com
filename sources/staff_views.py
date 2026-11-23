@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.review_history import recent_reviews_with_reviewers
 from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
 from .date_inspection import DATE_CATEGORIES, MAX_PK, inspect_dates
@@ -88,7 +89,7 @@ def create(request):
 
 
 def detail_response(request, claim, *, form=None, status=200):
-    reviews = list(claim.reviews.select_related('reviewer').order_by('-pk')[:25])
+    reviews = recent_reviews_with_reviewers(claim.reviews.all())
     current_status = date_label(claim)
     can_review = (request.user.has_perm(REVIEW) and claim.recorded_by_id != request.user.pk and current_status != 'invalid')
     if can_review and form is None:

@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'CLAIM']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'CLAIM', 'CANDIDATE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -461,6 +461,17 @@ async function run() {
       assert.match(await summary.innerText(), /فقط 1 ادعای نمایش‌داده‌شده/);
       assert.match(await summary.locator('.staff-stat-grid > div').first().locator('span').innerText(), /گذشته/);
       assert.equal((await summary.locator('.staff-stat-grid > div').first().locator('strong').innerText()).trim(), '1');
+      await page.goto(base + `/staff/sources/${ids.claim}/`);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی منبع ساختگی برای مرورگر'}).innerText(), /بازبینی منبع ساختگی برای مرورگر/);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      await checkLayout(page, `source review history ${width}`);
+      if (width === 390) await auditAccessibility(page, 'source review history');
+      await page.goto(base + `/staff/products/${ids.candidate}/`);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی فرآورده ساختگی برای مرورگر'}).innerText(), /بازبینی فرآورده ساختگی برای مرورگر/);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      await checkLayout(page, `product review history ${width}`);
+      if (width === 390) await auditAccessibility(page, 'product review history');
+      await page.goto(base + '/staff/sources/');
       await checkLayout(page, `source date summary ${width}`);
       if (width === 390) {
         await auditAccessibility(page, 'source date summary');
@@ -676,6 +687,8 @@ async function run() {
       response = await pricePage.goto(base + `/staff/prices/${ids.price}/`);
       assert.equal(response.status(), 200);
       assert.equal(await pricePage.getByText('این بازبینی تضمین یکتایی نیست', {exact: false}).count(), 1);
+      assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'بازبینی قیمت ساختگی برای مرورگر'}).innerText(), /بازبینی قیمت ساختگی برای مرورگر/);
+      assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
       assert.match(response.headers()['cache-control'], /no-store/);
       await checkLayout(pricePage, `price detail ${width}`);
       if (width === 390) await auditAccessibility(pricePage, 'price detail');

@@ -183,3 +183,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Clinical review detail comparisons
 
 `clinical/test_evidence.py` checks independent draft/author and reference comparisons, supported missing evidence without an age claim, invalid record and contributor conflicts, unknown current states, a missing reviewer with a preserved expected-review ID, selected non-snapshot and ABA behavior, 25 displayed reviews and no per-review SQL in selected requests. A bounded reviewer lookup adds one query when reviews exist. Synthetic Chromium checks the normal detail text and layout at four widths. These checks do not establish chronology, actor qualifications, authenticity or accessibility across browsers. See [ADR 0031](ARCHITECTURE_DECISIONS/0031-clinical-detail-review-comparisons.md).
+
+## Intake review-history missing accounts
+
+`daroobank/test_recent_review_history.py` uses synthetic deferred-FK corruption to cover missing latest and older reviewers for source, product and price histories, expected IDs, stale and fresh submission outcomes, permissions, 25-row order and query counts. A selected separate-read race shows the lookup can be stale. Chromium covers normal history display at four widths and selected axe checks; broken accounts are covered by HTTP tests, not live browser corruption. These checks do not verify review snapshots or historical actor identity. See [ADR 0032](ARCHITECTURE_DECISIONS/0032-reviewer-lookup-in-intake-history.md).

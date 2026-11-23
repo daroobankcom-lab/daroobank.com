@@ -14,7 +14,9 @@ from django.test import override_settings
 from django.utils import timezone
 
 from catalog.identity import digest, ingredient_snapshot, revise_identity
-from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresentation
+from catalog.intake import review_product, stage_products
+from catalog.test_intake import make_csv
+from catalog.models import IngredientDraft, IdentityPackageReview, ProductCandidate, ProductPresentation
 from catalog.test_identity import ALL, INGREDIENT, build, user
 from clinical.services import create_draft, draft_data, review_draft
 from clinical.models import ClinicalDraftReview
@@ -24,7 +26,8 @@ from ingestion.receipts import stage_price_with_receipt
 from pricing.importer import stage_csv
 from pricing.models import PriceCandidate
 from pricing.test_workflow import csv_bytes
-from sources.services import record_claim
+from pricing.reviews import record_preliminary_review
+from sources.services import record_claim, review_claim
 from sources.models import SourceClaimReview
 from tools.browser_test_diagnostics import browser_failure_annotation
 
@@ -42,6 +45,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(connection.vendor, 'postgresql')
         self.assertRegex(connection.settings_dict['NAME'], r'^test_daroobank_browser_[0-9a-f]{32}$')
         author = user('browser-author', *ALL, 'view_productcandidate', 'view_productpresentation')
+        author.user_permissions.add(Permission.objects.get(content_type__app_label='catalog', codename='add_productcandidate'))
         author.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
                                     codename__in=['view_sourceclaim', 'add_sourceclaim']))
         author.user_permissions.add(*Permission.objects.filter(content_type__app_label='clinical',
@@ -68,6 +72,22 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                                       codename__in=['view_clinicaldraft', 'review_clinicaldraft']))
         reviewer.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
                                       codename__in=['view_sourceclaim', 'review_sourceclaim']))
+        reviewer.user_permissions.add(*Permission.objects.filter(content_type__app_label='catalog',
+                                      codename__in=['view_productcandidate', 'review_productcandidate']))
+        reviewer.user_permissions.add(*Permission.objects.filter(content_type__app_label='pricing',
+                                      codename__in=['view_pricecandidate', 'review_pricecandidate']))
+        review_claim(actor=reviewer, claim_id=browser_claim.pk, decision='defer',
+                     reason='بازبینی منبع ساختگی برای مرورگر', expected_review=0,
+                     expected_hash=browser_claim.payload_sha256)
+        product_row = {'source_record_id': 'browser-product', 'name_fa': 'فرآورده ساختگی مرورگر',
+                       'name_en': '', 'manufacturer': 'سازنده فرضی', 'strength': '1 mg',
+                       'dosage_form': 'قرص', 'package_description': '10 عدد', 'irc': '001'}
+        stage_products(io.BytesIO(make_csv([product_row])), 'منبع ساختگی مرورگر',
+                       'https://example.org/browser-product', actor=author, commit=True, rights_attested=True)
+        browser_candidate = ProductCandidate.objects.get(source_record_id='browser-product')
+        review_product(actor=reviewer, candidate_id=browser_candidate.pk, decision='defer',
+                       reason='بازبینی فرآورده ساختگی برای مرورگر', expected_review=0,
+                       expected_hash=browser_candidate.payload_sha256)
         review_draft(actor=reviewer, draft_id=clinical_leaf.pk, decision='defer',
                      reason='دلیل خصوصی ساختگی بازبینی مرورگر', expected_review=0,
                      expected_hash=clinical_leaf.payload_sha256,
@@ -93,13 +113,17 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         _, browser_receipt = stage_price_with_receipt(io.BytesIO(csv_bytes([price_row, price_row])), 'منبع ساختگی مرورگر',
             'https://example.org/browser-detail', actor=price_stager, rights_attested=True)
         browser_price = PriceCandidate.objects.get(source_record_id='browser-detail')
+        record_preliminary_review(actor=reviewer, candidate_id=browser_price.pk, decision='defer',
+                                  reason='بازبینی قیمت ساختگی برای مرورگر', expected_review=0,
+                                  expected_product=0, expected_product_hash='')
         # The subprocess receives only what it needs; database credentials are not propagated.
         env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG', 'TMPDIR') if key in os.environ}
         env.update(BROWSER_BASE_URL=self.live_server_url, BROWSER_AUTHOR='browser-author', BROWSER_REVIEWER='browser-reviewer',
                    BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
                    BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
-                   BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk))
+                   BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk),
+                   BROWSER_CANDIDATE=str(browser_candidate.pk))
         try:
             result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
                                     capture_output=True, text=True, timeout=180)
@@ -114,7 +138,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IngredientDraft.objects.filter(name_fa='ماده تازه ساختگی مرورگر').count(), 1)
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
         self.assertEqual(ClinicalDraftReview.objects.count(), 1)
-        self.assertEqual(SourceClaimReview.objects.count(), 0)
+        self.assertEqual(SourceClaimReview.objects.count(), 1)
         self.assertEqual(PriceCandidate.objects.count(), 1)
         self.assertEqual(ImportReceipt.objects.count(), 1)
         self.assertEqual(browser_receipt.items.count(), 2)

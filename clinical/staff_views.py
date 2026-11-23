@@ -1,5 +1,4 @@
 """Private development-only editorial triage; never publish."""
-from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
@@ -9,6 +8,7 @@ from django.views.decorators.http import require_http_methods, require_POST, req
 
 from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
+from daroobank.review_history import recent_reviews_with_reviewers
 from sources.services import related_claims
 from .inspection import CATEGORIES, MAX_PK, inspect_drafts
 from .lineage import InvalidLineageCursor, LineageNotFound, inspect_lineage
@@ -112,9 +112,7 @@ def revise(request, pk):
 
 def detail_response(request, draft, *, form=None, status=200):
     valid = valid_draft(draft)
-    # Keep a review row visible even if a corrupt foreign key has no reviewer.
-    reviews = list(draft.reviews.order_by('-pk')[:25])
-    reviewers = get_user_model().objects.in_bulk({review.reviewer_id for review in reviews}) if reviews else {}
+    reviews = recent_reviews_with_reviewers(draft.reviews.all())
     evidence = evidence_state(draft) if valid else {'status': 'invalid'}
     contributor = evidence['status'] == 'available' and any(item.recorded_by_id == request.user.pk for item in evidence['items'])
     can_review = (valid and evidence['status'] == 'available' and request.user.has_perm(REVIEW)
@@ -123,7 +121,6 @@ def detail_response(request, draft, *, form=None, status=200):
         form = ReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0, 'expected_hash': draft.payload_sha256,
                                    'expected_evidence_hash': evidence['fingerprint']})
     for review in reviews:
-        review.display_reviewer = reviewers.get(review.reviewer_id)
         if review.display_reviewer is None:
             review.technical_status, review.draft_comparison = 'missing_reviewer', 'unknown'
         elif valid:

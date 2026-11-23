@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.review_history import recent_reviews_with_reviewers
 from sources.services import related_claims
 from ingestion.receipts import related_receipts, stage_price_with_receipt
 from daroobank.forms import StaffAuthenticationForm
@@ -72,7 +73,7 @@ def _current_suggestion(candidate):
 
 def _detail_response(request, candidate, *, form=None, status=200):
     current_status, current_product = _current_suggestion(candidate)
-    reviews = list(candidate.reviews.select_related('reviewer', 'reviewed_product').order_by('-pk')[:25])
+    reviews = recent_reviews_with_reviewers(candidate.reviews.all())
     can_review = bool(request.user.has_perm('pricing.review_pricecandidate') and candidate.staged_by_id
                       and candidate.source_rights_attested and candidate.staged_by_id != request.user.pk)
     if form is None and can_review:

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — reviewer lookup in intake histories
+
+**Changes:** Source, product and price detail retain recent review rows even if their reviewer account is missing, show an unknown-details notice and keep the real latest review ID in the form. The bounded reviewer lookup is shared with clinical detail. Synthetic tests cover missing latest and older reviewers, stale and fresh submissions, permissions, 25-row/query bounds and non-snapshot lookup; Chromium checks normal histories at four widths.
+
+**Limits:** A fresh review remains permitted when a previous reviewer is absent. Lookup is not a historical identity check, audit or review-snapshot validation. Missing parent authors, direct database writes and later changes remain out of scope; see ADR 0032.
+
 ## 2026-11-22 — clinical review detail comparison boundaries
 
 **Changes:** The private detail distinguishes the reviewed draft/author comparison from the reference-set comparison, uses the existing technical classifier before displaying historical assertions, and treats missing evidence without claiming age. Invalid record decisions and reasons are suppressed, and a missing reviewer no longer hides the row or resets the expected-review ID. Tests cover corruption, contributor conflicts, separate-read and ABA behavior, the 25-row cap, query counts and synthetic Chromium at four widths.

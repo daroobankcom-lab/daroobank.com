@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import Http404, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.review_history import recent_reviews_with_reviewers
 from sources.services import related_claims
 from ingestion.receipts import related_receipts, stage_product_with_receipt
 
@@ -75,7 +76,7 @@ def get_candidate(pk):
 
 
 def detail_response(request, candidate, *, form=None, status=200):
-    reviews = list(candidate.reviews.select_related('reviewer').order_by('-pk')[:25])
+    reviews = recent_reviews_with_reviewers(candidate.reviews.all())
     can_review = (request.user.has_perm(REVIEW) and candidate.staged_by_id != request.user.pk
                   and bool(candidate.staged_by_id) and candidate.source_rights_attested)
     if form is None and can_review:

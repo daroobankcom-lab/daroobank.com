@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — malformed signed cursor timestamps
+
+**Changes:** The shared cursor decoder now maps Django's `IndexError` and `OverflowError` for validly signed empty or extreme timestamps to generic invalid-cursor errors. A synthetic test reproduced the previous public HTTP failure before the fix and now covers all four cursor decoders.
+
+**Limits:** Generating these valid signatures requires the signing key; development's fallback key is public. This is not key management or a production security assessment. See ADR 0047.
+
 ## 2026-11-23 — in-flight search observation boundary
 
 **Changes:** Coordinated synthetic PostgreSQL tests demonstrate that a name change or withdrawal committed after search fetch does not alter the already-fetched in-flight result. Subsequent reads reflect the change; API and architecture documentation now state this exposure window.

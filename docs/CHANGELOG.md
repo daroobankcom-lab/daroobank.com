@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — early HTTPS redirect privacy
+
+**Changes:** A response-only middleware wraps Django's security middleware so its early HTTPS redirects receive the existing privacy headers for known public-read and staff paths. The HTTPS redirect and the disabled staff gate retain their order; synthetic tests cover both, methods, query retention and lookalikes.
+
+**Limits:** Proxy-generated redirects, request logging and other paths remain outside scope; redirect locations retain queries. See ADR 0044.
+
 ## 2026-11-23 — public display control-character guard
 
 **Changes:** Shared public presentation eligibility now rejects non-string display fields and Unicode control/surrogate characters, including in optional fields and source metadata. Synthetic bypass tests cover HTML and JSON search/detail; Persian zero-width non-joiners remain valid.

@@ -11,6 +11,7 @@ from daroobank.scan_responses import invalid_scan_response
 from sources.services import related_claims
 from .inspection import CATEGORIES, MAX_PK, inspect_drafts
 from .lineage import InvalidLineageCursor, LineageNotFound, inspect_lineage
+from .review_inspection import CATEGORIES as REVIEW_CATEGORIES, ReviewInspectionNotFound, inspect_reviews
 from .forms import DraftForm, ReferenceForm, RevisionForm, ReviewForm
 from .evidence import ASSERTION_FIELDS, add_reference, evidence_state, reviewed_evidence
 from .models import ClinicalDraft, ClinicalDraftReview
@@ -164,6 +165,33 @@ def lineage(request, pk):
         }, status=400)
     return render(request, 'staff/clinical_lineage.html', {
         'page_title': 'بازرسی نسخه‌های پیشین | داروبانک', 'description': 'مسیر نسخه‌های پیشین ساختگی.',
+        'noindex': True, 'private_staff': True, 'report': report,
+    })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def review_inspection(request, pk):
+    require_staff(request.user, VIEW)
+    category = request.GET.get('category', '')
+    try:
+        after = parse_scan_after(request.GET.get('after', '0'), maximum=MAX_PK)
+    except ValueError:
+        after = None
+    if after is None or category not in ('', *REVIEW_CATEGORIES):
+        # Only render a restart link after confirming the anchor exists and is accessible.
+        if not 1 <= pk <= MAX_PK or not ClinicalDraft.objects.filter(pk=pk).exists():
+            raise Http404('Draft not found')
+        return render(request, 'staff/clinical_review_inspection_error.html', {
+            'page_title': 'ورودی بازرسی نامعتبر | داروبانک', 'description': 'ورودی نامعتبر.',
+            'noindex': True, 'private_staff': True, 'draft_id': pk,
+        }, status=400)
+    try:
+        report = inspect_reviews(actor=request.user, draft_id=pk, after=after, category=category)
+    except ReviewInspectionNotFound:
+        raise Http404('Draft not found')
+    return render(request, 'staff/clinical_review_inspection.html', {
+        'page_title': 'بازرسی بازبینی‌های پیش‌نویس | داروبانک', 'description': 'بازرسی محدود بازبینی‌های ساختگی.',
         'noindex': True, 'private_staff': True, 'report': report,
     })
 

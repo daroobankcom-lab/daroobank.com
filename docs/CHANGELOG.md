@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — synthetic clinical review snapshot inspection
+
+**Changes:** Added a private read-only, per-draft, 50-review scan with page-local status filters and non-reflecting error recovery. It validates supported historical draft and supplementary-evidence snapshot structures, reports missing or invalid images and compares the snapshot draft hash/author ID to a technically consistent current version. It shows IDs and fixed statuses only. PostgreSQL tests and synthetic Chromium exercise access, tampering, pagination and selected accessibility checks.
+
+**Limits:** Missing evidence is not proof of age. Actor existence/qualifications, current evidence, provenance, source rights and clinical correctness are not established. The scan is non-snapshot, JSON bytes and database work are not bounded, and this is not an audit or production feature. Axe contrast inconclusives require manual review.
+
 ## 2026-11-22 — synthetic clinical parent-path inspection
 
 **Changes:** Added a private, permission-checked, read-only inspector for up to 20 immediate-parent links per section, including restartable, signed, time-limited continuation and a generic non-reflecting cursor error. It checks observed payloads and seams, stops on inconsistencies and shows IDs only. PostgreSQL and synthetic Chromium tests cover paths, boundaries, stale/malformed cursors, permissions, concurrent-change seams and selected accessibility checks.

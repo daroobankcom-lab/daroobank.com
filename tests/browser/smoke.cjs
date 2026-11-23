@@ -431,6 +431,30 @@ async function run() {
         await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical scan status');
       }
       await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
+      await page.getByRole('link', {name: 'بازرسی فنی تاریخچه بازبینی‌ها ←'}).click();
+      const reviewInspection = `/staff/clinical/${ids.clinical_leaf}/reviews/inspection/`;
+      assert.equal(new URL(page.url()).pathname, reviewInspection);
+      await checkScanIdSyntax(page, `clinical review scan ${width}`);
+      await submitLocalizedScan(page, '۰۰۰۰');
+      await checkStaffScanError(page, 'clinical review scan', width);
+      await page.getByRole('link', {name: 'بازگشت به پیش‌نویس ←'}).focus();
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#after', `review scan start ${width}`, '.staff-section');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#category', `review scan category ${width}`, '.staff-section');
+      await page.locator('#category').selectOption('consistent');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '.staff-filter button', `review scan submit ${width}`, '.staff-section');
+      await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=consistent'), page.keyboard.press('Enter')]);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      assert.equal(await page.locator('.staff-candidate').count(), 1);
+      assert(!(await page.locator('main').innerText()).includes('دلیل خصوصی ساختگی بازبینی مرورگر'));
+      await checkLayout(page, `clinical review scan ${width}`);
+      if (width === 390) {
+        await auditAccessibility(page, 'clinical review scan');
+        await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical review scan status');
+      }
+      await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
       await page.getByRole('link', {name: 'بازرسی مسیر نسخه‌های پیشین ←'}).click();
       const clinicalLineage = `/staff/clinical/${ids.clinical_leaf}/lineage/`;
       assert.equal(new URL(page.url()).pathname, clinicalLineage);

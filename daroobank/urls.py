@@ -27,6 +27,7 @@ urlpatterns = [
     path('staff/clinical/<int:pk>/lineage/', clinical_staff_views.lineage, name='staff_clinical_lineage'),
     path('staff/clinical/<int:pk>/revise/', clinical_staff_views.revise, name='staff_clinical_revise'),
     path('staff/clinical/<int:pk>/references/new/', clinical_staff_views.reference_create, name='staff_clinical_reference_create'),
+    path('staff/clinical/<int:pk>/reviews/inspection/', clinical_staff_views.review_inspection, name='staff_clinical_review_inspection'),
     path('staff/clinical/<int:pk>/review/', clinical_staff_views.review, name='staff_clinical_review'),
     path('staff/clinical/<int:pk>/', clinical_staff_views.detail, name='staff_clinical_detail'),
     path('staff/sources/', source_staff_views.claims, name='staff_sources'),

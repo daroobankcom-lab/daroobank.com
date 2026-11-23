@@ -15,7 +15,8 @@ from django.utils import timezone
 from catalog.identity import digest, ingredient_snapshot, revise_identity
 from catalog.models import IngredientDraft, IdentityPackageReview, ProductPresentation
 from catalog.test_identity import ALL, INGREDIENT, build, user
-from clinical.services import create_draft, draft_data
+from clinical.services import create_draft, draft_data, review_draft
+from clinical.evidence import evidence_state
 from sources.services import record_claim
 from tools.browser_test_diagnostics import browser_failure_annotation
 
@@ -54,7 +55,13 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
             'claims_collection': True, 'claims_storage': False, 'claims_publication': False,
             'starts_on': None, 'expires_on': timezone.localdate() - timedelta(days=1),
         })
-        user('browser-reviewer', 'view_identityworkspace', 'review_identityworkspace')
+        reviewer = user('browser-reviewer', 'view_identityworkspace', 'review_identityworkspace')
+        reviewer.user_permissions.add(*Permission.objects.filter(content_type__app_label='clinical',
+                                      codename__in=['view_clinicaldraft', 'review_clinicaldraft']))
+        review_draft(actor=reviewer, draft_id=clinical_leaf.pk, decision='defer',
+                     reason='دلیل خصوصی ساختگی بازبینی مرورگر', expected_review=0,
+                     expected_hash=clinical_leaf.payload_sha256,
+                     expected_evidence_hash=evidence_state(clinical_leaf)['fingerprint'])
         ingredient, _, formulation, product, package = build(author)
         leaf = ingredient
         for i in range(22):

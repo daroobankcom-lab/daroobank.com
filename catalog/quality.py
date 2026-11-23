@@ -5,13 +5,13 @@ from collections import Counter
 from django.db.models import Exists, OuterRef
 
 from daroobank.validation import valid_private_source_url
-from .models import ProductPresentation
+from .models import PRESENTATION_SEARCH_FIELDS, ProductPresentation
 from .normalization import normalize_search
 from .services import is_public_presentation, public_candidates
 
 BATCH_SIZE = 50
 MAX_PK = 9_223_372_036_854_775_807
-SEARCH_FIELDS = ('name_fa', 'name_en', 'manufacturer', 'strength', 'dosage_form', 'package_description', 'irc')
+SEARCH_FIELDS = PRESENTATION_SEARCH_FIELDS
 TEXT_FIELDS = SEARCH_FIELDS + ('source_name', 'source_url', 'search_text', 'irc_normalized')
 ISSUE_LABELS = {
     'invalid_text': 'متن ناسازگار یا دارای نویسه کنترلی',

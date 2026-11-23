@@ -1,8 +1,11 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
-from django.db import models
+from django.db import models, router, transaction
 from .normalization import normalize_search
+
+PRESENTATION_SEARCH_FIELDS = ('name_fa', 'name_en', 'manufacturer', 'strength', 'dosage_form', 'package_description', 'irc')
+
 
 class ProductPresentation(models.Model):
     """A limited, source-backed package record, not a drug monograph or price."""
@@ -25,22 +28,39 @@ class ProductPresentation(models.Model):
         if self.published and not self.verified_at:
             raise ValidationError({'verified_at': 'Published products need a verification date.'})
 
-    def save(self, *args, **kwargs):
-        fields = ('name_fa', 'name_en', 'manufacturer', 'strength', 'dosage_form', 'package_description', 'irc')
-        update_fields = kwargs.get('update_fields')
-        values = {field: getattr(self, field) for field in fields}
+    def save(self, *args, force_insert=False, force_update=False, using=None, update_fields=None):
+        # Mirror Django 5.2's deprecated positional save parameters before
+        # deciding whether a partial update needs projection maintenance.
+        if args:
+            force_insert, force_update, using, update_fields = self._parse_save_params(
+                *args, method_name='save', force_insert=force_insert, force_update=force_update,
+                using=using, update_fields=update_fields)
+        kwargs = dict(force_insert=force_insert, force_update=force_update, using=using, update_fields=update_fields)
         if update_fields is not None:
             update_fields = set(update_fields)
+            kwargs['update_fields'] = update_fields
             if not update_fields:
-                return super().save(*args, **kwargs)
-            if self.pk:
-                stored = type(self).objects.using(kwargs.get('using') or self._state.db).get(pk=self.pk)
-                values = {field: values[field] if field in update_fields else getattr(stored, field) for field in fields}
+                return super().save(**kwargs)
             kwargs['update_fields'] = update_fields | {'search_text', 'irc_normalized'}
+        fields = PRESENTATION_SEARCH_FIELDS
+        values = {field: getattr(self, field) for field in fields}
+        if update_fields is not None:
+            if self.pk:
+                using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
+                # The read and write must share a row lock: another partial save
+                # must not change a source field between projection and UPDATE.
+                with transaction.atomic(using=using):
+                    stored = type(self).objects.using(using).select_for_update().get(pk=self.pk)
+                    values = {field: values[field] if field in update_fields else getattr(stored, field) for field in fields}
+                    kwargs['using'] = using
+                    return self._save_with_projection(values, **kwargs)
+        return self._save_with_projection(values, **kwargs)
+
+    def _save_with_projection(self, values, **kwargs):
         self.irc_normalized = normalize_search(values['irc'])
-        self.search_text = normalize_search(' '.join(values[field] for field in fields))
+        self.search_text = normalize_search(' '.join(values[field] for field in PRESENTATION_SEARCH_FIELDS))
         self.full_clean()
-        return super().save(*args, **kwargs)
+        return super().save(**kwargs)
 
 
 class ProductCandidate(models.Model):

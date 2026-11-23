@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — presentation partial-save projection consistency
+
+**Changes:** Nonempty partial model saves lock and read the presentation row inside a transaction before recomputing the search and IRC projections. Deprecated Django 5.2 positional save parameters are parsed before projection handling; empty updates remain no-ops. The quality inspector shares the projection field list. Synthetic PostgreSQL tests exercise overlapping partial saves, lock waits, errors, rollback, stale instances, positional calls and pricing lookup.
+
+**Limits:** This adds locking and possible waits/deadlocks without retries. Bulk/SQL writes, historical models and stale full saves are not covered; existing inconsistencies are not automatically repaired. It does not prevent concurrent duplicate matching rows or provide source or clinical verification. See ADR 0023.
+
 ## 2026-11-22 — price review concurrency limits and validation
 
 **Changes:** Added separate-connection PostgreSQL tests for simultaneous reviewers, locked product updates, concurrent duplicate inserts and a staging cache observed across a committed product change. The price detail page now warns that acceptance does not guarantee uniqueness. Review service and form reject out-of-range IDs, with direct service calls rejecting boolean IDs and malformed decisions.

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — in-flight search observation boundary
+
+**Changes:** Coordinated synthetic PostgreSQL tests demonstrate that a name change or withdrawal committed after search fetch does not alter the already-fetched in-flight result. Subsequent reads reflect the change; API and architecture documentation now state this exposure window.
+
+**Limits:** These tests characterize selected schedules, not a fix, immediate-withdrawal guarantee or proof of all concurrency behavior. See ADR 0046.
+
 ## 2026-11-23 — future-dated cursor rejection
 
 **Changes:** Public search, catalog IRC inspection, identity lineage and clinical lineage now reject correctly signed cursors dated after the verifying host's clock, in addition to their existing maximum-age checks. Controlled-clock and synthetic HTTP tests cover the four consumers.

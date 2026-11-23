@@ -109,3 +109,41 @@ class ClinicalWriteConflictTests(TransactionTestCase):
             with self.assertRaises(OperationalError):
                 create_draft(actor=self.author, data=self.data)
         self.assertEqual(ClinicalDraft.objects.count(), 1)
+
+    def test_real_lock_timeout_reaches_private_http_conflict(self):
+        self.client.force_login(self.author)
+        draft_form = {**{key: value if value is not None else '' for key, value in self.data.items()},
+                      'synthetic_ack': 'on', 'expected_parent_hash': self.parent.payload_sha256,
+                      'change_reason': 'دلیل ساختگی برای اصلاح'}
+        reference_form = {**{key: value if value is not None else '' for key, value in self.reference.items()},
+                          'synthetic_ack': 'on', 'expected_draft_hash': self.parent.payload_sha256,
+                          'expected_evidence_hash': self.hash}
+        cases = [
+            ('staff_clinical_revise', draft_form, 'clinical.staff_views.create_draft', create_draft),
+            ('staff_clinical_reference_create', reference_form, 'clinical.staff_views.add_reference', add_reference),
+        ]
+        for route, payload, target, service in cases:
+            with self.subTest(route=route):
+                def configured(*args, **kwargs):
+                    # Test-only timeout on the request's own post-read connection.
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET lock_timeout = '300ms'")
+                        cursor.execute("SET statement_timeout = '8s'")
+                    return service(*args, **kwargs)
+                def post():
+                    close_old_connections()
+                    try:
+                        return self.client.post(reverse(route, args=[self.parent.pk]), payload)
+                    finally:
+                        connection.close()
+                with patch(target, side_effect=configured), ThreadPoolExecutor(max_workers=1) as pool:
+                    with transaction.atomic():
+                        ClinicalDraft.objects.select_for_update().get(pk=self.parent.pk)
+                        response = pool.submit(post).result(timeout=10)
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
+                self.assertContains(response, 'ثبت به دلیل تداخل هم‌زمان انجام نشد', status_code=409)
+                self.assertNotContains(response, 'lock timeout', status_code=409)
+                self.assertEqual(ClinicalDraft.objects.count(), 1)
+                self.assertFalse(ClinicalReferenceAssertion.objects.exists())

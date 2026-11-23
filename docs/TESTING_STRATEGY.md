@@ -219,3 +219,7 @@ These scans depend on registry advisory coverage and do not prove safety: they d
 ## Identity component and ingredient concurrency
 
 `catalog/test_identity_component_locks.py` checks synthetic PostgreSQL locks, updates before and during selected writer operations, missing rows, outer transactions, bounded SQL, shared ingredients, deletion of the sole component before each selected writer locks it, an immediate-FK insertion blocked during review, and a deferred concurrent insertion that commits after review. Other tests demonstrate same-transaction bypasses. These are selected schedules and do not prove deadlock freedom, general concurrent deletion safety or full isolation; see [ADR 0040](ARCHITECTURE_DECISIONS/0040-identity-components-and-ingredients-locks.md).
+
+## Identity latest-review concurrency
+
+`catalog/test_identity_latest_review_lock.py` covers selected PostgreSQL latest-row update/delete contention, rereads, outer transactions, ordered bounded SQL, older-row mutation, same-transaction bypass, and immediate versus deferred foreign-key insertion. These scenarios are not a proof of gap locking, history isolation, deadlock freedom or reviewer authenticity. See [ADR 0041](ARCHITECTURE_DECISIONS/0041-identity-latest-review-lock.md).

@@ -1,6 +1,7 @@
 """Selected PostgreSQL races for package review/correction formulation locking."""
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from queue import Queue
 from threading import Event
 from unittest.mock import patch
 
@@ -12,6 +13,7 @@ from django.test import TransactionTestCase
 from .identity import IdentityConflict, create_ingredient, digest, package_snapshot, review_package, revise_package
 from .models import (FormulationComponent, FormulationDraft, IdentityPackageDraft, IdentityPackageReview,
                      IdentityPackageRevision, IdentityProductDraft)
+from .identity_test_utils import assert_blocked_by_current_transaction, publish_backend_pid
 from .test_identity import ALL, INGREDIENT, PACKAGE, build, user
 
 REASON = 'دلیل ساختگی برای بررسی یا اصلاح بسته'
@@ -24,12 +26,13 @@ class IdentityFormulationLockTests(TransactionTestCase):
         self.ingredient, self.part, self.form, self.product, self.package = build(self.author)
         self.graph_hash = digest(package_snapshot(self.package))
 
-    def run_writer(self, kind):
+    def run_writer(self, kind, pid_queue=None):
         close_old_connections()
         try:
             with connection.cursor() as cursor:
                 cursor.execute("SET lock_timeout = '5s'")
                 cursor.execute("SET statement_timeout = '12s'")
+                publish_backend_pid(cursor, pid_queue)
             actor = get_user_model().objects.get(pk=self.actor.pk)
             if kind == 'review':
                 return review_package(actor=actor, package_id=self.package.pk, decision='defer', reason=REASON,
@@ -69,7 +72,7 @@ class IdentityFormulationLockTests(TransactionTestCase):
         from .identity import _lock_product_formulation
         for kind in ('review', 'revision'):
             with self.subTest(kind=kind):
-                waiting = Event()
+                waiting, pids = Event(), Queue()
                 def signal(product):
                     waiting.set()
                     return _lock_product_formulation(product)
@@ -77,8 +80,9 @@ class IdentityFormulationLockTests(TransactionTestCase):
                     with ThreadPoolExecutor(max_workers=1) as pool:
                         with transaction.atomic():
                             FormulationDraft.objects.filter(pk=self.form.pk).update(name='تغییر هم‌زمان ساختگی')
-                            future = pool.submit(self.run_writer, kind)
+                            future = pool.submit(self.run_writer, kind, pids)
                             self.assertTrue(waiting.wait(8))
+                            assert_blocked_by_current_transaction(self, pids.get(timeout=5))
                             self.assertFalse(future.done())
                         with self.assertRaises(IdentityConflict):
                             future.result(timeout=10)

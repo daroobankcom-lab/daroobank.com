@@ -327,6 +327,15 @@ def _lock_formulation_components(formulation):
     return rows
 
 
+def _lock_latest_package_review(package):
+    """Lock the latest existing review; absent or future rows are not locked."""
+    using = package._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest identity review locking requires an atomic writer transaction.')
+    return (IdentityPackageReview.objects.using(using).filter(package_id=package.pk)
+            .order_by('-pk').select_for_update().first())
+
+
 def _revision_payload(parent_id, child_id, recorded_by_id, change_reason, parent_graph_sha256, child_graph_sha256):
     return {'parent_id': parent_id, 'child_id': child_id, 'recorded_by_id': recorded_by_id,
             'change_reason': change_reason, 'parent_graph_sha256': parent_graph_sha256,
@@ -351,7 +360,7 @@ def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash
         if not parent_graph or digest(parent_graph) != expected_graph_hash:
             raise IdentityConflict('بسته پیشین یا وابستگی آن تغییر کرده یا ناسازگار است.')
         _require_creator_accounts(graph_authors(parent_graph), using=parent._state.db)
-        latest = parent.reviews.order_by('-pk').first()
+        latest = _lock_latest_package_review(parent)
         if (latest.pk if latest else 0) != expected_review:
             raise IdentityConflict('بازبینی جدیدی برای بسته پیشین ثبت شده است.')
         if latest and not review_is_consistent(latest, parent.pk):
@@ -506,7 +515,7 @@ def review_package(*, actor, package_id, decision, reason, expected_review, expe
         if not graph or digest(graph) != expected_graph_hash: raise IdentityConflict('اطلاعات زنجیره تغییر کرده یا ناسازگار است.')
         if actor.pk in graph_authors(graph): raise PermissionDenied
         _require_creator_accounts(graph_authors(graph), using=package._state.db)
-        latest = package.reviews.order_by('-pk').first()
+        latest = _lock_latest_package_review(package)
         if (latest.pk if latest else 0) != expected_review: raise IdentityConflict('بازبینی جدیدی ثبت شده است.')
         return IdentityPackageReview.objects.create(package=package, reviewer=actor, decision=decision, reason=reason.strip(),
                                                     graph_sha256=expected_graph_hash, graph_snapshot=graph)

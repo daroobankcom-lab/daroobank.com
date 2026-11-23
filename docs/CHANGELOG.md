@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — latest identity package review lock
+
+**Changes:** Package review and correction now lock the latest existing review before their existing optimistic-token checks; correction still validates that row structurally. Synthetic PostgreSQL tests cover selected update, delete, outer-transaction, older-row and concurrent insertion cases.
+
+**Limits:** This is not a history, absent-row or predicate lock; review creation still checks only the previous ID, and concurrent deferred inserts or later/same-transaction bypasses remain possible. See ADR 0041.
+
 ## 2026-11-22 — bounded identity component and ingredient locks
 
 **Changes:** Selected identity dependent-creation, package-review and correction services now lock and re-read bounded existing component and ingredient rows after their applicable parent locks. Missing rows fail closed. Synthetic tests exercise both update directions across six writer paths, shared ingredients, outer transactions, bounded SQL and a deferred concurrent insertion.

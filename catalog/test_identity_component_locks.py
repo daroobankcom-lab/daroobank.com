@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from decimal import Decimal
+from queue import Queue
 from threading import Barrier, Event
 from unittest.mock import patch
 
@@ -17,6 +18,7 @@ from .identity import (IdentityConflict, MAX_COMPONENTS, create_formulation, cre
 from .models import (FormulationComponent, FormulationDraft, IdentityPackageDraft, IdentityPackageReview,
                      IdentityPackageRevision, IngredientDraft)
 from .test_identity import ALL, FORM, INGREDIENT, PACKAGE, PRODUCT, build, user
+from .identity_test_utils import assert_blocked_by_current_transaction, publish_backend_pid
 
 REASON = 'دلیل ساختگی برای بررسی و اصلاح بسته'
 
@@ -39,12 +41,13 @@ class IdentityComponentLockTests(TransactionTestCase):
         cause = caught.exception.__cause__
         self.assertEqual(getattr(cause, 'sqlstate', None) or getattr(cause, 'pgcode', None), '55P03')
 
-    def run_writer(self, kind):
+    def run_writer(self, kind, pid_queue=None):
         close_old_connections()
         try:
             with connection.cursor() as cursor:
                 cursor.execute("SET lock_timeout = '5s'")
                 cursor.execute("SET statement_timeout = '12s'")
+                publish_backend_pid(cursor, pid_queue)
             actor = get_user_model().objects.get(pk=self.actor.pk)
             if kind == 'review':
                 return review_package(actor=actor, package_id=self.package.pk, decision='defer', reason=REASON,
@@ -86,7 +89,7 @@ class IdentityComponentLockTests(TransactionTestCase):
             for model, pk, change in [(FormulationComponent, self.component.pk, {'numerator': Decimal('4')}),
                                       (IngredientDraft, self.ingredient.pk, {'name_fa': 'ماده تغییر یافته ساختگی'})]:
                 with self.subTest(kind=kind, model=model.__name__):
-                    waiting = Event()
+                    waiting, pids = Event(), Queue()
                     def signal(form):
                         waiting.set()
                         return _lock_formulation_components(form)
@@ -94,8 +97,9 @@ class IdentityComponentLockTests(TransactionTestCase):
                         with ThreadPoolExecutor(max_workers=1) as pool:
                             with transaction.atomic():
                                 model.objects.filter(pk=pk).update(**change)
-                                future = pool.submit(self.run_writer, kind)
+                                future = pool.submit(self.run_writer, kind, pids)
                                 self.assertTrue(waiting.wait(8))
+                                assert_blocked_by_current_transaction(self, pids.get(timeout=5))
                                 self.assertFalse(future.done())
                             with self.assertRaises(IdentityConflict):
                                 future.result(timeout=10)
@@ -105,12 +109,13 @@ class IdentityComponentLockTests(TransactionTestCase):
                     original = {'numerator': self.part['numerator']} if model is FormulationComponent else {'name_fa': self.ingredient.name_fa}
                     model.objects.filter(pk=pk).update(**original)
 
-    def dependent_writer(self, kind):
+    def dependent_writer(self, kind, pid_queue=None):
         close_old_connections()
         try:
             with connection.cursor() as cursor:
                 cursor.execute("SET lock_timeout = '5s'")
                 cursor.execute("SET statement_timeout = '12s'")
+                publish_backend_pid(cursor, pid_queue)
             actor = get_user_model().objects.get(pk=self.actor.pk)
             if kind == 'create_product':
                 return create_product(actor=actor, data=PRODUCT, formulation_id=self.form.pk)
@@ -180,7 +185,7 @@ class IdentityComponentLockTests(TransactionTestCase):
             for model, pk, change in [(FormulationComponent, self.component.pk, {'numerator': Decimal('4')}),
                                       (IngredientDraft, self.ingredient.pk, {'name_fa': 'ماده تغییر یافته ساختگی'})]:
                 with self.subTest(kind=kind, model=model.__name__):
-                    waiting = Event()
+                    waiting, pids = Event(), Queue()
                     def signal(form):
                         waiting.set()
                         return _lock_formulation_components(form)
@@ -188,8 +193,9 @@ class IdentityComponentLockTests(TransactionTestCase):
                         with ThreadPoolExecutor(max_workers=1) as pool:
                             with transaction.atomic():
                                 model.objects.filter(pk=pk).update(**change)
-                                future = pool.submit(self.dependent_writer, kind)
+                                future = pool.submit(self.dependent_writer, kind, pids)
                                 self.assertTrue(waiting.wait(8))
+                                assert_blocked_by_current_transaction(self, pids.get(timeout=5))
                                 self.assertFalse(future.done())
                             with self.assertRaises(IdentityConflict):
                                 future.result(timeout=10)
@@ -321,7 +327,7 @@ class IdentityComponentLockTests(TransactionTestCase):
         from .identity import _lock_formulation_components
         for kind in ('review', 'revision', 'create_product', 'create_package', 'revise_formulation', 'revise_product'):
             with self.subTest(kind=kind):
-                waiting = Event()
+                waiting, pids = Event(), Queue()
                 def signal(form):
                     waiting.set()
                     return _lock_formulation_components(form)
@@ -330,8 +336,9 @@ class IdentityComponentLockTests(TransactionTestCase):
                         with transaction.atomic():
                             FormulationComponent.objects.filter(pk=self.component.pk).delete()
                             target = self.run_writer if kind in ('review', 'revision') else self.dependent_writer
-                            future = pool.submit(target, kind)
+                            future = pool.submit(target, kind, pids)
                             self.assertTrue(waiting.wait(8))
+                            assert_blocked_by_current_transaction(self, pids.get(timeout=5))
                             self.assertFalse(future.done())
                         with self.assertRaises(IdentityConflict):
                             future.result(timeout=10)

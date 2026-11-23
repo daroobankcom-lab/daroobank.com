@@ -387,3 +387,7 @@ Package review and correction lock the package, product and then re-read/lock th
 ### Identity graph component and ingredient locks
 
 Package review/correction, dependent product/package creation and formulation/product correction lock existing components (at most five valid rows, plus one sentinel) and their ingredients in ascending primary-key order after applicable parent locks, then reconstruct the graph. Missing/inconsistent rows conflict; nested operations may repeat checks. Locks last until the outer transaction ends, can cause waiting or deadlocks, and have no retry. They are not predicate locks: a tested deferred concurrent insert committed after review and made its saved graph stale. Same-transaction bypasses and later changes remain possible. Current account existence is separate, not proof of identity or authority. Only synthetic data; see [ADR 0040](ARCHITECTURE_DECISIONS/0040-identity-components-and-ingredients-locks.md).
+
+### Latest identity package review lock
+
+Package review and correction also lock the latest existing review after the graph row locks, through the outer transaction. Correction validates it; new review creation checks its ID only. No older or absent review row is locked, and display reads are unchanged. Deferred concurrent inserts, later writes and same-transaction bypasses can change history; waiting and deadlocks remain possible without retry. See [ADR 0041](ARCHITECTURE_DECISIONS/0041-identity-latest-review-lock.md).

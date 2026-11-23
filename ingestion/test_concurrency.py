@@ -10,11 +10,12 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.db import OperationalError, close_old_connections, connection, transaction
+from django.db import close_old_connections, connection, transaction
 from django.test import TransactionTestCase
 
 from catalog.intake import stage_products
 from catalog.models import ProductCandidate
+from ingestion.exceptions import StagingConflict
 from ingestion.locks import lock_source_stage, source_lock_key
 from ingestion.models import ImportReceipt
 from ingestion.receipts import manifest_context, stage_price_with_receipt, stage_product_with_receipt
@@ -128,8 +129,10 @@ class SourceStagingLockTests(TransactionTestCase):
             with self.subTest(domain=domain), transaction.atomic():
                 lock_source_stage(domain, self.url)
                 with ThreadPoolExecutor(max_workers=1) as pool:
-                    with self.assertRaises(OperationalError):
+                    with self.assertRaises(StagingConflict) as caught:
                         pool.submit(direct_stage, domain).result(timeout=10)
+                    driver = caught.exception.__cause__.__cause__
+                    self.assertEqual(getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None), '55P03')
         self.assertEqual(ProductCandidate.objects.count(), 0)
         self.assertEqual(PriceCandidate.objects.count(), 0)
         self.assertEqual(ImportReceipt.objects.count(), 0)

@@ -13,6 +13,7 @@ from django.db.transaction import TransactionManagementError
 from daroobank.account_checks import current_account_exists
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_private_source_url, valid_review_reason
+from ingestion.exceptions import StagingConflict
 from ingestion.locks import lock_source_stage
 
 from .models import ProductCandidate, ProductCandidateReview
@@ -109,7 +110,7 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
     valid_source(source_name, source_url)
     rows = parse_product_csv(file)
     counts = {'rows': len(rows), 'created': 0, 'duplicates': 0}
-    with transaction.atomic():
+    with write_conflict_boundary(StagingConflict):
         if commit:
             lock_source_stage('product', source_url)
             for row in rows:

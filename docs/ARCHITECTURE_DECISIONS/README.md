@@ -43,6 +43,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0054: clinical draft and reference write conflicts](0054-clinical-draft-write-conflicts.md) — development-only implementation, 23 November 2026.
 
+- [0055: staging conflict boundary](0055-staging-conflict-boundary.md) — development-only implementation, 23 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

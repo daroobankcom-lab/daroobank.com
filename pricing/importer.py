@@ -10,9 +10,9 @@ from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
 
-from django.db import transaction
-
 from daroobank.validation import valid_private_source_url
+from daroobank.write_conflict_boundary import write_conflict_boundary
+from ingestion.exceptions import StagingConflict
 from ingestion.locks import lock_source_stage
 from catalog.models import ProductPresentation
 from catalog.normalization import normalize_search
@@ -210,7 +210,7 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
     # advisory: changing catalog data is not observed consistently during a call.
     suggestions = {}
     irc_indexes = OrderedDict()
-    with transaction.atomic():
+    with write_conflict_boundary(StagingConflict):
         if commit:
             lock_source_stage('price', source_url)
         for row, currency, amount, effective, published in rows:

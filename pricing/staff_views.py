@@ -13,6 +13,7 @@ from django.views.decorators.http import require_http_methods, require_POST, req
 from daroobank.account_checks import current_accounts
 from daroobank.review_history import recent_reviews_with_reviewers
 from sources.services import related_claims
+from ingestion.exceptions import StagingConflict
 from ingestion.receipts import related_receipts, stage_price_with_receipt
 from daroobank.forms import StaffAuthenticationForm
 
@@ -132,6 +133,7 @@ def price_upload(request):
     _require_permission(request.user, 'pricing.add_pricecandidate')
     form = PriceUploadForm(request.POST or None, request.FILES or None)
     result = None
+    status = 200
     if request.method == 'POST' and form.is_valid():
         data = form.cleaned_data
         try:
@@ -144,10 +146,13 @@ def price_upload(request):
             result['mode'] = data['action']
         except ImportValidationError as exc:
             form.add_error(None, 'فایل معتبر نیست؛ هیچ داده‌ای ثبت نشد. ' + str(exc))
+        except StagingConflict:
+            form.add_error(None, 'عملیات به دلیل تداخل هم‌زمان انجام نشد؛ برای تلاش دوباره فایل را دوباره انتخاب کنید.')
+            status = 409
     return render(request, 'staff/upload.html', {
         'page_title': 'ورود فایل قیمت | داروبانک', 'description': 'ورود مرحله‌ای فایل قیمت.',
         'noindex': True, 'private_staff': True, 'form': form, 'result': result,
-    })
+    }, status=status)
 
 
 def _get_candidate(pk):

@@ -99,7 +99,7 @@ The DEBUG-only `/staff/catalog/quality/` requires an active staff user with `cat
 
 ## Cooperative staging locks
 
-Product and price committed CSV staging uses PostgreSQL transaction advisory locks keyed by domain and exact source URL; previews do not lock. Receipt/manifest writes are inside the outer transaction. Only writers using the current services participate; older processes, ORM bulk operations and SQL can bypass the protocol. A long transaction or callback can make other same-source requests wait, and the service does not set a lock timeout or retry policy. This protects neither source authorization nor matching against concurrent catalog changes, and does not create immutable or exactly-once audit records. See [ADR 0010](ARCHITECTURE_DECISIONS/0010-staging-concurrency.md).
+Product and price committed CSV staging uses PostgreSQL transaction advisory locks keyed by domain and exact source URL; previews do not lock. Receipt/manifest writes are inside the outer transaction. Only writers using the current services participate; older processes, ORM bulk operations and SQL can bypass the protocol. A long transaction or callback can make other same-source requests wait, and the service does not set a lock timeout or retry policy. Selected PostgreSQL concurrency errors are translated after staging/receipt rollback into a generic conflict; connection loss and later enclosing-transaction commit remain outside this boundary. See [ADR 0055](ARCHITECTURE_DECISIONS/0055-staging-conflict-boundary.md). This protects neither source authorization nor matching against concurrent catalog changes, and does not create immutable or exactly-once audit records. See [ADR 0010](ARCHITECTURE_DECISIONS/0010-staging-concurrency.md).
 
 
 ## Indexed IRC inspection

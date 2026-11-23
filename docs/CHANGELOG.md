@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — selected CSV staging conflict handling
+
+**Changes:** Product/price staging and their receipt transactions translate selected PostgreSQL concurrency failures after rollback. Uploads return a private 409 and ask for the file to be selected again; the price CLI reports a command error. Synthetic tests cover actual advisory-lock timeouts and simulated candidate/manifest rollback.
+
+**Limits:** No timeout, automatic retry, source verification or publication is introduced. Unknown errors, connection loss and later enclosing-transaction commits remain outside the guarantee; see ADR 0055.
+
 ## 2026-11-23 — clinical draft and reference write conflict handling
 
 **Changes:** Clinical draft creation/revision and supplementary-reference creation translate selected PostgreSQL concurrency failures after rollback; initial draft creation now also returns a private generic 409. Synthetic tests cover actual lock timeouts for revision/reference and simulated errors, rollback and HTTP responses for all three forms.

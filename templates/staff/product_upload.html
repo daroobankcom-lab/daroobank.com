@@ -6,7 +6,7 @@
   <div class="staff-alert">این ابزار حقوق منبع یا صحت هویت فرآورده را تأیید نمی‌کند و هیچ محصولی ایجاد یا منتشر نمی‌کند.</div>
   {% if result %}<div class="staff-panel staff-upload-result" role="status"><h2>{% if result.mode == 'stage' %}نتیجه ثبت مرحله‌ای{% else %}نتیجه بررسی آزمایشی{% endif %}</h2><p>ردیف‌ها: {{ result.rows }} · رکورد جدید: {{ result.created }} · تکراری: {{ result.duplicates }}</p><p>هیچ فرآورده‌ای منتشر نشده است.</p>{% if result.receipt_id %}<p><a class="staff-detail-link" href="{% url 'staff_import_receipt_detail' result.receipt_id %}">مشاهده رسید این ثبت ←</a></p>{% endif %}<a class="staff-detail-link" href="{% url 'staff_products' %}">مشاهده صف ←</a></div>{% endif %}
   <div class="staff-panel"><h2>فایل و مشخصات منبع</h2><p class="staff-panel-note">CSV با کدگذاری UTF-8، حداکثر یک مگابایت و ۱۰۰۰ ردیف. ستون‌ها: <bdi dir="ltr">source_record_id, name_fa, name_en, manufacturer, strength, dosage_form, package_description, irc</bdi>. نام انگلیسی و IRC می‌توانند خالی باشند.</p>
-    <form method="post" enctype="multipart/form-data" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}
+    <form method="post" enctype="multipart/form-data" class="staff-review-form">{% csrf_token %}{% if form.non_field_errors %}<div role="alert">{{ form.non_field_errors }}</div>{% endif %}
       <label for="id_source_name">{{ form.source_name.label }}</label>{{ form.source_name }}{{ form.source_name.errors }}
       <label for="id_source_url">{{ form.source_url.label }}</label>{{ form.source_url }}{{ form.source_url.errors }}
       <label for="id_csv_file">{{ form.csv_file.label }}</label>{{ form.csv_file }}{{ form.csv_file.errors }}

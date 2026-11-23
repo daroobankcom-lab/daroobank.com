@@ -1,13 +1,14 @@
 """Atomic web intake receipts and row outcomes. Never fetch or publish."""
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Count, Max, Min, Q
 
+from daroobank.write_conflict_boundary import write_conflict_boundary
 from catalog.comparisons import valid_candidate as valid_product
 from catalog.intake import stage_products
 from pricing.comparisons import valid_candidate as valid_price
 from pricing.importer import stage_csv, validate_source
+from .exceptions import StagingConflict
 from .models import ImportReceipt, ImportReceiptItem
 
 PRODUCT_VIEW = 'catalog.view_productcandidate'
@@ -46,7 +47,7 @@ def stage_product_with_receipt(file, source_name, source_url, *, actor, rights_a
     if not actor:
         raise PermissionDenied
     outcomes = []
-    with transaction.atomic():
+    with write_conflict_boundary(StagingConflict):
         counts = stage_products(file, source_name, source_url, actor=actor, commit=True, rights_attested=rights_attested,
                                 on_staged=lambda *item: outcomes.append(item))
         receipt = ImportReceipt.objects.create(kind=ImportReceipt.PRODUCT, source_name=source_name,
@@ -62,7 +63,7 @@ def stage_price_with_receipt(file, source_name, source_url, *, actor, rights_att
         raise PermissionDenied
     source_name, source_url = validate_source(source_name, source_url)
     outcomes = []
-    with transaction.atomic():
+    with write_conflict_boundary(StagingConflict):
         counts = stage_csv(file, source_name, source_url, commit=True, rights_attested=rights_attested, staged_by=actor,
                            on_staged=lambda *item: outcomes.append(item))
         receipt = ImportReceipt.objects.create(kind=ImportReceipt.PRICE, source_name=source_name, source_url=source_url,

@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF', 'PRICE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -42,9 +42,11 @@ async function checkLayout(page, label) {
     // Report geometry and selectors only; never print page content or form values.
     const offenders = await page.evaluate(() => [...document.querySelectorAll('body *')].map(el => {
       const r = el.getBoundingClientRect();
+      const style = getComputedStyle(el), parent = el.parentElement && getComputedStyle(el.parentElement);
       return {tag: el.tagName, id: el.id.slice(0, 80), className: typeof el.className === 'string' ? el.className.slice(0, 120) : '',
               left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width),
-              client: el.clientWidth, scroll: el.scrollWidth};
+              client: el.clientWidth, scroll: el.scrollWidth, cssWidth: style.width, cssMax: style.maxWidth,
+              parentDisplay: parent && parent.display, parentColumns: parent && parent.gridTemplateColumns};
     }).filter(el => el.right > document.documentElement.clientWidth + 1 || el.left < -1)
       .slice(0, 12));
     assert.fail(`${label}: horizontal overflow ${state.scrollWidth} > ${state.width}; elements=${JSON.stringify(offenders)}`);
@@ -527,6 +529,8 @@ async function run() {
       await page.getByRole('link', {name: 'بررسی بخش بعدی'}).click();
       assert.match(await page.locator('body').innerText(), /گام ۲۱|گام 21/);
       await checkLayout(page, `lineage next ${width}`);
+      response = await page.goto(base + `/staff/operations/imports/${ids.receipt}/inspection/?after=bad-canary`);
+      assert.equal(response.status(), 404, 'a product-only viewer cannot inspect price receipts');
       await context.close();
       const priceContext = await contextFor(browser, width, errors);
       const pricePage = await priceContext.newPage();
@@ -544,11 +548,28 @@ async function run() {
         'browser-3,001,سازنده فرضی,2 mg,قرص,10 عدد,300,RIAL,retail,package,,\n';
       await pricePage.locator('#id_csv_file').setInputFiles({name: 'synthetic-'.repeat(15) + '.csv', mimeType: 'text/csv', buffer: Buffer.from(csv)});
       await checkLayout(pricePage, `price preview with selected file ${width}`);
+      let stylesheetRequests = 0;
+      if (width === 320) {
+        // Exercise a slow stylesheet on the POST response; main-document response
+        // alone does not mean layout styles have loaded.
+        await pricePage.route('**/static/css/staff.css', async route => {
+          stylesheetRequests++;
+          await new Promise(resolve => setTimeout(resolve, 250));
+          await route.continue();
+        });
+      }
       const [preview] = await Promise.all([
         pricePage.waitForResponse(r => r.url().endsWith('/staff/prices/import/') && r.request().method() === 'POST'),
         pricePage.locator('.staff-review-form button[type=submit]').click(),
       ]);
       assert.equal(preview.status(), 200);
+      await pricePage.waitForLoadState('load');
+      if (width === 320) {
+        assert(stylesheetRequests > 0, 'slow stylesheet probe was not requested');
+        await pricePage.unroute('**/static/css/staff.css');
+      }
+      assert.equal(await pricePage.locator('.staff-review-form').evaluate(el => getComputedStyle(el).display), 'grid',
+                   'price result stylesheet must be loaded');
       assert.match(await pricePage.locator('.staff-upload-result').innerText(), /ردیف‌ها: 3/);
       assert.match(await pricePage.locator('.staff-upload-result').innerText(), /پیشنهاد تطبیق: 2/);
       assert.match(await pricePage.locator('.staff-upload-result').innerText(), /بدون تطبیق: 1/);
@@ -560,6 +581,26 @@ async function run() {
       assert.match(response.headers()['cache-control'], /no-store/);
       await checkLayout(pricePage, `price detail ${width}`);
       if (width === 390) await auditAccessibility(pricePage, 'price detail');
+      const receiptInspection = `/staff/operations/imports/${ids.receipt}/inspection/`;
+      response = await pricePage.goto(base + receiptInspection);
+      assert.equal(response.status(), 200);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await pricePage.locator('main').innerText(), /ردیف داده 1/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-detail'));
+      await checkLayout(pricePage, `receipt inspection ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'receipt inspection');
+      await pricePage.locator('#after').fill('۵۰۰۱');
+      const [invalidScan] = await Promise.all([
+        pricePage.waitForResponse(r => r.url().includes(receiptInspection) && r.request().method() === 'GET'),
+        pricePage.locator('.staff-filter button').click(),
+      ]);
+      assert.equal(invalidScan.status(), 400);
+      await pricePage.waitForLoadState('load');
+      assert.match(invalidScan.headers()['cache-control'], /no-store/);
+      assert(!(await pricePage.locator('main').innerText()).includes('۵۰۰۱'));
+      await checkLayout(pricePage, `receipt inspection error ${width}`);
+      await pricePage.getByRole('link', {name: 'شروع دوباره بازرسی ←'}).click();
+      assert.equal(new URL(pricePage.url()).pathname, receiptInspection);
       await priceContext.close();
     }
     const authorContext = await contextFor(browser, 390, errors);

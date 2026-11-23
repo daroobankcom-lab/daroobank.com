@@ -1,0 +1,3 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container"><h1>درخواست بازرسی معتبر نیست</h1><p>شماره ردیف یا وضعیت فنی معتبر نیست. داده ارسالی نمایش داده نمی‌شود.</p><p><a class="staff-detail-link" href="{% url 'staff_import_manifest_inspection' receipt_id %}">شروع دوباره بازرسی ←</a></p></div></section>{% endblock %}

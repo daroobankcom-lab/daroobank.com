@@ -1,5 +1,5 @@
 """Atomic web intake receipts and row outcomes. Never fetch or publish."""
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Max, Min, Q
@@ -72,12 +72,12 @@ def stage_price_with_receipt(file, source_name, source_url, *, actor, rights_att
     return counts, receipt
 
 
-def manifest_context(receipt, page_number):
-    """Check structural counts and bounded row/candidate consistency, not authenticity."""
+def manifest_structure(receipt):
+    """Check manifest aggregate structure; this is not proof of authenticity."""
     if receipt.manifest_version is None:
-        return {'status': 'legacy'}
+        return 'legacy'
     if receipt.manifest_version != MANIFEST_VERSION:
-        return {'status': 'invalid'}
+        return 'invalid'
     rows = receipt.items.all()
     totals = rows.aggregate(total=Count('pk'), first=Min('ordinal'), last=Max('ordinal'),
         created=Count('pk', filter=Q(was_created=True)),
@@ -95,19 +95,33 @@ def manifest_context(receipt, page_number):
                  and totals['ambiguous'] == receipt.ambiguous and totals['unmatched'] == receipt.unmatched)
     else:
         valid = False
-    if not valid:
-        return {'status': 'invalid'}
+    return 'available' if valid else 'invalid'
+
+
+def manifest_item_safe(receipt, item):
+    """Compare one outcome with its current candidate without revealing bad fields."""
+    if receipt.kind not in (ImportReceipt.PRODUCT, ImportReceipt.PRICE):
+        return False
     candidate_field = 'product_candidate' if receipt.kind == ImportReceipt.PRODUCT else 'price_candidate'
-    page = Paginator(rows.select_related(candidate_field).order_by('ordinal'), PAGE_SIZE).get_page(page_number)
-    for item in page.object_list:
+    try:
         candidate = getattr(item, candidate_field)
-        try:
-            item.safe = bool(candidate and candidate.source_name == receipt.source_name
-                and candidate.source_url == receipt.source_url and candidate.source_record_id == item.source_record_id
-                and candidate.payload_sha256 == item.payload_sha256
-                and (valid_product(candidate) if receipt.kind == ImportReceipt.PRODUCT else valid_price(candidate)))
-        except (ValueError, TypeError, AttributeError, OverflowError):
-            item.safe = False
+        return bool(candidate and candidate.source_name == receipt.source_name
+            and candidate.source_url == receipt.source_url and candidate.source_record_id == item.source_record_id
+            and candidate.payload_sha256 == item.payload_sha256
+            and (valid_product(candidate) if receipt.kind == ImportReceipt.PRODUCT else valid_price(candidate)))
+    except (ValueError, TypeError, AttributeError, OverflowError, ObjectDoesNotExist):
+        return False
+
+
+def manifest_context(receipt, page_number):
+    """Check structural counts and bounded row/candidate consistency, not authenticity."""
+    status = manifest_structure(receipt)
+    if status != 'available':
+        return {'status': status}
+    candidate_field = 'product_candidate' if receipt.kind == ImportReceipt.PRODUCT else 'price_candidate'
+    page = Paginator(receipt.items.select_related(candidate_field).order_by('ordinal'), PAGE_SIZE).get_page(page_number)
+    for item in page.object_list:
+        item.safe = manifest_item_safe(receipt, item)
     return {'status': 'available', 'page': page}
 
 

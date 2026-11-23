@@ -81,3 +81,31 @@ def receipt_detail(request, pk):
         'noindex': True, 'private_staff': True, 'receipt': receipt,
         'manifest': manifest_context(receipt, request.GET.get('page', 1)),
     })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def manifest_inspection(request, pk):
+    from django.http import Http404
+    from daroobank.scan_input import parse_scan_after
+    from .manifest_inspection import (MAX_ORDINAL, InvalidManifestInspection,
+                                      ReceiptNotFound, inspect_manifest)
+
+    try:
+        after = parse_scan_after(request.GET.get('after', '0'), maximum=MAX_ORDINAL)
+    except ValueError:
+        after = None
+    category = request.GET.get('category', '')
+    try:
+        report = inspect_manifest(actor=request.user, receipt_id=pk, after=after, category=category)
+    except ReceiptNotFound:
+        raise Http404('Receipt not found')
+    except InvalidManifestInspection:
+        return render(request, 'staff/import_manifest_inspection_error.html', {
+            'page_title': 'ورودی بازرسی نامعتبر | داروبانک', 'description': 'ورودی نامعتبر.',
+            'noindex': True, 'private_staff': True, 'receipt_id': pk,
+        }, status=400)
+    return render(request, 'staff/import_manifest_inspection.html', {
+        'page_title': 'بازرسی ردیف‌های رسید | داروبانک', 'description': 'بازرسی محدود ردیف‌های ساختگی.',
+        'noindex': True, 'private_staff': True, 'report': report,
+    })

@@ -2,6 +2,14 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-22 — bounded receipt-row consistency inspection
+
+**Changes:** Added a private, permission-scoped, read-only inspection of one receipt at a time, scanning up to 50 current candidate comparisons plus lookahead and filtering only within that batch. Shared the structural and per-row checks with receipt detail. Tests cover both domains, legacy and corrupt manifests, permissions, private errors, query counts, selected non-snapshot behavior and synthetic Chromium access at four widths.
+
+**Limits:** Technical consistency is not file provenance, source authorization, identity or clinical approval. Aggregate and row reads can observe different times; no snapshot or complete-history claim is made. Recorded price matching is not recomputed. Synthetic data only; database work and bytes are not bounded by the output cap. See ADR 0025.
+
+**Browser-test correction:** A later recurrence of the 320px upload-result failure showed `staff.css` had not yet applied (`display: block`, no input max width) when layout was measured. The POST test now waits for page load, explicitly asserts the stylesheet's grid is applied, and exercises an intentionally delayed stylesheet; it still fails on real overflow. Earlier CSS width constraints remain, but the prior change alone did not establish the cause of every occurrence.
+
 ## 2026-11-22 — explicit synthetic projection repair
 
 **Changes:** Added a DEBUG-only local command to preview a single presentation's projection drift and explicitly repair only derived fields after a signed, short-lived state/database recheck under a row lock and a synthetic-data attestation. Tests cover stale/deleted records, malformed inputs, time precision, failure rollback, private output, CLI flags, matching/search effects and selected PostgreSQL concurrency.

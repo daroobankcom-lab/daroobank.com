@@ -38,3 +38,5 @@ Record future decisions with context, alternatives, consequences and status. Sup
 - [0023: serialize partial presentation projection writes](0023-presentation-partial-save-projections.md) — development implementation, 22 November 2026.
 
 - [0024: explicit one-row synthetic projection repair](0024-synthetic-projection-repair.md) — development-only local command, 22 November 2026.
+
+- [0025: bounded receipt-row consistency inspection](0025-manifest-consistency-inspection.md) — development-only, read-only inspection, 22 November 2026.

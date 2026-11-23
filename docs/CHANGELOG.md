@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-23 — price detail consistency gate
+
+**Changes:** A staff price detail now checks the staged payload before computing its current suggestion; an inconsistent payload shows a warning and suppresses that suggestion and new review form. A stale POST still fails at the existing write-side check. Queue and detail candidate queries no longer join an unused stored suggestion. Synthetic regressions cover changed amount, fields, hash and URL, conflict responses and SQL joins.
+
+**Limits:** Raw fields and review history can remain visible to authorized staff. Consistency is not authenticity or confidentiality, the queue does not run this check, and reads are not snapshots; see ADR 0065.
+
 ## 2026-11-23 — unsafe presentation text in price matching
 
 **Changes:** Price matching marks an identity ambiguous when a matching presentation has invalid matching text or an unsafe displayed Persian name, rather than ignoring it or suggesting it. An unassignable non-string matching field makes its IRC group ambiguous. Staging, fresh suggestions and acceptance use the shared check; stored history is unchanged. Synthetic tests cover all fields, duplicate conservatism, receipts and acceptance.

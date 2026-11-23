@@ -21,7 +21,7 @@ from .comparisons import price_revision_context
 from .forms import PriceReviewForm, PriceUploadForm
 from .importer import ImportValidationError, match_fields_valid, stage_csv, suggest_product
 from .models import PriceCandidate, PriceCandidateReview
-from .reviews import ReviewConflict, product_fingerprint, record_preliminary_review
+from .reviews import ReviewConflict, ensure_candidate_integrity, product_fingerprint, record_preliminary_review
 
 STATUS_LABELS = {
     'suggested': 'پیشنهاد تطبیق', 'ambiguous': 'تطبیق مبهم یا بیش از سقف بررسی',
@@ -67,6 +67,10 @@ def _display_source_fields(fields):
 
 
 def _current_suggestion(candidate):
+    try:
+        ensure_candidate_integrity(candidate)
+    except ReviewConflict:
+        return 'invalid', None
     fields = candidate.source_fields
     if not match_fields_valid(fields):
         return 'invalid', None
@@ -77,8 +81,9 @@ def _detail_response(request, candidate, *, form=None, status=200):
     current_status, current_product = _current_suggestion(candidate)
     reviews = recent_reviews_with_reviewers(candidate.reviews.all())
     candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
-    can_review = bool(request.user.has_perm('pricing.review_pricecandidate') and candidate.display_stager is not None
-                      and candidate.source_rights_attested and candidate.staged_by_id != request.user.pk)
+    can_review = bool(current_status != 'invalid' and request.user.has_perm('pricing.review_pricecandidate')
+                      and candidate.display_stager is not None and candidate.source_rights_attested
+                      and candidate.staged_by_id != request.user.pk)
     if form is None and can_review:
         form = PriceReviewForm(initial={
             'expected_review': reviews[0].pk if reviews else 0,
@@ -88,7 +93,8 @@ def _detail_response(request, candidate, *, form=None, status=200):
     return render(request, 'staff/price_detail.html', {
         'page_title': 'جزئیات نامزد قیمت | داروبانک', 'description': 'جزئیات داده قیمت برای بررسی داخلی.',
         'noindex': True, 'private_staff': True, 'candidate': candidate, 'source_fields': _display_source_fields(candidate.source_fields), 'current_product': current_product,
-        'current_label': STATUS_LABELS[current_status], 'snapshot_label': STATUS_LABELS.get(candidate.match_status, STATUS_LABELS['invalid']),
+        'current_label': STATUS_LABELS[current_status], 'payload_invalid': current_status == 'invalid',
+        'snapshot_label': STATUS_LABELS.get(candidate.match_status, STATUS_LABELS['invalid']),
         'category_label': CATEGORY_LABELS.get(candidate.price_category, 'نامشخص'),
         'unit_label': UNIT_LABELS.get(candidate.unit, 'نامشخص'), 'reviews': reviews,
         'review_form': form, 'can_review': can_review, 'comparison': price_revision_context(candidate),
@@ -107,7 +113,7 @@ def price_candidates(request):
         return HttpResponseBadRequest('Invalid filter.')
     stats = {item['match_status']: item['count'] for item in PriceCandidate.objects.values('match_status').annotate(count=Count('id'))}
     latest = PriceCandidateReview.objects.filter(candidate_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
-    rows = PriceCandidate.objects.select_related('suggested_product').annotate(latest_decision=Subquery(latest)).order_by('-collected_at', '-pk')
+    rows = PriceCandidate.objects.annotate(latest_decision=Subquery(latest)).order_by('-collected_at', '-pk')
     if status:
         rows = rows.filter(match_status=status)
     if review_status == 'pending':
@@ -158,7 +164,7 @@ def price_upload(request):
 def _get_candidate(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Candidate not found')
-    return get_object_or_404(PriceCandidate.objects.select_related('suggested_product'), pk=pk)
+    return get_object_or_404(PriceCandidate, pk=pk)
 
 
 @login_required(login_url='staff_login')

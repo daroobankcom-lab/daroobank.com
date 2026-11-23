@@ -1,4 +1,4 @@
-from datetime import date
+import io
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -6,7 +6,9 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from catalog.models import ProductPresentation
+from .importer import stage_csv
 from .models import PriceCandidate
+from .test_workflow import csv_bytes
 
 
 class StaffPriceAccessTests(TestCase):
@@ -25,15 +27,12 @@ class StaffPriceAccessTests(TestCase):
             dosage_form='قرص', package_description='۱۰ عدد', irc='001234',
             source_name='نمونه', source_url='https://example.org/product',
         )
-        cls.candidate = PriceCandidate.objects.create(
-            source_name='منبع فرضی', source_url='https://example.org/feed', source_record_id='fake-1',
-            payload_sha256='a' * 64, source_fields={
-                'irc': '۰۰۱۲۳۴', 'manufacturer': 'شرکت نمونه', 'strength': '5 میلی گرم',
-                'dosage_form': 'قرص', 'package_description': '10 عدد',
-            }, original_amount='123.5', original_currency='TOMAN', amount_rial=1235,
-            price_category='retail', unit='package', effective_date=date(2026, 1, 2),
-            match_status='suggested', suggested_product=cls.product,
-        )
+        row = dict(source_record_id='fake-1', irc='۰۰۱۲۳۴', manufacturer='شرکت نمونه', strength='5 میلی گرم',
+                   dosage_form='قرص', package_description='10 عدد', amount='123.5', currency='TOMAN',
+                   category='retail', unit='package', effective_date='2026-01-02', source_published_date='')
+        stage_csv(io.BytesIO(csv_bytes([row])), 'منبع فرضی', 'https://example.org/feed',
+                  commit=True, rights_attested=True)
+        cls.candidate = PriceCandidate.objects.get()
 
     def assert_private(self, response):
         self.assertIn('no-store', response['Cache-Control'])

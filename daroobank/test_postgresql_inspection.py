@@ -240,6 +240,28 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
+    def test_deferred_or_deferrable_unique_is_not_a_simple_unique_match(self):
+        for timing in ('INITIALLY DEFERRED', 'INITIALLY IMMEDIATE'):
+            with self.subTest(timing=timing), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
+                    cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT synthetic_unique '
+                                   'UNIQUE (source_url, payload_sha256) DEFERRABLE ' + timing)
+                report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
+                self.assertEqual(report['missing_unique_keys'], 1)
+                self.assertEqual(report['status'], 'attention')
+                transaction.set_rollback(True)
+
+    def test_standalone_immediate_unique_index_still_matches(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
+                cursor.execute('CREATE UNIQUE INDEX synthetic_plain_unique ON sources_sourceclaim (source_url, payload_sha256)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
+            self.assertEqual(report['missing_unique_keys'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
     def test_reordered_unique_index_is_conservatively_reported_missing(self):
         with transaction.atomic():
             with connection.cursor() as cursor:

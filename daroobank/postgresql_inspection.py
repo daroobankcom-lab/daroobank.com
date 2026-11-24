@@ -217,6 +217,7 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                 (SELECT COUNT(*) FROM expected_unique u WHERE NOT EXISTS (
                     SELECT 1 FROM pg_catalog.pg_index i
                     WHERE i.indrelid = u.table_oid AND i.indisunique AND i.indisvalid AND i.indisready AND i.indislive
+                      AND i.indimmediate
                       -- The catalog field was introduced in PostgreSQL 15; absent means the older default.
                       AND NOT COALESCE((pg_catalog.to_jsonb(i)->>'indnullsnotdistinct')::boolean, false)
                       AND (NOT u.is_primary OR i.indisprimary) AND i.indpred IS NULL AND i.indexprs IS NULL

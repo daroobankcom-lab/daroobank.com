@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL unique-key enforcement timing
+
+**Changes:** Selected simple uniqueness matches must be enforced immediately; synthetic DDL tests cover deferrable constraints in both initial modes.
+
+**Limits:** A standalone immediate unique index still matches and full constraint equivalence remains unchecked. See ADR 0087.
+
 ## 2026-11-24 — unsupported unique declarations
 
 **Changes:** The read-only schema inspector reports unsupported managed-model unique declarations as an aggregate attention count instead of silently omitting them. Synthetic metadata tests cover conditions, expressions, include, operator classes, explicit null semantics, deferrability and subclasses.

@@ -1,6 +1,6 @@
 # ADR 0086: unsupported model unique declarations
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0073](0073-postgresql-unique-key-clues.md) and [ADR 0085](0085-postgresql-unique-null-semantics.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0073](0073-postgresql-unique-key-clues.md) and [ADR 0085](0085-postgresql-unique-null-semantics.md). [ADR 0087](0087-postgresql-unique-enforcement.md) adds a selected immediate-enforcement clue, superseding that limitation below.
 
 ## Decision
 

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — fail-stop synthetic backup example
+
+**Changes:** The manual synthetic backup example chains all stages so a failed target creation cannot be followed by a restore. Offline fake-command tests exercise each failure; a separate PostgreSQL 16 synthetic-cluster probe checks target collision and a successful restore.
+
+**Limits:** This is not an atomic, encrypted or production backup tool and relies on running the entire block against a disposable cluster. See ADR 0091.
+
 ## 2026-11-24 — optimization-safe synthetic restore checks
 
 **Changes:** The opt-in synthetic restore fixture and identity-graph verification use explicit checks instead of Python assertions, so optimization cannot erase them. PostgreSQL tests verify valid and deliberately corrupted fixtures under `python -O`.

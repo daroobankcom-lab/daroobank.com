@@ -260,22 +260,25 @@ The inspection follows the connection search path and uses one catalog statement
 
 PostgreSQL's `pg_dump` and `pg_restore` are external client utilities, not an application backup service. Use a client version at least as new as the server; access must be restricted and authorized. Dumps contain all user data, password hashes, sessions and other private information, are unencrypted by default and are not committed. Choose a trusted private location, encrypt and retain according to policy, and test restoration separately. A volume alone is not a backup.
 
-For a **synthetic development** database, after exporting the PostgreSQL variables above and installing matching PostgreSQL client tools:
+For a **synthetic development** database, after exporting the PostgreSQL variables above and installing matching PostgreSQL client tools, set `SYNTHETIC_DUMP_FILE` to a new absolute file path in a trusted private directory. Run the **entire block together**, not individual lines. Each stage is conditional on the previous stage succeeding, including successful creation of the new target:
 
 ```sh
-export PGHOST="$POSTGRES_HOST" PGPORT="${POSTGRES_PORT:-5432}" PGUSER="$POSTGRES_USER" PGPASSWORD="$POSTGRES_PASSWORD"
-umask 077
-# shell noclobber fails if the destination already exists.
-(set -C; pg_dump --format=custom --no-owner --no-acl --dbname="$POSTGRES_DB" > /private/backup/dev.dump)
-pg_restore --list /private/backup/dev.dump > /dev/null
-# Only use a new, isolated drill database. Fail if it already exists.
-createdb daroobank_restore_drill
-pg_restore --exit-on-error --single-transaction --no-owner --no-acl --dbname=daroobank_restore_drill /private/backup/dev.dump
-POSTGRES_DB=daroobank_restore_drill .venv/bin/python manage.py migrate --check
-POSTGRES_DB=daroobank_restore_drill .venv/bin/python manage.py check
+(
+  set -C &&
+  : "${SYNTHETIC_DUMP_FILE:?Set a new private archive path}" "${POSTGRES_DB:?Set the synthetic source database}" \
+    "${POSTGRES_HOST:?Set the disposable PostgreSQL host}" "${POSTGRES_USER:?Set the PostgreSQL user}" &&
+  umask 077 &&
+  export PGHOST="$POSTGRES_HOST" PGPORT="${POSTGRES_PORT:-5432}" PGUSER="$POSTGRES_USER" PGPASSWORD="${POSTGRES_PASSWORD:-}" &&
+  pg_dump --no-password --format=custom --no-owner --no-acl --dbname="$POSTGRES_DB" > "$SYNTHETIC_DUMP_FILE" &&
+  pg_restore --list --no-password "$SYNTHETIC_DUMP_FILE" > /dev/null &&
+  createdb --no-password daroobank_restore_drill &&
+  pg_restore --no-password --exit-on-error --single-transaction --no-owner --no-acl --dbname=daroobank_restore_drill "$SYNTHETIC_DUMP_FILE" &&
+  POSTGRES_DB=daroobank_restore_drill .venv/bin/python manage.py migrate --check &&
+  POSTGRES_DB=daroobank_restore_drill .venv/bin/python manage.py check
+)
 ```
 
-The example directories must already exist and be private. PostgreSQL/OS environment variables can be visible to privileged local processes; use an appropriate secret manager or restricted `.pgpass` for production. Set `PGSSLMODE` and certificate variables as required. `createdb` needs privileges and must target an isolated test server; remove drill databases only under an explicit local retention policy. `pg_restore --list` checks the archive structure, not the restored data; check expected records, relationships and application behavior on the isolated copy. Database-only dumps do not include roles, external assets or all cluster configuration. `migrate --check` only checks pending migrations. Restore commands never target the active database. No automatic encryption, off-host retention, cadence or monitoring is provided; see [ADR 0007](ARCHITECTURE_DECISIONS/0007-backup-policy.md).
+The example directory must already exist and be private. `set -C` requests shell noclobber; verify filesystem and shell behavior, and never use an untrusted directory. A failed dump can leave an incomplete file and a failed restore can leave the newly created database; inspect and clean up only after independently verifying their identity. If the target already exists, `createdb` fails and this block does not start restore. Do not run the commands separately or use the target concurrently. This is not atomic backup publication or a general safeguard against misconfigured hosts; see [ADR 0091](ARCHITECTURE_DECISIONS/0091-synthetic-backup-guide-fail-stop.md). PostgreSQL/OS environment variables can be visible to privileged local processes; use an appropriate secret manager or restricted `.pgpass` for production. Set `PGSSLMODE` and certificate variables as required. `createdb` needs privileges and must target an isolated test server; remove drill databases only under an explicit local retention policy. `pg_restore --list` checks the archive structure, not the restored data; check expected records, relationships and application behavior on the isolated copy. Database-only dumps do not include roles, external assets or all cluster configuration. `migrate --check` only checks pending migrations. Restore commands never target the active database. No automatic encryption, off-host retention, cadence or monitoring is provided; see [ADR 0007](ARCHITECTURE_DECISIONS/0007-backup-policy.md).
 
 
 

@@ -1225,6 +1225,22 @@ async function run() {
       assert.match(await reviewPage.locator('#id_reason_error').innerText(), /نویسه کنترلی نامعتبر/);
       assert.equal(await reviewPage.locator('#staff-form-errors a[href="#id_reason"]').count(), 1);
     }
+    // A stale valid form sent to a now-uninspected draft must conflict without
+    // disclosing the draft. This deliberately targets only the disposable DB.
+    await reviewPage.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
+    const oversizedReviewForm = reviewPage.locator('form.staff-review-form');
+    await oversizedReviewForm.locator('#id_decision').selectOption('defer');
+    await oversizedReviewForm.locator('#id_reason').fill('بازبینی ساختگی برای بررسی بیشتر');
+    await oversizedReviewForm.evaluate((form, id) => { form.action = `/staff/clinical/${id}/review/`; }, ids.oversized_draft);
+    const [oversizedReviewConflict] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
+      oversizedReviewForm.locator('button[type=submit]').click()]);
+    assert.equal(oversizedReviewConflict.status(), 409);
+    assert.match(oversizedReviewConflict.headers()['cache-control'], /no-store/);
+    assert.match(await reviewPage.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+    assert(!(await reviewPage.locator('main').innerText()).includes('browser-draft-statement-canary'));
+    assert.equal(await reviewPage.locator('form.staff-review-form').count(), 0);
+    await checkLayout(reviewPage, 'oversized clinical review conflict');
+    await auditAccessibility(reviewPage, 'oversized clinical review conflict');
     await reviewContext.close();
     const authorContext = await contextFor(browser, 390, errors);
     const page = await authorContext.newPage();

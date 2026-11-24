@@ -5,12 +5,18 @@ MAX_STATEMENT_LENGTH = 4000
 MAX_REASON_TRANSFER_LENGTH = 1000
 
 
+def bounded_draft_own_text(queryset):
+    """Bound one draft without a parent join, including locked writer reads."""
+    return (queryset.defer('statement', 'change_reason')
+        .annotate(_statement_prefix=Substr('statement', 1, MAX_STATEMENT_LENGTH + 1),
+                  _reason_prefix=Substr('change_reason', 1, MAX_REASON_TRANSFER_LENGTH + 1)))
+
+
 def bounded_draft_text(queryset):
     """Queryset must select_related('parent'); originals never lazily fetched."""
-    return (queryset.defer('statement', 'change_reason', 'parent__statement', 'parent__change_reason')
-        .annotate(_statement_prefix=Substr('statement', 1, MAX_STATEMENT_LENGTH + 1),
-                  _reason_prefix=Substr('change_reason', 1, MAX_REASON_TRANSFER_LENGTH + 1),
-                  _parent_statement_prefix=Substr('parent__statement', 1, MAX_STATEMENT_LENGTH + 1),
+    return (bounded_draft_own_text(queryset)
+        .defer('parent__statement', 'parent__change_reason')
+        .annotate(_parent_statement_prefix=Substr('parent__statement', 1, MAX_STATEMENT_LENGTH + 1),
                   _parent_reason_prefix=Substr('parent__change_reason', 1, MAX_REASON_TRANSFER_LENGTH + 1)))
 
 
@@ -24,8 +30,12 @@ def _materialize(draft, statement, reason):
     draft.change_reason = None if oversized_reason else reason
 
 
-def materialize_draft_text(draft):
+def materialize_draft_own_text(draft):
     _materialize(draft, draft._statement_prefix, draft._reason_prefix)
+
+
+def materialize_draft_text(draft):
+    materialize_draft_own_text(draft)
     parent = draft._state.fields_cache.get('parent')
     if parent is not None:
         _materialize(parent, draft._parent_statement_prefix, draft._parent_reason_prefix)

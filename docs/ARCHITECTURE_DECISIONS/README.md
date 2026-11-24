@@ -326,4 +326,6 @@
 
 - [0163: bounded clinical detail and lineage](0163-bounded-clinical-detail-lineage.md) — development-only defensive reads.
 
+- [0164: bounded locked clinical draft text](0164-bounded-locked-clinical-draft-text.md) — development-only defensive writer reads.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

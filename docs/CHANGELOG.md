@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded locked clinical draft text
+
+**Changes:** Revision, reference and review writers bound target and immediate-parent text under their existing row locks and conflict on uninspected values.
+
+**Limits:** Even a valid long whitespace-bearing reason may conflict; inputs, database work and other paths are not bounded by this change. See ADR 0164.
+
 ## 2026-11-24 — bounded clinical detail and lineage
 
 **Changes:** Selected draft, immediate-parent and child text in private clinical detail and lineage reads is bounded; excessive values remain uninspected and disable unsafe affordances.

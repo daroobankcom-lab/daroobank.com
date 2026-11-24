@@ -13,6 +13,7 @@ from daroobank.account_checks import current_account_exists
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import (has_control_or_surrogate, has_forbidden_multiline_control,
                                   valid_private_source_url, valid_review_reason)
+from .draft_reads import bounded_draft_own_text, materialize_draft_own_text
 from .models import ClinicalDraft, ClinicalDraftReview
 
 VIEW = 'clinical.view_clinicaldraft'
@@ -126,14 +127,20 @@ def _valid_draft_for_update(draft):
     """
     if not transaction.get_connection(draft._state.db).in_atomic_block:
         raise TransactionManagementError('Immediate-parent locking requires an atomic writer transaction.')
-    if not valid_payload(draft):
+    draft.writer_text_uninspected = getattr(draft, 'bounded_text_oversized', False)
+    if draft.writer_text_uninspected or not valid_payload(draft):
         return False
     if draft.parent_id:
         try:
-            parent = ClinicalDraft.objects.using(draft._state.db).select_for_update().get(pk=draft.parent_id)
+            parent = bounded_draft_own_text(ClinicalDraft.objects.using(draft._state.db)
+                                             .select_for_update()).get(pk=draft.parent_id)
         except ClinicalDraft.DoesNotExist:
             return False
+        materialize_draft_own_text(parent)
         draft.parent = parent
+        if parent.bounded_text_oversized:
+            draft.writer_text_uninspected = True
+            return False
     return valid_draft(draft) and current_account_exists(draft.author_id, using=draft._state.db)
 
 
@@ -151,10 +158,14 @@ def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change
         parent = None
         if parent_id is not None:
             try:
-                parent = ClinicalDraft.objects.select_for_update(of=('self',)).get(pk=parent_id)
+                parent = bounded_draft_own_text(ClinicalDraft.objects.select_for_update(of=('self',))).get(pk=parent_id)
             except ClinicalDraft.DoesNotExist as exc:
                 raise DraftConflict('نسخه پیشین در دسترس نیست.') from exc
-            if not _valid_draft_for_update(parent) or parent.payload_sha256 != expected_parent_hash:
+            materialize_draft_own_text(parent)
+            valid = _valid_draft_for_update(parent)
+            if parent.writer_text_uninspected:
+                raise DraftConflict('نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد و عملیات متوقف شد.')
+            if not valid or parent.payload_sha256 != expected_parent_hash:
                 raise DraftConflict('نسخه پیشین تغییر کرده یا ناسازگار است؛ عملیات متوقف شد.')
             if data['subject'] != parent.subject or data['audience'] != parent.audience:
                 raise DraftError('برای موضوع یا مخاطب متفاوت پیش‌نویس جدید بسازید.')
@@ -182,10 +193,14 @@ def review_draft(*, actor, draft_id, decision, reason, expected_review, expected
                 or not HASH.fullmatch(expected_evidence_hash)))):
         raise DraftConflict('اطلاعات بازبینی معتبر نیست.')
     with write_conflict_boundary(DraftConflict):
-        draft = ClinicalDraft.objects.select_for_update(of=('self',)).get(pk=draft_id)
+        draft = bounded_draft_own_text(ClinicalDraft.objects.select_for_update(of=('self',))).get(pk=draft_id)
+        materialize_draft_own_text(draft)
         if draft.author_id == actor.pk:
             raise PermissionDenied
-        if not _valid_draft_for_update(draft) or draft.payload_sha256 != expected_hash:
+        valid = _valid_draft_for_update(draft)
+        if draft.writer_text_uninspected:
+            raise DraftConflict('نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد و عملیات متوقف شد.')
+        if not valid or draft.payload_sha256 != expected_hash:
             raise DraftConflict('پیش‌نویس یا نسخه پیشین تغییر کرده یا ناسازگار است.')
         from .evidence import evidence_state
         evidence = evidence_state(draft, lock=True)

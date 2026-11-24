@@ -9,6 +9,7 @@ from django.db.models import Prefetch, prefetch_related_objects
 from daroobank.account_checks import current_account_ids
 from daroobank.write_conflict_boundary import write_conflict_boundary
 
+from .draft_reads import bounded_draft_own_text, materialize_draft_own_text
 from .models import ClinicalDraft, ClinicalReferenceAssertion
 from .services import (ADD, HASH, REFERENCE_FIELDS, VIEW, DraftConflict, DraftError, require_staff,
                        _valid_draft_for_update, validate_reference_data)
@@ -130,10 +131,14 @@ def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_eviden
         raise DraftError('شناسه پیش‌نویس یا فهرست ارجاع معتبر نیست.')
     with write_conflict_boundary(DraftConflict):
         try:
-            draft = ClinicalDraft.objects.select_for_update(of=('self',)).get(pk=draft_id)
+            draft = bounded_draft_own_text(ClinicalDraft.objects.select_for_update(of=('self',))).get(pk=draft_id)
         except ClinicalDraft.DoesNotExist as exc:
             raise DraftConflict('پیش‌نویس در دسترس نیست.') from exc
-        if not _valid_draft_for_update(draft) or draft.payload_sha256 != expected_draft_hash:
+        materialize_draft_own_text(draft)
+        valid = _valid_draft_for_update(draft)
+        if draft.writer_text_uninspected:
+            raise DraftConflict('نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد و عملیات متوقف شد.')
+        if not valid or draft.payload_sha256 != expected_draft_hash:
             raise DraftConflict('پیش‌نویس تغییر کرده یا ناسازگار است.')
         state = evidence_state(draft, lock=True)
         if state['status'] != 'available' or state['fingerprint'] != expected_evidence_hash:

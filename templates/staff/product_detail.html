@@ -1,9 +1,11 @@
 {% extends 'base.html' %}{% load static %}
+{% block title %}{% include 'staff/form_title.html' with form=review_form %}{% endblock %}
 {% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
 {% block content %}
 <section class="staff-section"><div class="container">
   <div class="staff-topline"><div><a class="staff-back" href="{% url 'staff_products' %}">→ بازگشت به صف فرآورده</a><div class="kicker"><span></span> نامزد فرآورده · بررسی اولیه</div><h1>جزئیات نامزد {{ candidate.pk }}</h1><p>این داده‌ها ادعای منبع هستند، نه اطلاعات تأییدشده.</p></div><form method="post" action="{% url 'staff_logout' %}">{% csrf_token %}<button class="staff-logout" type="submit">خروج از حساب</button></form></div>
   <div class="staff-alert">هیچ تصمیمی در این صفحه محصول یا قیمت منتشر نمی‌کند. تطبیق، هویت، حقوق منبع و محتوای بالینی همچنان نیازمند فرایند مستقل هستند.</div>
+  {% include 'staff/review_form_errors.html' %}
   <div class="staff-detail-grid">{% if comparison.available %}<article class="staff-panel"><h2>مشخصات اعلام‌شده</h2><dl class="staff-definition">
     <div><dt>نام فارسی</dt><dd>{{ candidate.source_fields.name_fa }}</dd></div><div><dt>نام انگلیسی</dt><dd><bdi dir="ltr">{{ candidate.source_fields.name_en|default:'نامشخص' }}</bdi></dd></div>
     <div><dt>سازنده</dt><dd>{{ candidate.source_fields.manufacturer }}</dd></div><div><dt>شکل و مقدار</dt><dd>{{ candidate.source_fields.dosage_form }} · {{ candidate.source_fields.strength }}</dd></div><div><dt>بسته‌بندی</dt><dd>{{ candidate.source_fields.package_description }}</dd></div><div><dt>IRC اعلام‌شده</dt><dd><bdi dir="ltr">{{ candidate.source_fields.irc|default:'نامشخص' }}</bdi></dd></div>

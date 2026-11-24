@@ -1005,6 +1005,41 @@ async function run() {
       assert.equal(await reviewPage.locator('form.staff-review-form #id_reason').inputValue(), '');
       assert.equal(await reviewPage.locator('form.staff-review-form #id_decision').inputValue(), '');
     }
+    // Product and price detail POST errors retain the form; exercise a visible
+    // field error and native keyboard navigation to its summary link.
+    for (const [detailPath, reviewPath, domain] of [
+      [`/staff/products/${ids.candidate}/`, `/staff/products/${ids.candidate}/review/`, 'product'],
+      [`/staff/prices/${ids.price}/`, `/staff/prices/${ids.price}/review/`, 'price'],
+    ]) {
+      let response = await reviewPage.goto(base + detailPath);
+      assert.equal(response.status(), 200);
+      assert.equal(await reviewPage.locator('#staff-form-errors').count(), 0);
+      const form = reviewPage.locator('form.staff-review-form');
+      await form.locator('#id_decision').selectOption('defer');
+      await form.locator('#id_reason').fill('            ');
+      [response] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
+                                     form.locator('button[type=submit]').click()]);
+      assert.equal(response.status(), 400);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await reviewPage.title(), /^خطا در فرم/);
+      const link = reviewPage.locator('#staff-form-errors a[href="#id_reason"]');
+      assert.equal(await link.count(), 1);
+      assert.equal(await reviewPage.locator('#id_reason').getAttribute('aria-invalid'), 'true');
+      assert.match(await reviewPage.locator('#id_reason').getAttribute('aria-describedby'), /id_reason_error/);
+      let reached = false;
+      for (let tab = 0; tab < 30 && !reached; tab++) {
+        await reviewPage.keyboard.press('Tab');
+        reached = await link.evaluate(el => document.activeElement === el);
+      }
+      assert(reached, `${domain} error summary reachable by Tab`);
+      await checkKeyboardFocus(reviewPage, '#staff-form-errors a[href="#id_reason"]', `${domain} error summary`, '#staff-form-errors');
+      await checkTextContrast(reviewPage, '#staff-form-errors a[href="#id_reason"]', '#staff-form-errors', `${domain} error summary link`);
+      await Promise.all([reviewPage.waitForURL(url => url.pathname === reviewPath && url.hash === '#id_reason'),
+                         reviewPage.keyboard.press('Enter')]);
+      assert(await reviewPage.locator('#id_reason').evaluate(el => document.activeElement === el));
+      await checkLayout(reviewPage, `${domain} review errors 390`);
+      await auditAccessibility(reviewPage, `${domain} review errors`);
+    }
     await reviewContext.close();
     const authorContext = await contextFor(browser, 390, errors);
     const page = await authorContext.newPage();

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — candidate review error summaries
+
+**Changes:** Product and price review errors receive a descriptive page title and server-rendered summary; when the form is unavailable, a fixed notice replaces links to absent fields.
+
+**Limits:** Selected synthetic keyboard and automated checks are not comprehensive accessibility validation. See ADR 0139.
+
 ## 2026-11-24 — synthetic source deadlock probe
 
 **Changes:** The actual PostgreSQL source-review deadlock probe checks both worker results and permits either real `40P01` victim, with the appropriate rollback or success outcome.

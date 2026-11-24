@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — synthetic public-read role probe
+
+**Changes:** A disposable PostgreSQL test exercises anonymous presentation pages and APIs under selected restricted-role grants and verifies several denied operations.
+
+**Limits:** Table-wide SELECT still exposes unpublished rows to direct SQL; the test is not an authenticated role, deployment configuration or complete privilege assessment. See ADR 0115.
+
 ## 2026-11-24 — isolated test teardown name guard
 
 **Changes:** The isolated test backend records a successful CREATE on the creation instance and allows a single teardown attempt only for that exact name. A real synthetic canary and mocked failed-DROP tests cover selected refusal paths.

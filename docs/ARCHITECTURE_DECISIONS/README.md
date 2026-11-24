@@ -228,4 +228,6 @@
 
 - [0114: isolated teardown name guard](0114-isolated-teardown-name-guard.md) — development-only safeguard, 24 November 2026.
 
+- [0115: public-read role probe](0115-public-read-role-probe.md) — development-only test, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

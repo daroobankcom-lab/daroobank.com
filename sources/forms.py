@@ -1,11 +1,14 @@
 import re
 from django import forms
 
+from daroobank.forms import RawControlsMixin
+
 from .models import SourceClaimReview
 from .services import FIELDS, MAX_PK, ClaimError, validate_data
 
 
-class SourceClaimForm(forms.Form):
+class SourceClaimForm(RawControlsMixin, forms.Form):
+    raw_control_fields = ('source_name', 'source_url', 'owner', 'evidence_url', 'evidence_note')
     source_name = forms.CharField(label='نام منبع', max_length=200)
     source_url = forms.URLField(label='نشانی HTTPS منبع', max_length=200)
     owner = forms.CharField(label='مالک یا دارنده حق اعلام‌شده', max_length=200)

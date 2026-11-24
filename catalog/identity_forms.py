@@ -1,27 +1,33 @@
 from decimal import Decimal
 from django import forms
 from django.forms import BaseFormSet, formset_factory
+
+from daroobank.forms import RawControlsMixin
 from .identity import MAX_COMPONENTS
 
 
-class AssertionForm(forms.Form):
+class AssertionForm(RawControlsMixin, forms.Form):
+    raw_control_fields = ('source_name', 'source_url')
     source_name = forms.CharField(label='نام منبع ادعایی', max_length=200)
     source_url = forms.URLField(label='نشانی HTTPS منبع ادعایی', max_length=200)
     synthetic_ack = forms.BooleanField(label='فقط داده ساختگی و غیرمحرمانه وارد می‌کنم.')
 
 
 class IngredientForm(AssertionForm):
+    raw_control_fields = AssertionForm.raw_control_fields + ('name_fa', 'name_en')
     name_fa = forms.CharField(label='نام فارسی ماده ساختگی', max_length=200)
     name_en = forms.CharField(label='نام انگلیسی (اختیاری)', max_length=200, required=False)
 
 
 class FormulationForm(AssertionForm):
+    raw_control_fields = AssertionForm.raw_control_fields + ('name', 'dosage_form', 'route')
     name = forms.CharField(label='نام فرمولاسیون ساختگی', max_length=200)
     dosage_form = forms.CharField(label='شکل دارویی ادعایی', max_length=100)
     route = forms.CharField(label='مسیر مصرف ادعایی', max_length=100)
 
 
-class ComponentForm(forms.Form):
+class ComponentForm(RawControlsMixin, forms.Form):
+    raw_control_fields = ('numerator_unit', 'denominator_unit')
     ingredient_id = forms.IntegerField(label='شناسه ماده', min_value=1, max_value=9223372036854775807)
     numerator = forms.DecimalField(label='مقدار صورت', max_digits=12, decimal_places=4, min_value=Decimal('0.0001'))
     numerator_unit = forms.CharField(label='واحد صورت', max_length=50)
@@ -51,6 +57,7 @@ ComponentFormSet = formset_factory(ComponentForm, formset=BaseComponentFormSet, 
 
 
 class ProductForm(AssertionForm):
+    raw_control_fields = AssertionForm.raw_control_fields + ('name', 'brand', 'manufacturer')
     formulation_id = forms.IntegerField(label='شناسه فرمولاسیون', min_value=1, max_value=9223372036854775807)
     name = forms.CharField(label='نام فرآورده ساختگی', max_length=200)
     brand = forms.CharField(label='نام تجاری ادعایی (اختیاری)', max_length=200, required=False)
@@ -58,6 +65,7 @@ class ProductForm(AssertionForm):
 
 
 class PackageForm(AssertionForm):
+    raw_control_fields = AssertionForm.raw_control_fields + ('description', 'quantity_unit', 'irc')
     product_id = forms.IntegerField(label='شناسه فرآورده', min_value=1, max_value=9223372036854775807)
     description = forms.CharField(label='شرح بسته ساختگی', max_length=200)
     quantity = forms.DecimalField(label='مقدار بسته', max_digits=12, decimal_places=4, min_value=Decimal('0.0001'))

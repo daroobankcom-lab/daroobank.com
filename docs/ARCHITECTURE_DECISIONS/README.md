@@ -264,4 +264,6 @@
 
 - [0132: deadlock-test coordination](0132-deadlock-test-coordination.md) — synthetic test reliability, 24 November 2026.
 
+- [0133: staff form raw controls](0133-staff-form-raw-controls.md) — development-only input hardening, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

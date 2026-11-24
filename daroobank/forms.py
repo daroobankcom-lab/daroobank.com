@@ -5,17 +5,25 @@ from django.core.exceptions import ValidationError
 from .validation import has_control_or_surrogate
 
 
-class SourceUploadRawControlsMixin:
-    """Reject raw source controls before CharField/URLField trim can hide them."""
+class RawControlsMixin:
+    """Check raw selected single-line input that field cleanup may have trimmed."""
+
+    raw_control_fields = ()
 
     def clean(self):
         cleaned = super().clean()
-        for name in ('source_name', 'source_url'):
+        for name in self.raw_control_fields:
             field = self.fields[name]
             value = field.widget.value_from_datadict(self.data, self.files, self.add_prefix(name))
             if isinstance(value, str) and has_control_or_surrogate(value):
                 self.add_error(name, 'این مقدار شامل نویسه کنترلی نامعتبر است.')
         return cleaned
+
+
+class SourceUploadRawControlsMixin(RawControlsMixin):
+    """Reject raw source controls before CharField/URLField trim can hide them."""
+
+    raw_control_fields = ('source_name', 'source_url')
 
 
 class StaffAuthenticationForm(AuthenticationForm):

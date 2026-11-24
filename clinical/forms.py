@@ -1,10 +1,15 @@
 from django import forms
 
+from daroobank.forms import RawControlsMixin
+
 from .models import ClinicalDraft, ClinicalDraftReview
 from .services import FIELDS, HASH, MAX_PK, DraftError, validate_data
 
 
-class DraftForm(forms.Form):
+class DraftForm(RawControlsMixin, forms.Form):
+    # Statement is intentionally multiline; its existing service policy applies.
+    raw_control_fields = ('subject', 'title', 'reference_title', 'reference_url', 'reference_location',
+                          'reference_author', 'reference_version')
     subject = forms.CharField(label='موضوع ساختگی (بدون ارتباط خودکار با کاتالوگ)', max_length=200)
     audience = forms.ChoiceField(label='مخاطب', choices=[('', 'انتخاب کنید')] + ClinicalDraft.AUDIENCES)
     title = forms.CharField(label='عنوان پیش‌نویس', max_length=200)
@@ -64,7 +69,8 @@ class ReviewForm(forms.Form):
         return value
 
 
-class ReferenceForm(forms.Form):
+class ReferenceForm(RawControlsMixin, forms.Form):
+    raw_control_fields = ('reference_title', 'reference_url', 'reference_location', 'reference_author', 'reference_version')
     reference_title = forms.CharField(label='عنوان ارجاع ساختگی', max_length=300)
     reference_url = forms.URLField(label='نشانی HTTPS ارجاع', max_length=200)
     reference_location = forms.CharField(label='محل دقیق در ارجاع', max_length=300)

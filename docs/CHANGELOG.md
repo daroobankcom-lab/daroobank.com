@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — raw controls on selected staff forms
+
+**Changes:** Selected source, clinical and identity assertion forms reject controls and surrogates in raw single-line input even when Django would trim them away; ordinary outer spaces and clinical multiline statement behavior remain unchanged.
+
+**Limits:** This is form-level hardening, not a general Unicode, service, database or secrecy guarantee; unchanged empty extra component rows are skipped. See ADR 0133.
+
 ## 2026-11-24 — synthetic identity deadlock test coordination
 
 **Changes:** The selected identity deadlock probe now coordinates from the actual lock holder and uses longer bounded waits while still requiring SQLSTATE `40P01`.

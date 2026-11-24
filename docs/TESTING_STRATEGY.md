@@ -318,7 +318,7 @@ Product and price CSV tests reject six selected raw controls at both edges of ev
 
 ## Selected raw concurrency-token controls
 
-`daroobank/test_staff_raw_tokens.py` covers selected Cc/surrogate boundary values in prefixed review, revision and reference forms, including optional empty price hash and existing ordinary-space behavior. Synthetic CSRF HTTP tests exercise the five review endpoints, clinical revision/reference and identity ingredient/package revisions with no writes on invalid tokens and selected clean retries. The checks do not authenticate tokens, cover every writer or establish stronger concurrency guarantees. See [ADR 0146](ARCHITECTURE_DECISIONS/0146-raw-concurrency-token-controls.md).
+`daroobank/test_staff_raw_tokens.py` covers selected Cc/surrogate boundary values in prefixed review, revision and reference forms, including optional empty price hash and existing ordinary-space behavior. Synthetic CSRF HTTP tests exercise the five review endpoints, clinical revision/reference and identity ingredient/package revisions with no writes on invalid tokens and selected clean retries. A separate one-off local sweep using Python 3.11.2 and Unicode 14.0.0 checked all 2,113 Cc/Cs code points at both boundaries of each of 20 selected token fields: 84,520 invalid cases were rejected and removed from cleaned data. This sweep did not test transport or all positions and is not an exhaustive security test. The checks do not authenticate tokens, cover every writer or establish stronger concurrency guarantees. See [ADR 0146](ARCHITECTURE_DECISIONS/0146-raw-concurrency-token-controls.md).
 
 ## Offline window form input
 

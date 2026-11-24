@@ -2,6 +2,24 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — selected raw concurrency-token controls
+
+**Changes:** Selected private review, revision and reference forms reject raw control characters and surrogates in hidden concurrency fields before field cleanup can hide them. Synthetic HTTP tests check invalid requests do not write and selected clean retries succeed.
+
+**Limits:** This is not token authentication or a stronger locking guarantee; other writers, logging and possible redisplay of bound values remain outside scope. See ADR 0146.
+
+## 2026-11-24 — offline window form boundaries
+
+**Changes:** The offline schedule form independently validates its three inputs, rejects raw boundary controls and provides an error title and linked summary.
+
+**Limits:** This is only a calculation, not dispatch or source authorization; selected browser checks do not establish comprehensive accessibility. See ADR 0145.
+
+## 2026-11-24 — identity revision error navigation
+
+**Changes:** Selected identity revision forms show an error title and summary with links to visible fields and component errors; unavailable forms do not receive dangling links.
+
+**Limits:** Conflicts still require reloading, and automated/keyboard checks are not comprehensive accessibility validation. See ADR 0144.
+
 ## More review error summaries
 
 **Changes:** Selected source, clinical and identity review responses now have an error-specific title and summary; unavailable forms use a fixed notice instead of broken links.

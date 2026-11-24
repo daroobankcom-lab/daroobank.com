@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'CLAIM', 'CANDIDATE', 'BAD_CANDIDATE', 'BAD_PRICE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'CLAIM', 'CANDIDATE', 'BAD_CANDIDATE', 'BAD_PRICE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -920,6 +920,17 @@ async function run() {
       assert(!(await page.locator('main').innerText()).includes('browser-identity-oversized-reason-canary'));
       await checkLayout(page, `identity oversized revision ${width}`);
       if (width === 390) await auditAccessibility(page, 'identity oversized revision');
+      response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.oversized_ingredient}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /پیوند نسخه پیشین ناسازگار است؛ جزئیات پنهان شد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-link-reason-canary'));
+      await checkLayout(page, `identity oversized revision link ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity oversized revision link');
+      response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.oversized_ingredient}/lineage/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /رکورد یا پیوند ناسازگار است/);
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-link-reason-canary'));
+      await checkLayout(page, `identity oversized lineage ${width}`);
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);
       assert.equal(response.status(), 200);
       assert.match(await page.locator('main').innerText(), /وجود حساب ثبت‌کنندگان زنجیره و پیوندهای اصلاح در این بررسی کنترل نمی‌شود/);

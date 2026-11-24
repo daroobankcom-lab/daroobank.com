@@ -16,7 +16,7 @@ from django.utils import timezone
 from catalog.identity import create_package, digest, ingredient_snapshot, revise_identity
 from catalog.intake import review_product, stage_products
 from catalog.test_intake import make_csv
-from catalog.models import IngredientDraft, IdentityPackageReview, ProductCandidate, ProductCandidateReview, ProductPresentation
+from catalog.models import IngredientDraft, IngredientRevision, IdentityPackageReview, ProductCandidate, ProductCandidateReview, ProductPresentation
 from catalog.quality import MAX_INSPECTED_SEARCH_LENGTH
 from catalog.test_identity import ALL, INGREDIENT, PACKAGE, build, user
 from clinical.services import create_draft, draft_data, review_draft
@@ -132,6 +132,11 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
             leaf = revise_identity(actor=author, kind='ingredient', parent_id=leaf.pk,
                 data={**INGREDIENT, 'name_fa': f'ماده ساختگی خصوصی مرورگر {i}'},
                 change_reason='اصلاح ساختگی برای آزمایش مرورگر', expected_graph_hash=digest(ingredient_snapshot(leaf)))
+        oversized_ingredient = revise_identity(actor=author, kind='ingredient', parent_id=ingredient.pk,
+            data={**INGREDIENT, 'name_fa': 'نسخه با دلیل طولانی ساختگی'},
+            change_reason='دلیل ساختگی برای آزمون صفحه مرورگر', expected_graph_hash=digest(ingredient_snapshot(ingredient)))
+        IngredientRevision.objects.filter(child_id=oversized_ingredient.pk).update(
+            change_reason='ر' * 100_000 + 'browser-identity-link-reason-canary')
         public_product = ProductPresentation.objects.create(name_fa='داروی عمومی ساختگی مرورگر', name_en='Browser Synthetic Product',
             manufacturer='سازنده فرضی', strength='1 mg', dosage_form='قرص', package_description='10 عدد',
             irc='001', source_name='منبع ساختگی', source_url='https://example.org/public',
@@ -174,7 +179,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         env.update(BROWSER_BASE_URL=self.live_server_url, BROWSER_AUTHOR='browser-author', BROWSER_REVIEWER='browser-reviewer',
                    BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
-                   BROWSER_OVERSIZED_PACKAGE=str(oversized_package.pk),
+                   BROWSER_OVERSIZED_PACKAGE=str(oversized_package.pk), BROWSER_OVERSIZED_INGREDIENT=str(oversized_ingredient.pk),
                    BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
                    BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk),
                    BROWSER_CANDIDATE=str(browser_candidate.pk), BROWSER_BAD_CANDIDATE=str(bad_product.pk),

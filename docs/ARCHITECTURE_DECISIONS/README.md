@@ -306,4 +306,6 @@
 
 - [0153: bounded locked identity review](0153-bounded-locked-identity-review.md) — development-only defensive writer read.
 
+- [0154: bounded identity revision-link reason](0154-bounded-identity-revision-reason.md) — development-only defensive inspection.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

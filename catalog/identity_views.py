@@ -16,6 +16,7 @@ from .identity import (
     review_package, safe_snapshot,
 )
 from .identity_lineage import inspect_lineage, InvalidLineageCursor, LineageNotFound
+from .revision_read import bounded_revision_reasons, materialize_revision_reason
 from .identity_forms import (
     ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm,
     PackageRevisionForm, IngredientRevisionForm, FormulationRevisionForm, ProductRevisionForm, RevisionComponentFormSet,
@@ -136,8 +137,10 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
         else:
             links = COMPONENT_LINKS[kind].objects.select_related('parent', 'child')
             if kind == 'product': links = links.select_related('parent__formulation', 'child__formulation')
+        links = bounded_revision_reasons(links)
         parent_link = links.filter(child_id=obj.pk).first()
         if parent_link:
+            materialize_revision_reason(parent_link)
             parent_link.safe = (valid_package_revision(parent_link, obj.pk) if kind == 'package'
                                 else valid_identity_revision(kind, parent_link, obj.pk))
         children = links.filter(parent_id=obj.pk).order_by('-pk')
@@ -148,6 +151,7 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
         if len(child_rows) > REVISION_PAGE_SIZE:
             next_revision_before = child_links[-1].pk
         for link in child_links:
+            materialize_revision_reason(link)
             link.safe = (valid_package_revision(link, link.child_id) if kind == 'package'
                          else valid_identity_revision(kind, link, link.child_id))
     if kind == 'package' and snapshot:

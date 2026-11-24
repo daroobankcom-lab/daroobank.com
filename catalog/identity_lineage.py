@@ -15,6 +15,7 @@ from .identity import (MAX_ID, VIEW, digest, require_staff, safe_snapshot, ingre
                        valid_identity_revision, valid_package_revision)
 from .models import (IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft,
                      IngredientRevision, FormulationRevision, ProductRevision, IdentityPackageRevision)
+from .revision_read import bounded_revision_reasons, materialize_revision_reason
 
 PAGE_SIZE = 20
 CURSOR_SALT = 'catalog.identity.lineage.v1'
@@ -106,11 +107,12 @@ def inspect_lineage(*, actor, kind, anchor_id, cursor=''):
     rows = []
     # Do not inner-join links to related records: a dangling parent created by
     # privileged out-of-band writes must be flagged, not treated as no link.
-    links = link_model.objects.all()
+    links = bounded_revision_reasons(link_model.objects.all())
     for _ in range(PAGE_SIZE):
         link = links.filter(child_id=current_id).first()
         if link is None:
             return {'kind': kind, 'anchor_id': anchor_id, 'status': 'no_parent', 'rows': rows, 'next_cursor': None}
+        materialize_revision_reason(link)
         valid = valid_package_revision(link, current_id) if kind == 'package' else valid_identity_revision(kind, link, current_id)
         if not valid or not constant_time_compare(link.child_graph_sha256, current_hash):
             return {'kind': kind, 'anchor_id': anchor_id, 'status': 'inconsistent', 'rows': rows, 'next_cursor': None}

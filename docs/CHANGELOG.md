@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded identity revision-link reasons
+
+**Changes:** Identity detail and lineage reads bound selected revision-link reason transfers while keeping existing validation and pagination.
+
+**Limits:** Database work, other graph fields and write paths are not bounded. See ADR 0154.
+
 ## 2026-11-24 — bounded locked identity review
 
 **Changes:** Identity review and revision writers bound selected fields in the same locked latest-review read; revision refuses an uninspected oversized latest review without partial classification.

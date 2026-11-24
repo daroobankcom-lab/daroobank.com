@@ -250,4 +250,6 @@
 
 - [0125: public detail ID type](0125-public-detail-id-type.md) — development input validation, 24 November 2026.
 
+- [0126: bounded repair projection fetch](0126-bounded-repair-projection-fetch.md) — development-only safeguard, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

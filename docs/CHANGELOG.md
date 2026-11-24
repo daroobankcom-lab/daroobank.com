@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded synthetic repair projection fetch
+
+**Changes:** Synthetic projection-repair preview and locked commit select at most 8193 characters of the stored search projection; an oversized projection remains unsafe. Safe-length snapshots retain the complete text.
+
+**Limits:** This bounds returned text, not database work or other readers, and does not authorize repair of real data. See ADR 0126.
+
 ## 2026-11-24 — public detail ID type
 
 **Changes:** The direct public-detail service rejects non-integer and out-of-range IDs before database access, using the existing generic not-found response.

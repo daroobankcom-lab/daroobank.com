@@ -8,6 +8,7 @@ from datetime import datetime
 from django.conf import settings
 from django.core import signing
 from django.db import connections
+from django.db.models.functions import Substr
 from django.utils.crypto import constant_time_compare, salted_hmac
 
 from daroobank.write_conflict_boundary import write_conflict_boundary
@@ -86,12 +87,28 @@ def _changed(row, expected):
     return [field for field in ('search_text', 'irc_normalized') if row[field] != expected[field]]
 
 
+def _fetch_row(presentation_id, *, lock=False):
+    """Fetch at most one extra projection character to detect oversized data.
+
+    The SQL still has to evaluate the substring; this limits returned text, not
+    PostgreSQL's work. For safe lengths the full field remains in the state hash.
+    """
+    query = ProductPresentation.objects.using(DB_ALIAS).filter(pk=presentation_id)
+    if lock:
+        query = query.select_for_update()
+    fields = [field.attname for field in ProductPresentation._meta.concrete_fields if field.attname != 'search_text']
+    row = query.values(*fields, _bounded_search=Substr('search_text', 1, MAX_SEARCH_LENGTH + 1)).first()
+    if row is not None:
+        row['search_text'] = row.pop('_bounded_search')
+    return row
+
+
 def preview_projection(*, presentation_id):
     """Read a single row; output only fixed statuses, ID, field names and a signed token."""
     _require_development()
     if not _id(presentation_id):
         raise ProjectionRepairError('Invalid presentation.')
-    row = ProductPresentation.objects.using(DB_ALIAS).filter(pk=presentation_id).values().first()
+    row = _fetch_row(presentation_id)
     if row is None:
         raise ProjectionRepairError('Invalid presentation.')
     expected = _expected(row)
@@ -125,7 +142,7 @@ def apply_projection(*, presentation_id, token, synthetic_confirmed=False):
     # DB_ALIAS is deliberately the default database, matching the boundary's
     # transaction. Translate only selected PostgreSQL conflicts after rollback.
     with write_conflict_boundary(ProjectionRepairError):
-        row = ProductPresentation.objects.using(DB_ALIAS).select_for_update().filter(pk=presentation_id).values().first()
+        row = _fetch_row(presentation_id, lock=True)
         if row is None:
             raise ProjectionRepairError('Invalid or stale repair request.')
         expected = _expected(row)

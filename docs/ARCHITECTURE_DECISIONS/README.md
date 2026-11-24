@@ -117,6 +117,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0091: fail-stop synthetic backup example](0091-synthetic-backup-guide-fail-stop.md) — development-only documentation and tests, 24 November 2026.
 
+- [0092: PostgreSQL migration-recorder primary key](0092-postgresql-migration-recorder-primary-key.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

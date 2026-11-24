@@ -1,6 +1,6 @@
 # ADR 0089: PostgreSQL migration-recorder column clues
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0075](0075-postgresql-column-clues.md) and [ADR 0078](0078-postgresql-column-type-clues.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0075](0075-postgresql-column-clues.md) and [ADR 0078](0078-postgresql-column-type-clues.md). [ADR 0092](0092-postgresql-migration-recorder-primary-key.md) adds a recorder primary-key presence clue, superseding that limitation below.
 
 ## Decision
 

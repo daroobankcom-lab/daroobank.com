@@ -397,6 +397,21 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                 self.assertEqual(report['status'], 'attention')
                 transaction.set_rollback(True)
 
+    def test_migration_recorder_primary_key_constraint_is_required(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE django_migrations DROP CONSTRAINT django_migrations_pkey')
+                cursor.execute('CREATE UNIQUE INDEX synthetic_recorder_unique ON django_migrations (id)')
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['missing_unique_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
+            self.assertNotIn('django_migrations', output.getvalue())
+            self.assertNotIn('synthetic_recorder_unique', output.getvalue())
+            transaction.set_rollback(True)
+
     def test_migration_recorder_primary_key_type_is_skipped(self):
         with transaction.atomic():
             with connection.cursor() as cursor:

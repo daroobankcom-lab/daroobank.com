@@ -56,6 +56,9 @@ def expected_unique_keys():
         for constraint in meta.constraints:
             if _supported_unique_constraint(constraint):
                 result.add((meta.db_table, tuple(meta.get_field(name).column for name in constraint.fields), False))
+    recorder = MigrationRecorder.Migration._meta
+    if recorder.pk.column:
+        result.add((recorder.db_table, (recorder.pk.column,), True))
     return sorted(result)
 
 

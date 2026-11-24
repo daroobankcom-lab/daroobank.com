@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL migration-recorder primary-key clue
+
+**Changes:** The catalog inspector checks selected primary-key index properties for Django's migration recorder; a synthetic DDL test removes the key and substitutes a standalone unique index.
+
+**Limits:** The primary-key physical type remains skipped, and sequence, defaults and migration records are not verified. See ADR 0092.
+
 ## 2026-11-24 — fail-stop synthetic backup example
 
 **Changes:** The manual synthetic backup example chains all stages so a failed target creation cannot be followed by a restore. Offline fake-command tests exercise each failure; a separate PostgreSQL 16 synthetic-cluster probe checks target collision and a successful restore.

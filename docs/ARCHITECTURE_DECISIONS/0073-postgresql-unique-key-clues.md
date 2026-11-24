@@ -1,6 +1,6 @@
 # ADR 0073: PostgreSQL unique-key clues
 
-Status: development-only implementation, 23 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md). [ADR 0074](0074-postgresql-check-constraint-names.md) later adds limited named-check presence clues, not expression validation. [ADR 0085](0085-postgresql-unique-null-semantics.md) adds selected null-semantics checks, and [ADR 0086](0086-unsupported-unique-declarations.md) counts unsupported model unique declarations, superseding those limitations below.
+Status: development-only implementation, 23 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md). [ADR 0074](0074-postgresql-check-constraint-names.md) later adds limited named-check presence clues, not expression validation. [ADR 0085](0085-postgresql-unique-null-semantics.md) adds selected null-semantics checks, [ADR 0086](0086-unsupported-unique-declarations.md) counts unsupported model unique declarations, and [ADR 0092](0092-postgresql-migration-recorder-primary-key.md) includes the recorder primary key, superseding those limitations below.
 
 ## Decision
 

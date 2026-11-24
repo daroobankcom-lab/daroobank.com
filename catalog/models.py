@@ -1,3 +1,5 @@
+from copy import copy
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -43,7 +45,6 @@ class ProductPresentation(models.Model):
                 return super().save(**kwargs)
             kwargs['update_fields'] = update_fields | {'search_text', 'irc_normalized'}
         fields = PRESENTATION_SEARCH_FIELDS
-        values = {field: getattr(self, field) for field in fields}
         if update_fields is not None:
             if self.pk:
                 using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
@@ -51,9 +52,26 @@ class ProductPresentation(models.Model):
                 # must not change a source field between projection and UPDATE.
                 with transaction.atomic(using=using):
                     stored = type(self).objects.using(using).select_for_update().get(pk=self.pk)
-                    values = {field: values[field] if field in update_fields else getattr(stored, field) for field in fields}
+                    # Validate the actual prospective row, not the potentially
+                    # stale or locally modified fields excluded from this UPDATE.
+                    prospective = copy(self)
+                    prospective._state = copy(stored._state)
+                    for field in self._meta.concrete_fields:
+                        if field.primary_key or field.name in update_fields or field.attname in update_fields:
+                            continue
+                        setattr(prospective, field.attname, getattr(stored, field.attname))
+                    values = {field: getattr(prospective, field) for field in fields}
+                    prospective.irc_normalized = normalize_search(values['irc'])
+                    prospective.search_text = normalize_search(' '.join(values[field] for field in fields))
+                    prospective.full_clean()
+                    # full_clean can coerce values; keep the written fields and
+                    # derived projections on the original signal-bearing object.
+                    for field in self._meta.concrete_fields:
+                        if field.name in kwargs['update_fields'] or field.attname in kwargs['update_fields']:
+                            setattr(self, field.attname, getattr(prospective, field.attname))
                     kwargs['using'] = using
-                    return self._save_with_projection(values, **kwargs)
+                    return super().save(**kwargs)
+        values = {field: getattr(self, field) for field in fields}
         return self._save_with_projection(values, **kwargs)
 
     def _save_with_projection(self, values, **kwargs):

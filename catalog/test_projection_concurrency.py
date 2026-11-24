@@ -125,6 +125,71 @@ class ProjectionConcurrencyTests(TransactionTestCase):
         status, matched = suggest_product(match)
         self.assertEqual((status, matched.pk), ('suggested', product.pk))
 
+    def test_waiting_partial_save_validates_against_committed_publication(self):
+        from datetime import datetime, timezone
+
+        self.product.verified_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        self.product.save(update_fields=['verified_at'])
+        paused, resume = Event(), Event()
+        first_thread = []
+        second_pid = Queue()
+        stale_loaded = Event()
+        start_second = Event()
+
+        def pause_first(value):
+            if first_thread and current_thread() is first_thread[0] and not paused.is_set():
+                paused.set()
+                if not resume.wait(8):
+                    raise TimeoutError('Test failed to resume publication')
+            return normalize_search(value)
+
+        def publish():
+            first_thread.append(current_thread())
+            product = ProductPresentation.objects.get(pk=self.product.pk)
+            product.published = True
+            product.save(update_fields=['published'])
+
+        def remove_verification():
+            product = ProductPresentation.objects.get(pk=self.product.pk)
+            self.assertFalse(product.published)
+            stale_loaded.set()
+            if not start_second.wait(8):
+                raise TimeoutError('Test failed to start competing save')
+            product.verified_at = None
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT pg_backend_pid()')
+                second_pid.put(cursor.fetchone()[0])
+            product.save(update_fields=['verified_at'])
+
+        with patch('catalog.models.normalize_search', side_effect=pause_first):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                second = pool.submit(self.worker, remove_verification)
+                try:
+                    self.assertTrue(stale_loaded.wait(8))
+                    first = pool.submit(self.worker, publish)
+                    self.assertTrue(paused.wait(8))
+                    start_second.set()
+                    pid = second_pid.get(timeout=8)
+                    deadline = time.monotonic() + 4
+                    blocked = False
+                    while time.monotonic() < deadline:
+                        with connection.cursor() as cursor:
+                            cursor.execute('SELECT cardinality(pg_blocking_pids(%s)) > 0', [pid])
+                            blocked = cursor.fetchone()[0]
+                        if blocked or second.done():
+                            break
+                        time.sleep(0.05)
+                    self.assertTrue(blocked, 'Second save did not wait for publication')
+                finally:
+                    start_second.set()
+                    resume.set()
+                first.result(timeout=10)
+                with self.assertRaises(ValidationError):
+                    second.result(timeout=10)
+        current = self.assert_projection()
+        self.assertTrue(current.published)
+        self.assertIsNotNone(current.verified_at)
+
     def test_stale_instance_partial_update_uses_current_other_fields(self):
         stale = ProductPresentation.objects.get(pk=self.product.pk)
         fresh = ProductPresentation.objects.get(pk=self.product.pk)

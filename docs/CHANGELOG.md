@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — partial presentation validation
+
+**Changes:** Nonempty partial presentation saves validate the prospective combination of locked stored fields and explicitly updated values, closing stale-state publication/date mismatches; synthetic two-connection and unit tests cover selected cases.
+
+**Limits:** Bulk and SQL writes bypass this validation, full saves can overwrite newer values, and signal instances can still carry stale omitted fields. See ADR 0107.
+
 ## 2026-11-24 — architecture decision index
 
 **Changes:** Restored 22 missing decision links and sorted the index; an offline test now checks coverage, uniqueness and order.

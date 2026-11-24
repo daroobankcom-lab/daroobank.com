@@ -212,4 +212,6 @@
 
 - [0106: check expression reuse](0106-check-expression-reuse.md) — development-only implementation, 24 November 2026.
 
+- [0107: partial presentation validation](0107-partial-presentation-validation.md) — development-only implementation, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

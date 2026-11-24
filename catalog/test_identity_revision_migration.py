@@ -10,6 +10,8 @@ class IdentityRevisionMigrationTests(TransactionTestCase):
 
     def setUp(self):
         super().setUp()
+        # Register before changing schema: unittest runs this even if setup fails.
+        self.addCleanup(self.restore_migrations)
         executor = MigrationExecutor(connection)
         executor.migrate(self.migrate_from)
         apps = executor.loader.project_state(self.migrate_from).apps
@@ -31,10 +33,9 @@ class IdentityRevisionMigrationTests(TransactionTestCase):
         executor.migrate(self.migrate_to)
         self.apps = executor.loader.project_state(self.migrate_to).apps
 
-    def tearDown(self):
+    def restore_migrations(self):
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
-        super().tearDown()
 
     def test_existing_chain_and_review_preserved_without_backfill(self):
         user, ingredient, form, component, product, package, review = self.ids

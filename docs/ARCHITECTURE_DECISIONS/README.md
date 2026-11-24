@@ -224,4 +224,6 @@
 
 - [0112: presentation projection migration test](0112-presentation-projection-migration-test.md) — development-only test, 24 November 2026.
 
+- [0113: historical test setup cleanup](0113-historical-test-setup-cleanup.md) — development-only test reliability, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

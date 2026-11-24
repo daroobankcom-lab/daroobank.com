@@ -7,7 +7,6 @@ import re
 import unicodedata
 from collections import OrderedDict
 from datetime import date
-from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
 
 from daroobank.account_checks import current_account_exists
@@ -59,21 +58,28 @@ def validate_source(name, url):
 
 
 def amount_to_rial(amount, currency):
-    """Convert explicitly declared currency with exact arithmetic and no rounding."""
+    """Convert bounded, explicitly declared currency exactly and without rounding."""
+    if not isinstance(amount, str) or len(amount) > LIMITS['amount']:
+        raise ImportValidationError('Amount must be a bounded plain decimal string.')
     number = normalize_search(amount).replace('٫', '.')
     if not AMOUNT_PATTERN.fullmatch(number):
         raise ImportValidationError('Amount must be a positive plain decimal without separators or exponent.')
-    if currency not in {'RIAL', 'TOMAN'}:
+    if not isinstance(currency, str) or currency not in {'RIAL', 'TOMAN'}:
         raise ImportValidationError('Currency must explicitly be RIAL or TOMAN.')
-    try:
-        with localcontext() as context:
-            context.prec = 80  # Longer than the maximum input; do not silently round.
-            value = Decimal(number) * (10 if currency == 'TOMAN' else 1)
-            if value <= 0 or value > MAX_RIAL or value != value.to_integral_value():
-                raise ImportValidationError('Amount must convert exactly to a positive whole rial within range.')
-            return int(value)
-    except InvalidOperation as exc:
-        raise ImportValidationError('Amount is not a valid decimal.') from exc
+    integer, _, fraction = number.partition('.')
+    # A toman is exactly ten rial. Move at most one fractional digit to the
+    # integer part and reject any nonzero remainder, without decimal context or
+    # rounding. Only convert the final bounded integer to avoid huge int inputs.
+    if currency == 'TOMAN':
+        integer += fraction[:1] or '0'
+        fraction = fraction[1:]
+    if fraction.strip('0'):
+        raise ImportValidationError('Amount must convert exactly to a positive whole rial within range.')
+    digits = integer.lstrip('0')
+    upper = str(MAX_RIAL)
+    if not digits or len(digits) > len(upper) or (len(digits) == len(upper) and digits > upper):
+        raise ImportValidationError('Amount must convert exactly to a positive whole rial within range.')
+    return int(digits)
 
 
 def parse_date(value, field):

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — direct price-conversion bound
+
+**Changes:** The direct amount helper enforces the existing 50-character input limit and uses exact digit-string arithmetic independent of decimal context; selected oversized and 3,000 synthetic compatibility-digit cases are tested.
+
+**Limits:** The CSV parser already imposed its own limit; the direct-helper change is not evidence of a CSV exploit or a price-approval mechanism. See ADR 0108.
+
 ## 2026-11-24 — projection length boundary coverage
 
 **Changes:** Added synthetic tests for normalization expanding a short IRC to the exact or over-limit 80-character derived column, including full/partial rejection and explicit correction of a bypassed row. Corrected the API privacy documentation to include known-path early redirects.

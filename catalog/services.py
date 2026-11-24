@@ -140,7 +140,8 @@ def search_products(query):
 
 
 def get_public_presentation(pk):
-    if not 1 <= pk <= 9_223_372_036_854_775_807:
+    # Avoid Python/Django coercions such as True or 1.0 becoming primary key 1.
+    if type(pk) is not int or not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Presentation not found')
     product = public_candidates().filter(pk=pk).defer('search_text', 'irc_normalized').first()
     if product is None or not is_public_presentation(product):

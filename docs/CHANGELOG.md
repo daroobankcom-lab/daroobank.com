@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — public detail ID type
+
+**Changes:** The direct public-detail service rejects non-integer and out-of-range IDs before database access, using the existing generic not-found response.
+
+**Limits:** Direct callers passing coercible values must change; HTTP integer routes are unchanged. This is not authorization or source verification. See ADR 0125.
+
 ## 2026-11-24 — reject controls in retained search queries
 
 **Changes:** Search rejects Unicode controls and surrogates in the retained query before cursor validation or database access, with a generic no-echo error.

@@ -57,13 +57,16 @@ class ProductPresentation(models.Model):
                 # The read and write must share a row lock: another partial save
                 # must not change a source field between projection and UPDATE.
                 with transaction.atomic(using=using):
-                    stored = type(self).objects.using(using).select_for_update().get(pk=self.pk)
+                    # The old search projection is discarded and rebuilt below;
+                    # never transfer it merely to overwrite it under the lock.
+                    stored = type(self).objects.using(using).select_for_update().defer('search_text').get(pk=self.pk)
                     # Validate the actual prospective row, not the potentially
                     # stale or locally modified fields excluded from this UPDATE.
                     prospective = copy(self)
                     prospective._state = copy(stored._state)
                     for field in self._meta.concrete_fields:
-                        if field.primary_key or field.name in update_fields or field.attname in update_fields:
+                        if (field.primary_key or field.name == 'search_text'
+                                or field.name in update_fields or field.attname in update_fields):
                             continue
                         setattr(prospective, field.attname, getattr(stored, field.attname))
                     values = {field: getattr(prospective, field) for field in fields}

@@ -332,4 +332,6 @@
 
 - [0166: defer search projection in matching](0166-defer-search-projection-in-matching.md) — development-only defensive reads.
 
+- [0167: omit old projection from partial save](0167-omit-old-projection-from-partial-save.md) — development-only defensive locked read.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

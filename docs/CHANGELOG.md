@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — omit discarded projection from partial save
+
+**Changes:** The locked read used for partial presentation saves no longer transfers the old search projection before rebuilding it from the current prospective row.
+
+**Limits:** Other reads, full or bulk writes and database work remain outside this bound. See ADR 0167.
+
 ## 2026-11-24 — omit unused matching projections
 
 **Changes:** Product comparison and price matching no longer transfer the unused stored search text, including on their lookahead and selected locked reads.

@@ -128,11 +128,37 @@ class SyntheticRestoreDrill(TransactionTestCase):
                     "assert r.package_id==p.pk and r.graph_sha256==os.environ['SYNTHETIC_GRAPH_HASH']; "
                     "assert review_is_consistent(r,p.pk) and r.reviewer.username=='synthetic-restore-reviewer'; "
                     "assert p.recorded_by.username=='synthetic-restore-author'; "
-                    "from daroobank.synthetic_restore_fixture import verify_cross_domain_fixture; verify_cross_domain_fixture()"
+                    "from daroobank.synthetic_restore_fixture import verify_cross_domain_fixture, verify_post_restore_writes; "
+                    "verify_cross_domain_fixture(); verify_post_restore_writes()"
                 )
                 check = run([sys.executable, 'manage.py', 'shell', '-c', script], restored_env)
                 self.assertEqual(check.returncode, 0, 'Restored synthetic ORM graph verification failed')
+
+                # Deliberately rewind one sequence on the throwaway target and
+                # prove an ordinary service write detects the resulting collision.
+                rewind = (
+                    "from django.db import connection; from sources.models import SourceClaim; "
+                    "c=connection.cursor(); c.execute(\"SELECT setval(pg_get_serial_sequence('sources_sourceclaim', 'id'), %s, false)\", "
+                    "[SourceClaim.objects.order_by('pk').values_list('pk', flat=True).first()])"
+                )
+                check = run([sys.executable, 'manage.py', 'shell', '-c', rewind], restored_env)
+                self.assertEqual(check.returncode, 0, 'Synthetic target sequence setup failed')
+                probe = ('from daroobank.synthetic_restore_fixture import verify_source_sequence_probe; '
+                         'verify_source_sequence_probe()')
+                check = run([sys.executable, 'manage.py', 'shell', '-c', probe], restored_env)
+                self.assertNotEqual(check.returncode, 0, 'Rewound synthetic sequence was not detected')
+                self.assertIn(b'IntegrityError', check.stderr, 'Sequence probe failed for an unexpected reason')
+                reset = (
+                    "from django.db import connection; from sources.models import SourceClaim; "
+                    "c=connection.cursor(); c.execute(\"SELECT setval(pg_get_serial_sequence('sources_sourceclaim', 'id'), %s, true)\", "
+                    "[SourceClaim.objects.order_by('-pk').values_list('pk', flat=True).first()])"
+                )
+                check = run([sys.executable, 'manage.py', 'shell', '-c', reset], restored_env)
+                self.assertEqual(check.returncode, 0, 'Synthetic target sequence reset failed')
+                check = run([sys.executable, 'manage.py', 'shell', '-c', probe], restored_env)
+                self.assertEqual(check.returncode, 0, 'Synthetic target sequence replay failed')
             self.assertEqual(IdentityPackageReview.objects.count(), 1)
+            verify_cross_domain_fixture()
         finally:
             if created:
                 with connection.cursor() as cursor:

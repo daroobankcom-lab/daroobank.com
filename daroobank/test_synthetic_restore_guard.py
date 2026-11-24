@@ -95,6 +95,10 @@ class RestoreDrillGuardTests(SimpleTestCase):
             db = Mock(vendor='postgresql', settings_dict={'NAME': 'test_daroobank_restore_' + 'a' * 32})
             with patch.object(fixture, 'connection', db), self.assertRaises(RuntimeError):
                 fixture.build_cross_domain_fixture(actor, actor)
+            with patch.object(fixture, 'connection', db), self.assertRaises(RuntimeError):
+                fixture.verify_post_restore_writes()
+            with patch.object(fixture, 'connection', db), self.assertRaises(RuntimeError):
+                fixture.verify_source_sequence_probe()
             actor.user_permissions.add.assert_not_called()
             db.cursor.assert_not_called()
 

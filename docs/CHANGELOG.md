@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — synthetic post-restore sequence probes
+
+**Changes:** The disposable PostgreSQL restore drill exercises new service writes across selected domains and checks generated IDs advance beyond restored records. A negative control rewinds one target-only synthetic sequence, detects an integrity failure, then resets it for a successful probe.
+
+**Limits:** This is not a general sequence-repair recipe or proof that every sequence, backup or production workflow is safe. The modified target is disposable; see ADR 0079.
+
 ## 2026-11-24 — PostgreSQL managed-column type clues
 
 **Changes:** Catalog inspection compares selected managed field types, including varchar length and numeric precision, against PostgreSQL. Unsupported types cause an incomplete/attention result. Synthetic rolled-back DDL exercises varchar, numeric and timestamp mismatches.

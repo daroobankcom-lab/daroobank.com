@@ -328,4 +328,6 @@
 
 - [0164: bounded locked clinical draft text](0164-bounded-locked-clinical-draft-text.md) — development-only defensive writer reads.
 
+- [0165: canonical new clinical revision reason](0165-canonical-new-clinical-revision-reason.md) — development-only write behavior.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

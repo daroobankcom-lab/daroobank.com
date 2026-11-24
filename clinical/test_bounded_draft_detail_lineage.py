@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from . import test_lineage as fixtures
 from .lineage import InvalidLineageCursor, inspect_lineage
+from .legacy_reason_test_utils import set_legacy_reason
 from .models import ClinicalDraft
 from .services import DraftConflict, create_draft, valid_draft
 
@@ -64,6 +65,7 @@ class BoundedClinicalDetailLineageTests(TestCase):
         reason = 'دلیل ساختگی قابل بررسی' + ' ' * 100_000
         child = create_draft(actor=self.author, data=self.data, parent_id=parent.pk,
                              expected_parent_hash=parent.payload_sha256, change_reason=reason)
+        set_legacy_reason(child, reason)
         self.assertTrue(valid_draft(ClinicalDraft.objects.select_related('parent').get(pk=child.pk)))
         self.assertEqual(self.inspect(child)['status'], 'oversized')
         self.client.force_login(self.viewer)

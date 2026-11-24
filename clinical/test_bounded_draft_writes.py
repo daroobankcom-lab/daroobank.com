@@ -8,6 +8,7 @@ from django.test.utils import CaptureQueriesContext
 
 from . import test_lineage as fixtures
 from .evidence import add_reference, evidence_state
+from .legacy_reason_test_utils import set_legacy_reason
 from .models import ClinicalDraft, ClinicalDraftReview, ClinicalReferenceAssertion
 from .services import DraftConflict, create_draft, valid_draft
 
@@ -84,6 +85,7 @@ class BoundedClinicalWritesTests(TestCase):
         root = self.chain(0)[0]
         child = create_draft(actor=self.author, data=self.data, parent_id=root.pk,
             expected_parent_hash=root.payload_sha256, change_reason=self.reason + ' ' * 100_000)
+        set_legacy_reason(child, self.reason + ' ' * 100_000)
         self.assertTrue(valid_draft(ClinicalDraft.objects.select_related('parent').get(pk=child.pk)))
         for kind in ('revise', 'reference', 'review'):
             with self.subTest(kind=kind), self.assertRaises(DraftConflict):

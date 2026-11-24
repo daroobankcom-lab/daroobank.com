@@ -154,6 +154,11 @@ def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change
           or not isinstance(expected_parent_hash, str) or not HASH.fullmatch(expected_parent_hash)
           or not valid_review_reason(change_reason)):
         raise DraftError('اطلاعات نسخه پیشین یا دلیل اصلاح معتبر نیست.')
+    else:
+        # Validate raw controls before trimming. New revisions store and hash the
+        # canonical value, just as review reasons do; historical values and
+        # their fingerprints are never rewritten.
+        change_reason = change_reason.strip()
     with write_conflict_boundary(DraftConflict):
         parent = None
         if parent_id is not None:

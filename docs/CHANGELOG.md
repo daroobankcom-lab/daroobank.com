@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — canonical new clinical revision reasons
+
+**Changes:** The direct clinical revision service validates the original reason, then strips outer whitespace before storing and hashing new revisions; internal whitespace is retained. Existing reasons and fingerprints are not rewritten.
+
+**Limits:** Valid oversized historical reasons remain uninspected and can block selected writers. Input size, other fields and database work are not bounded by this change. See ADR 0165.
+
 ## 2026-11-24 — bounded locked clinical draft text
 
 **Changes:** Revision, reference and review writers bound target and immediate-parent text under their existing row locks and conflict on uninspected values.

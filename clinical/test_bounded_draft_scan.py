@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from . import test_inspection as fixtures
 from .inspection import inspect_drafts
+from .legacy_reason_test_utils import set_legacy_reason
 from .models import ClinicalDraft
 from .services import create_draft, valid_draft
 
@@ -59,8 +60,8 @@ class BoundedClinicalScanTests(TestCase):
         reason = 'دلیل ساختگی قابل قبول' + ' ' * 100_000
         child = create_draft(actor=self.author, data=self.data, parent_id=parent.pk,
                              expected_parent_hash=parent.payload_sha256, change_reason=reason)
-        # Current service contract permits edge whitespace in a reason: the
-        # exact historical value and digest can be valid despite its length.
+        # Historical raw values and their exact digests remain valid.
+        set_legacy_reason(child, reason)
         self.assertTrue(valid_draft(ClinicalDraft.objects.select_related('parent').get(pk=child.pk)))
         report = inspect_drafts()
         self.assertEqual(report['rows'], [{'id': parent.pk, 'status': 'available'}, {'id': child.pk, 'status': 'oversized'}])
@@ -74,6 +75,7 @@ class BoundedClinicalScanTests(TestCase):
         self.assertEqual([row['status'] for row in first['rows']], ['available', 'available'])
         oversized_child = create_draft(actor=self.author, data=self.data, parent_id=root.pk,
             expected_parent_hash=root.payload_sha256, change_reason='ر' * 12 + ' ' * 989)
+        set_legacy_reason(oversized_child, 'ر' * 12 + ' ' * 989)
         self.assertTrue(valid_draft(ClinicalDraft.objects.select_related('parent').get(pk=oversized_child.pk)))
         report = inspect_drafts()
         self.assertEqual(report['rows'][-1], {'id': oversized_child.pk, 'status': 'oversized'})

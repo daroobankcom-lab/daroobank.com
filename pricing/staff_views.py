@@ -17,7 +17,7 @@ from ingestion.exceptions import StagingConflict
 from ingestion.receipts import related_receipts, stage_price_with_receipt
 from daroobank.forms import StaffAuthenticationForm
 
-from .comparisons import price_revision_context
+from .comparisons import price_revision_context, valid_candidate
 from .forms import PriceReviewForm, PriceUploadForm
 from .importer import ImportValidationError, match_fields_valid, stage_csv, suggest_product
 from .models import PriceCandidate, PriceCandidateReview
@@ -122,7 +122,8 @@ def price_candidates(request):
         rows = rows.filter(latest_decision=review_status)
     page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
     for item in page.object_list:
-        item.display_fields = _display_source_fields(item.source_fields)
+        item.display_consistent = valid_candidate(item)
+        item.display_fields = _display_source_fields(item.source_fields) if item.display_consistent else {}
     return render(request, 'staff/prices.html', {
         'page_title': 'نامزدهای قیمت | داروبانک', 'description': 'بخش داخلی بررسی داده‌های قیمت.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'review_status': review_status, 'stats': stats,

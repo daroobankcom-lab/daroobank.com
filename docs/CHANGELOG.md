@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — candidate queue consistency display
+
+**Changes:** Private product and price queues check each displayed candidate and replace inconsistent identity fields with a warning, retaining the ID, link and historical status.
+
+**Limits:** This adds per-row validation but does not bound fetched JSON, verify authenticity or hide all metadata and history. See ADR 0129.
+
 ## 2026-11-24 — suppress inconsistent detail values
 
 **Changes:** Private product and price detail pages replace selected identity and amount panels with a warning when candidate consistency checks fail; review gating remains independent.

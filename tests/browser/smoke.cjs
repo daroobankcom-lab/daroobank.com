@@ -613,6 +613,10 @@ async function run() {
       assert.equal(new URL(page.url()).pathname, '/staff/products/');
       assert.equal(new URL(page.url()).search, '?status=pending');
       assert.equal(await page.locator('#status').inputValue(), 'pending');
+      assert.match(await page.locator('main').innerText(), /مشخصات نامزد ناسازگار نمایش داده نمی‌شوند/);
+      assert(!(await page.locator('main').innerText()).includes('browser-product-hidden-canary'));
+      await checkLayout(page, `product queue ${width}`);
+      if (width === 390) await auditAccessibility(page, 'product queue');
       await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       await page.getByRole('link', {name: 'ورود به ادعاهای منبع'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/sources/');
@@ -857,6 +861,12 @@ async function run() {
       const priceContext = await contextFor(browser, width, errors);
       const pricePage = await priceContext.newPage();
       await login(pricePage, 'browser-price-stager');
+      response = await pricePage.goto(base + '/staff/prices/');
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('main').innerText(), /مشخصات نامزد ناسازگار نمایش داده نمی‌شوند/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-price-hidden-canary'));
+      await checkLayout(pricePage, `price queue ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'price queue');
       response = await pricePage.goto(base + '/staff/prices/import/');
       assert.equal(response.status(), 200);
       assert.match(await pricePage.locator('.staff-panel-note').innerText(), /اولین نتیجه تطبیق/);

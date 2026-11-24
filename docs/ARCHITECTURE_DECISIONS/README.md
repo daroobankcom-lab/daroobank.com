@@ -256,4 +256,6 @@
 
 - [0128: suppress inconsistent detail values](0128-suppress-inconsistent-detail-values.md) — development-only presentation change, 24 November 2026.
 
+- [0129: queue candidate consistency](0129-queue-candidate-consistency.md) — development-only presentation change, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

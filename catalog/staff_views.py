@@ -12,7 +12,7 @@ from sources.services import related_claims
 from ingestion.exceptions import StagingConflict
 from ingestion.receipts import related_receipts, stage_product_with_receipt
 
-from .comparisons import product_comparison_context
+from .comparisons import product_comparison_context, valid_candidate
 from .intake import IntakeError, ReviewConflict, require_staff, review_product, stage_products
 from .models import ProductCandidate, ProductCandidateReview
 from .staff_forms import ProductReviewForm, ProductUploadForm
@@ -36,6 +36,8 @@ def candidates(request):
     elif status:
         rows = rows.filter(latest_decision=status)
     page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    for candidate in page.object_list:
+        candidate.display_consistent = valid_candidate(candidate)
     return render(request, 'staff/products.html', {
         'page_title': 'نامزدهای فرآورده | داروبانک', 'description': 'صف داخلی نامزدهای فرآورده.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status,

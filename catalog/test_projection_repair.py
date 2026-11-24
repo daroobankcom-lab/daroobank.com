@@ -193,6 +193,26 @@ class ProjectionRepairTests(TestCase):
         with self.assertRaises(CommandError):
             call_command('repair_catalog_projection', presentation_id=self.product.pk, commit=True, token=plan['token'], confirm_synthetic=True)
 
+    def test_programmatic_command_flags_require_explicit_booleans(self):
+        self.damage()
+        token = self.preview()['token']
+        before = ProductPresentation.objects.values().get(pk=self.product.pk)
+        cases = [dict(commit=value, token=token, confirm_synthetic=True)
+                 for value in ('False', 'True', 1, 0, None, [], {})]
+        cases += [dict(commit=False, confirm_synthetic=value)
+                  for value in (0, None, '', [], {})]
+        cases += [dict(commit=True, token=token, confirm_synthetic=value)
+                  for value in ('False', 'True', 1)]
+        cases += [dict(token=value) for value in (None, 0, [], {})]
+        for options in cases:
+            with self.subTest(options=options), self.assertNumQueries(0), self.assertRaises(CommandError):
+                call_command('repair_catalog_projection', presentation_id=self.product.pk, stdout=io.StringIO(), **options)
+            self.assertEqual(ProductPresentation.objects.values().get(pk=self.product.pk), before)
+        out = io.StringIO()
+        call_command('repair_catalog_projection', presentation_id=self.product.pk,
+                     commit=True, token=token, confirm_synthetic=True, stdout=out)
+        self.assertEqual(json.loads(out.getvalue())['status'], 'repaired')
+
     @override_settings(DEBUG=False)
     def test_debug_gate_at_service_and_command(self):
         for fn in (lambda: self.preview(), lambda: self.apply('invalid')):

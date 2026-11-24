@@ -302,7 +302,7 @@ CI run 45171291395 failed the forced-colors home skip-link visibility assertion;
 
 ## Explicit intake mode
 
-Direct service tests reject selected truthy and falsey non-boolean `commit` values before file reads, callbacks or candidate writes, and exercise default preview and attested commit. This is not proof of authorization, source rights or behavior of direct database writers; see [ADR 0119](ARCHITECTURE_DECISIONS/0119-explicit-intake-commit-mode.md).
+Direct service tests reject selected truthy and falsey non-boolean `commit` values before file reads, callbacks or candidate writes, and exercise default preview and attested commit. The projection-repair command similarly rejects selected non-boolean programmatic flags and malformed tokens before any query; a literal `"False"` previously caused a repair in the synthetic test. This is not proof of authorization, source rights or behavior of direct database writers; see [ADR 0119](ARCHITECTURE_DECISIONS/0119-explicit-intake-commit-mode.md).
 
 ## Intake control-character boundaries
 

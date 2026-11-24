@@ -14,7 +14,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         commit, token, confirmed = options['commit'], options['token'], options['confirm_synthetic']
-        if bool(commit) != bool(token) or bool(commit) != bool(confirmed):
+        if (type(commit) is not bool or type(confirmed) is not bool or not isinstance(token, str)
+                or commit != bool(token) or commit != confirmed):
             raise CommandError('Use --commit, --token and --confirm-synthetic together; omit all for preview.')
         try:
             if commit:

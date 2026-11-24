@@ -1,7 +1,9 @@
 """Historical presentation projection upgrade on a disposable test database only."""
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from unittest.mock import patch
 
-from django.db import connection
+from django.db import OperationalError, close_old_connections, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.recorder import MigrationRecorder
 from django.test import TransactionTestCase
@@ -52,6 +54,47 @@ class PresentationProjectionMigrationTests(TransactionTestCase):
                 self.assertEqual(after.pop('irc_normalized'), normalized)
                 self.assertEqual(after, before)
         self.assertEqual(Product.objects.count(), len(self.expected))
+
+    def test_atomic_backfill_holds_table_lock_until_commit(self):
+        paused, resume = Event(), Event()
+
+        def migrate_on_another_connection():
+            close_old_connections()
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                    cursor.execute("SET statement_timeout = '15s'")
+                executor = MigrationExecutor(connection)
+                operation = executor.loader.graph.nodes[self.after[0]].operations[1]
+                original = operation.code
+
+                def pause_after_backfill(apps, schema_editor):
+                    original(apps, schema_editor)
+                    paused.set()
+                    if not resume.wait(10):
+                        raise TimeoutError('Synthetic migration was not resumed')
+
+                with patch.object(operation, 'code', pause_after_backfill):
+                    executor.migrate(self.after)
+            finally:
+                connection.close()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            migration = pool.submit(migrate_on_another_connection)
+            try:
+                self.assertTrue(paused.wait(8), 'Migration did not reach synthetic pause')
+                with self.assertRaises(OperationalError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                        cursor.execute('SELECT count(*) FROM catalog_productpresentation')
+                self.assertEqual(getattr(error.exception.__cause__, 'sqlstate', None), '55P03')
+            finally:
+                resume.set()
+            migration.result(timeout=15)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT count(*) FROM catalog_productpresentation')
+            self.assertEqual(cursor.fetchone(), (len(self.expected),))
+        self.assertIn(self.after[0], MigrationRecorder(connection).applied_migrations())
 
     def test_failed_backfill_rolls_back_schema_data_and_migration_record(self):
         executor = MigrationExecutor(connection)

@@ -1030,8 +1030,11 @@ async function run() {
     assert(summaryReached, 'error summary link reachable by Tab');
     await checkKeyboardFocus(page, '#staff-form-errors a[href="#id_source_name"]', 'error summary link', '#staff-form-errors');
     await checkTextContrast(page, '#staff-form-errors a[href="#id_source_name"]', '#staff-form-errors', 'error summary link');
-    await page.keyboard.press('Enter');
-    assert.equal(await sourceField.evaluate(el => document.activeElement === el), true, 'error summary link focus');
+    // Fragment navigation and its native focus update can finish after key dispatch.
+    await Promise.all([page.waitForURL(url => url.hash === '#id_source_name', {timeout: 5000}),
+                       page.keyboard.press('Enter')]);
+    await page.waitForFunction(() => document.activeElement === document.getElementById('id_source_name'),
+                               null, {timeout: 5000});
     await checkLayout(page, 'invalid identity form 390');
     await auditAccessibility(page, 'invalid identity form');
     await sourceField.fill('منبع ساختگی');

@@ -342,4 +342,6 @@
 
 - [0171: explicit staff checkbox values](0171-explicit-staff-checkbox-values.md) — development-only form validation.
 
+- [0172: defensive bounded JSON decoding](0172-defensive-bounded-json-decoding.md) — development-only selected reads.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

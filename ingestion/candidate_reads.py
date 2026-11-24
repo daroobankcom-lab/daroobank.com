@@ -1,8 +1,9 @@
 """Bound candidate JSON selected by private receipt inspection queries."""
-from django.db.models import Case, F, JSONField, TextField, Value, When
+from django.db.models import Case, TextField, Value, When
 from django.db.models.functions import Cast, Length
 
-MAX_CANDIDATE_JSON_TEXT_LENGTH = 65_536
+from daroobank.bounded_json_decode import decode_bounded_json
+from daroobank.candidate_content_bounds import MAX_CANDIDATE_JSON_TEXT_LENGTH
 
 
 def bounded_manifest_candidates(queryset, candidate_field):
@@ -12,8 +13,8 @@ def bounded_manifest_candidates(queryset, candidate_field):
     return (queryset.select_related(candidate_field).defer(path)
         .annotate(_candidate_json_length=Length(Cast(path, TextField())))
         .annotate(_bounded_candidate_json=Case(
-            When(_candidate_json_length__lte=MAX_CANDIDATE_JSON_TEXT_LENGTH, then=F(path)),
-            default=Value(None), output_field=JSONField())))
+            When(_candidate_json_length__lte=MAX_CANDIDATE_JSON_TEXT_LENGTH, then=Cast(path, TextField())),
+            default=Value(None), output_field=TextField())))
 
 
 def materialize_manifest_candidate(item, candidate_field):
@@ -22,4 +23,4 @@ def materialize_manifest_candidate(item, candidate_field):
         and item._candidate_json_length > MAX_CANDIDATE_JSON_TEXT_LENGTH)
     candidate = getattr(item, candidate_field)
     if candidate is not None:
-        candidate.source_fields = None if item.candidate_oversized else item._bounded_candidate_json
+        candidate.source_fields = None if item.candidate_oversized else decode_bounded_json(item._bounded_candidate_json)

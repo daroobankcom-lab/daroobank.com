@@ -1,7 +1,6 @@
 """Bounded synthetic candidate review clues; never authentication or audit."""
 from django.core.exceptions import PermissionDenied
-from django.db.models import Case, F, JSONField, TextField, Value, When
-from django.db.models.functions import Cast, Length
+from .candidate_content_bounds import MAX_CANDIDATE_JSON_TEXT_LENGTH, bounded_candidates, materialize_candidate
 
 from catalog.comparisons import valid_candidate as valid_product
 from catalog.intake import MAX_PK, require_staff
@@ -15,8 +14,6 @@ from .account_checks import current_account_ids
 from .review_content_bounds import bounded_review_fields, materialize_review_fields
 
 BATCH_SIZE = 50
-# Bounds characters in the database's JSON textual representation, not DB work.
-MAX_CANDIDATE_JSON_TEXT_LENGTH = 65_536
 CATEGORIES = ('consistent', 'invalid_record', 'oversized')
 _DOMAINS = {
     'product': (ProductCandidate, ProductCandidateReview, valid_product, classify_product, 'catalog.view_productcandidate'),
@@ -51,16 +48,11 @@ def inspect_reviews(*, actor, domain, candidate_id, after=0, category=''):
     if (type(after) is not int or not 0 <= after <= MAX_PK
             or not isinstance(category, str) or category not in ('', *CATEGORIES)):
         raise InvalidCandidateReviewScan
-    candidate = (candidate_model.objects.filter(pk=candidate_id).defer('source_fields')
-        .annotate(_json_length=Length(Cast('source_fields', TextField())))
-        .annotate(_bounded_json=Case(
-            When(_json_length__lte=MAX_CANDIDATE_JSON_TEXT_LENGTH, then=F('source_fields')),
-            default=Value(None), output_field=JSONField())).first())
+    candidate = bounded_candidates(candidate_model.objects.filter(pk=candidate_id)).first()
     if candidate is None:
         raise ReviewScanNotFound
-    # Populate the deferred field from the same SELECT, even for oversized or
-    # SQL-null rows, so a validator cannot trigger an unbounded lazy fetch.
-    candidate.source_fields = candidate._bounded_json
+    # Populate the deferred field from the same SELECT; never lazy-load it.
+    materialize_candidate(candidate)
     stagers = current_account_ids([candidate.staged_by_id], using=candidate._state.db)
     current_valid = validate(candidate) and candidate.staged_by_id in stagers
     # No inner account join: the snapshot check doesn't establish reviewer existence.

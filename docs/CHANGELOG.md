@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — defensive bounded JSON decoding
+
+**Changes:** Selected bounded candidate and review reads decode text defensively, so unusually deep or very large numeric JSONB values do not crash these reads before validation. Incompatible values are suppressed and comparison remains unknown.
+
+**Limits:** The JSON can still be valid PostgreSQL data; this inspection outcome is not an authenticity or clinical finding and does not cover every read. See ADR 0172.
+
 ## 2026-11-24 — explicit staff checkbox values
 
 **Changes:** Selected acknowledgements, source scopes and upload-rights checkboxes reject unknown or duplicate values; explicit `0` is false. Normal browser submissions remain supported.

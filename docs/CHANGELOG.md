@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — price staging replay integrity
+
+**Changes:** Committed price staging locks and checks duplicate candidates and derived price fields before recording them, with rollback on conflict. Actorless CLI candidates remain replayable and the original suggestion remains unchanged.
+
+**Limits:** Per-duplicate checks add work and locks; a null recorder has no provenance proof and source rights or prices are not verified. See ADR 0097.
+
 ## 2026-11-24 — product staging replay integrity
 
 **Changes:** Committed product staging locks and checks duplicate candidates before counting them or recording receipt items; unsafe replays roll back the stage and return a conflict. Synthetic PostgreSQL tests include integrity failures and concurrent row updates.

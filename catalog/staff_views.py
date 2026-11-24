@@ -67,7 +67,7 @@ def upload(request):
         except IntakeError as exc:
             form.add_error(None, 'فایل معتبر نیست؛ هیچ داده‌ای ثبت نشد. ' + str(exc))
         except StagingConflict:
-            form.add_error(None, 'عملیات به دلیل تداخل هم‌زمان انجام نشد؛ برای تلاش دوباره فایل را دوباره انتخاب کنید.')
+            form.add_error(None, 'ثبت به دلیل تداخل هم‌زمان یا ناسازگاری رکورد قبلی متوقف شد؛ وضعیت داده را بررسی و برای تلاش دوباره فایل را دوباره انتخاب کنید.')
             status = 409
     return render(request, 'staff/product_upload.html', {
         'page_title': 'ورود فرآورده | داروبانک', 'description': 'ورود مرحله‌ای مشخصات فرآورده.',

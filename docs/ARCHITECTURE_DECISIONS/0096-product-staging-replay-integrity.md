@@ -1,6 +1,6 @@
 # ADR 0096: product staging replay integrity
 
-Status: development-only implementation, 24 November 2026; extends the product staging and receipt paths in [ADR 0055](0055-staging-conflict-boundary.md).
+Status: development-only implementation, 24 November 2026; extends the product staging and receipt paths in [ADR 0055](0055-staging-conflict-boundary.md). [ADR 0097](0097-price-staging-replay-integrity.md) adds selected price-replay checks.
 
 ## Decision
 

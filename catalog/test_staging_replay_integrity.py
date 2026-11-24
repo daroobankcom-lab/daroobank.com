@@ -109,6 +109,7 @@ class ProductReplayIntegrityTests(TestCase):
             'csv_file': SimpleUploadedFile('data.csv', make_csv([ROW]), content_type='text/csv'),
         })
         self.assertEqual(response.status_code, 409)
+        self.assertContains(response, 'ناسازگاری رکورد قبلی', status_code=409)
         self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
         self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
         self.assertNotContains(response, 'محتوای خصوصی ساختگی', status_code=409)

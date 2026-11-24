@@ -10,6 +10,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
 
+from daroobank.account_checks import current_account_exists
 from daroobank.bounded_read import read_bounded_bytes
 from daroobank.validation import valid_private_source_url
 from daroobank.write_conflict_boundary import write_conflict_boundary
@@ -252,6 +253,21 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
                     'suggested_product_id': product_id, 'match_status': match_status,
                 },
             )
+            if not created:
+                try:
+                    candidate = PriceCandidate.objects.using(candidate._state.db).select_for_update().get(pk=candidate.pk)
+                except PriceCandidate.DoesNotExist as exc:
+                    raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
+                if (candidate.source_name != source_name or candidate.source_url != source_url
+                        or candidate.source_record_id != row['source_record_id'] or candidate.source_fields != row
+                        or candidate.payload_sha256 != digest or candidate.original_amount != row['amount']
+                        or candidate.original_currency != currency or candidate.amount_rial != amount
+                        or candidate.price_category != row['category'] or candidate.unit != row['unit']
+                        or candidate.effective_date != effective or candidate.source_published_date != published
+                        or candidate.source_rights_attested is not True
+                        or (candidate.staged_by_id is not None
+                            and not current_account_exists(candidate.staged_by_id, using=candidate._state.db))):
+                    raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.')
             counts['created' if created else 'duplicates'] += 1
             if on_staged is not None:
                 on_staged(candidate.pk, row['source_record_id'], digest, created, match_status)

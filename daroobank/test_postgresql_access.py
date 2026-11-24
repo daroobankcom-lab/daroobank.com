@@ -43,6 +43,12 @@ class PostgreSQLAccessInspectionTests(TransactionTestCase):
             observed = cursor.fetchone()
         self.assertEqual(tuple(report[key] for key in ('role_superuser', 'role_create_database',
                          'role_create_roles', 'role_replication', 'role_bypass_rls')), observed)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls '
+                           'FROM pg_catalog.pg_roles WHERE rolname = session_user')
+            session = cursor.fetchone()
+        self.assertEqual(tuple(report[key] for key in ('session_superuser', 'session_create_database',
+                         'session_create_roles', 'session_replication', 'session_bypass_rls')), session)
         self.assertEqual((report['expected_relations'], report['selected_tables']), (0, 0))
 
     def test_names_are_bound_and_unresolved_or_non_tables_are_not_table_privileges(self):
@@ -123,6 +129,7 @@ class PostgreSQLAccessInspectionTests(TransactionTestCase):
             report = inspect_access([ProductPresentation._meta.db_table])
             self.assertNotIn(role_name, json.dumps(report))
             self.assertTrue(report['role_switched'])
+            self.assertTrue(report['session_superuser'])
             for key in ('role_superuser', 'role_create_database', 'role_create_roles', 'role_replication', 'role_bypass_rls'):
                 self.assertFalse(report[key], key)
             self.assertEqual(report['tables_select'], 1)

@@ -18,6 +18,9 @@ def inspect_access(table_names):
             ), active_role AS (
                 SELECT rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
                 FROM pg_catalog.pg_roles WHERE rolname = current_user
+            ), session_role AS (
+                SELECT rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
+                FROM pg_catalog.pg_roles WHERE rolname = session_user
             ), transport AS (
                 SELECT CASE WHEN pg_catalog.inet_client_addr() IS NULL THEN 'unix_socket'
                             WHEN ssl.ssl IS TRUE THEN 'tls'
@@ -34,6 +37,8 @@ def inspect_access(table_names):
                 current_user <> session_user,
                 active_role.rolsuper, active_role.rolcreatedb, active_role.rolcreaterole,
                 active_role.rolreplication, active_role.rolbypassrls,
+                session_role.rolsuper, session_role.rolcreatedb, session_role.rolcreaterole,
+                session_role.rolreplication, session_role.rolbypassrls,
                 pg_catalog.has_database_privilege(current_user, pg_catalog.current_database(), 'CREATE'),
                 (SELECT pg_catalog.has_schema_privilege(current_user, oid, 'CREATE')
                  FROM pg_catalog.pg_namespace WHERE nspname = 'public'),
@@ -46,11 +51,12 @@ def inspect_access(table_names):
                 (SELECT count(*) FROM tables WHERE pg_catalog.has_table_privilege(current_user, oid, 'TRUNCATE')),
                 (SELECT count(*) FROM tables WHERE relrowsecurity),
                 (SELECT count(*) FROM tables WHERE relforcerowsecurity)
-            FROM active_role
+            FROM active_role CROSS JOIN session_role
         ''', [list(table_names)])
         row = cursor.fetchone()
     keys = ('expected_relations', 'unresolved_relations', 'non_table_relations', 'selected_tables', 'role_switched',
             'role_superuser', 'role_create_database', 'role_create_roles', 'role_replication', 'role_bypass_rls',
+            'session_superuser', 'session_create_database', 'session_create_roles', 'session_replication', 'session_bypass_rls',
             'database_create_privilege', 'public_schema_create_privilege', 'connection_transport', 'transaction_read_only',
             'tables_select', 'tables_insert', 'tables_update', 'tables_delete', 'tables_truncate',
             'tables_rls_enabled', 'tables_rls_forced')

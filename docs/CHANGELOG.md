@@ -10,7 +10,7 @@ Entries describe the state at each change; later entries can supersede earlier l
 
 ## 2026-11-24 — PostgreSQL session-access clues
 
-**Changes:** Added a development-only, one-statement aggregate inspection of selected current-role attributes, table-level privileges, RLS flags and server-observed transport. Synthetic restricted-role and RLS-bypass tests cover selected limits.
+**Changes:** Added a development-only, one-statement aggregate inspection of selected current/session-role attributes, current-role table-level privileges, RLS flags and server-observed transport. Synthetic restricted-role and RLS-bypass tests cover selected limits.
 
 **Limits:** It reports facts, not a security pass or production authorization; column grants, role escalation paths, policies and end-to-end transport remain outside scope. See ADR 0110.
 

@@ -58,7 +58,10 @@ class SyntheticEncryptedRestoreTests(TransactionTestCase):
         target = f'test_daroobank_restore_target_{uuid4().hex}'
         self.assertRegex(target, r'^test_daroobank_restore_target_[0-9a-f]{32}$')
         self.assertNotEqual(target, source)
+        replacement_name = 'synthetic_replacement_' + uuid4().hex
+        replacement_table = connection.ops.quote_name(replacement_name)
         created = False
+        created_replacement = False
         try:
             with tempfile.TemporaryDirectory(prefix='daroobank-synthetic-cms-') as directory:
                 self.assertEqual(stat.S_IMODE(os.stat(directory).st_mode), 0o700)
@@ -139,8 +142,9 @@ class SyntheticEncryptedRestoreTests(TransactionTestCase):
                 # Simulate a different, valid archive encrypted using only the
                 # public certificate. Encryption does not establish backup origin.
                 with connection.cursor() as cursor:
-                    cursor.execute('CREATE TABLE synthetic_replacement_only (value integer NOT NULL)')
-                    cursor.execute('INSERT INTO synthetic_replacement_only VALUES (246)')
+                    cursor.execute(f'CREATE TABLE {replacement_table} (value integer NOT NULL)')
+                    created_replacement = True
+                    cursor.execute(f'INSERT INTO {replacement_table} VALUES (246)')
                 forged_dump = run(['pg_dump', '--no-password', '--format=custom', '--no-owner', '--no-acl',
                                    '--file', str(forged)])
                 self.assertEqual(forged_dump.returncode, 0, 'Synthetic replacement dump failed')
@@ -172,12 +176,50 @@ class SyntheticEncryptedRestoreTests(TransactionTestCase):
                 probe.settings_dict['NAME'] = target
                 try:
                     with probe.cursor() as cursor:
-                        cursor.execute("SELECT to_regclass('public.synthetic_replacement_only')")
+                        cursor.execute('SELECT to_regclass(%s)', ['public.' + replacement_name])
                         self.assertIsNone(cursor.fetchone()[0])
                 finally:
                     probe.close()
             verify_cross_domain_fixture()  # The source fixture remains accessible.
         finally:
-            if created:
-                with connection.cursor() as cursor:
-                    cursor.execute(f'DROP DATABASE {connection.ops.quote_name(target)}')
+            try:
+                if created_replacement:
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'DROP TABLE IF EXISTS {replacement_table}')
+            finally:
+                if created:
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'DROP DATABASE {connection.ops.quote_name(target)}')
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT to_regclass(%s)', ['public.' + replacement_name])
+            self.assertIsNone(cursor.fetchone()[0], 'Synthetic replacement table was not cleaned up')
+
+    def test_replacement_table_cleanup_after_synthetic_dump_failure(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        target_token, replacement_token = uuid4().hex, uuid4().hex
+        target = 'test_daroobank_restore_target_' + target_token
+        table = 'synthetic_replacement_' + replacement_token
+        actual_run = subprocess.run
+        dump_calls = 0
+
+        def fail_second_dump(args, **kwargs):
+            nonlocal dump_calls
+            if args[0] == 'pg_dump':
+                dump_calls += 1
+                if dump_calls == 2:
+                    return SimpleNamespace(returncode=1, stdout=b'', stderr=b'')
+            return actual_run(args, **kwargs)
+
+        with patch('daroobank.test_synthetic_encrypted_restore.uuid4',
+                   side_effect=[SimpleNamespace(hex=target_token), SimpleNamespace(hex=replacement_token)]), \
+             patch('daroobank.test_synthetic_encrypted_restore.subprocess.run', side_effect=fail_second_dump):
+            with self.assertRaisesMessage(AssertionError, 'Synthetic replacement dump failed'):
+                self.test_authenticated_envelope_then_restore_and_selected_negative_controls()
+        self.assertEqual(dump_calls, 2)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT to_regclass(%s)', ['public.' + table])
+            self.assertIsNone(cursor.fetchone()[0])
+            cursor.execute('SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s', [target])
+            self.assertIsNone(cursor.fetchone())

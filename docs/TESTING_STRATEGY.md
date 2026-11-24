@@ -306,7 +306,7 @@ CI run 45171291395 failed the forced-colors home skip-link visibility assertion;
 
 ## Synthetic encrypted-envelope probe
 
-The opt-in `daroobank/test_synthetic_encrypted_restore.py` exercises OpenSSL CMS authenticated envelopes, selected tamper/wrong-key rejection, a different valid archive encrypted with the same public certificate, detached RSA-PSS signature verification and replay, and restoration of one decrypted synthetic PostgreSQL archive. Guard tests reject selected wrong settings before fixture access; CI opts in. The private keys and intermediate dumps are plaintext locally; the envelope alone does not establish sender identity, and the synthetic signature has no trusted key distribution or replay protection. Neither proves off-host recovery. See [ADR 0116](ARCHITECTURE_DECISIONS/0116-synthetic-encrypted-restore-drill.md).
+The opt-in `daroobank/test_synthetic_encrypted_restore.py` exercises OpenSSL CMS authenticated envelopes, selected tamper/wrong-key rejection, a different valid archive encrypted with the same public certificate, detached RSA-PSS signature verification and replay, restoration of one decrypted synthetic PostgreSQL archive, and cleanup after an injected replacement-dump failure. Guard tests reject selected wrong settings before fixture access; CI opts in. The private keys and intermediate dumps are plaintext locally; the envelope alone does not establish sender identity, and the synthetic signature has no trusted key distribution or replay protection. Neither proves off-host recovery. See [ADR 0116](ARCHITECTURE_DECISIONS/0116-synthetic-encrypted-restore-drill.md).
 
 ## Synthetic PostgreSQL restore drill
 

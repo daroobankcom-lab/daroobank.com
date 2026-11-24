@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — unknown candidate status labels
+
+**Changes:** Selected product and price queues and review histories show a fixed invalid label instead of mapping an unknown status to a normal one.
+
+**Limits:** This is defensive display for selected constraint-bypass cases, not history validation or repair; null latest decisions and other domains remain ambiguous. See ADR 0130.
+
 ## 2026-11-24 — candidate queue consistency display
 
 **Changes:** Private product and price queues check each displayed candidate and replace inconsistent identity fields with a warning, retaining the ID, link and historical status.

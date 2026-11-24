@@ -258,4 +258,6 @@
 
 - [0129: queue candidate consistency](0129-queue-candidate-consistency.md) — development-only presentation change, 24 November 2026.
 
+- [0130: unknown candidate status labels](0130-unknown-candidate-status-labels.md) — development-only defensive display, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

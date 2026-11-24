@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — isolated PostgreSQL test-database collision guard
+
+**Changes:** The synthetic, browser and restore test settings use a PostgreSQL test-creation backend that fails on a colliding name without dropping or reusing the pre-existing database. Real synthetic canaries cover all three settings with and without `--noinput`.
+
+**Limits:** Only initial test-database creation is guarded. Normal teardown, privileged writers, interruptions, shared cluster resources and default settings remain separate risks; use a disposable authorized cluster. See ADR 0109.
+
 ## 2026-11-24 — direct price-conversion bound
 
 **Changes:** The direct amount helper enforces the existing 50-character input limit and uses exact digit-string arithmetic independent of decimal context; selected oversized and 3,000 synthetic compatibility-digit cases are tested.

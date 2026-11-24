@@ -1,6 +1,6 @@
 # ADR 0071: isolated names for general synthetic PostgreSQL tests
 
-Status: development-only implementation, 23 November 2026.
+Status: development-only implementation, 23 November 2026. [ADR 0109](0109-isolated-test-database-collision.md) supersedes the isolated-settings collision-deletion limitation below.
 
 ## Decision
 

@@ -216,4 +216,6 @@
 
 - [0108: price conversion input bound](0108-price-conversion-input-bound.md) — development-only implementation, 24 November 2026.
 
+- [0109: isolated test-database collision](0109-isolated-test-database-collision.md) — development-only implementation, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

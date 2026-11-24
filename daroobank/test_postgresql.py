@@ -25,7 +25,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 class PostgreSQLConfigurationTests(SimpleTestCase):
     def test_only_postgresql_backend_configured(self):
-        self.assertEqual({db['ENGINE'] for db in settings.DATABASES.values()}, {'django.db.backends.postgresql'})
+        self.assertIn({db['ENGINE'] for db in settings.DATABASES.values()},
+                      ({'django.db.backends.postgresql'}, {'daroobank.isolated_postgresql'}))
+        self.assertEqual(connection.vendor, 'postgresql')
         self.assertTrue(settings.DATABASES['default']['CONN_HEALTH_CHECKS'])
 
     def test_missing_required_configuration_fails_closed(self):

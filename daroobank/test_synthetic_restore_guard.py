@@ -36,12 +36,15 @@ class RestoreDrillGuardTests(SimpleTestCase):
 
     def test_settings_use_isolated_runner_and_leave_base_database_unmodified(self):
         original = base_settings.DATABASES['default'].get('TEST')
+        original_engine = base_settings.DATABASES['default']['ENGINE']
         for module in ('daroobank.restore_test_settings', 'daroobank.browser_test_settings',
                        'daroobank.synthetic_test_settings'):
             with self.subTest(module=module):
                 config = load_test_settings(module)
                 self.assertEqual(config['TEST_RUNNER'], 'daroobank.isolated_test_runner.IsolatedTestRunner')
+                self.assertEqual(config['DATABASES']['default']['ENGINE'], 'daroobank.isolated_postgresql')
                 self.assertEqual(base_settings.DATABASES['default'].get('TEST'), original)
+                self.assertEqual(base_settings.DATABASES['default']['ENGINE'], original_engine)
 
     def test_cli_abbreviations_are_rejected_before_test_database_setup(self):
         root = Path(__file__).resolve().parent.parent

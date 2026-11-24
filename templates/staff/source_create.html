@@ -1,9 +1,11 @@
 {% extends 'base.html' %}{% load static %}
+{% block title %}{% include 'staff/form_title.html' %}{% endblock %}
 {% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
 {% block content %}<section class="staff-section"><div class="container">
   <div class="staff-topline"><div><a class="staff-back" href="{% url 'staff_sources' %}">→ بازگشت به ادعاهای منبع</a><div class="kicker"><span></span> ثبت داخلی</div><h1>ثبت ادعای حقوق منبع</h1><p>در نسخه توسعه‌ای فقط مقادیر ساختگی و فاقد اطلاعات شخصی یا محرمانه ثبت کنید.</p></div></div>
   <div class="staff-alert">مدرک یا نشانی آن دریافت و بررسی نمی‌شود؛ این فرم اجازه استفاده، جمع‌آوری یا انتشار ایجاد نمی‌کند. نشانی نباید رمز، توکن، پارامتر یا قطعه داشته باشد.</div>
-  <div class="staff-panel"><form method="post" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}
+  {% include 'staff/form_error_summary.html' %}
+<div class="staff-panel"><form method="post" action="{{ request.get_full_path }}" class="staff-review-form">{% csrf_token %}{{ form.non_field_errors }}
     <label for="id_source_name">{{ form.source_name.label }}</label>{{ form.source_name }}{{ form.source_name.errors }}
     <label for="id_source_url">{{ form.source_url.label }}</label>{{ form.source_url }}{{ form.source_url.errors }}
     <label for="id_owner">{{ form.owner.label }}</label>{{ form.owner }}{{ form.owner.errors }}

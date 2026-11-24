@@ -125,10 +125,40 @@ class StaffRawTextHttpTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
                 self.assertIn(field, response.context['form'].errors)
+                self.assertContains(response, 'id="staff-form-errors"')
+                self.assertContains(response, f'href="#id_{field}"')
+                self.assertContains(response, 'خطا در فرم |')
                 self.assertEqual(model.objects.count(), 0)
                 normal = self.client.post(url, data)
                 self.assertEqual(normal.status_code, 302)
                 self.assertEqual(model.objects.count(), 1)
+
+    def test_component_field_and_management_errors_have_summary_without_value_echo(self):
+        self.client.force_login(self.actor)
+        url = reverse('staff_identity_create', args=['formulation'])
+        get = self.client.get(url)
+        self.assertNotContains(get, 'id="staff-form-errors"')
+        payload = {**FORMULATION, 'parts-TOTAL_FORMS': str(MAX_COMPONENTS), 'parts-INITIAL_FORMS': '0',
+                   'parts-MIN_NUM_FORMS': '1', 'parts-MAX_NUM_FORMS': str(MAX_COMPONENTS)}
+        payload.update({f'parts-0-{name}': value for name, value in COMPONENT.items()})
+        payload['parts-0-numerator_unit'] = '\tcanary-unit'
+        response = self.client.post(url, payload)
+        self.assertContains(response, 'id="staff-form-errors"')
+        self.assertContains(response, 'href="#id_parts-0-numerator_unit"')
+        summary = response.content.decode().split('id="staff-form-errors"', 1)[1].split('</section>', 1)[0]
+        self.assertNotIn('canary-unit', summary)
+        response = self.client.post(url, FORMULATION)
+        self.assertContains(response, 'id="staff-form-errors"')
+        self.assertContains(response, 'ساختار فرم را بررسی کنید')
+
+    def test_non_field_error_appears_in_summary_without_fabricated_link(self):
+        self.client.force_login(self.actor)
+        response = self.client.post(reverse('staff_source_create'), {**SOURCE, 'source_url': 'http://example.org/source'})
+        self.assertContains(response, 'id="staff-form-errors"')
+        self.assertContains(response, 'پیام عمومی زیر را نیز بررسی کنید')
+        summary = response.content.decode().split('id="staff-form-errors"', 1)[1].split('</section>', 1)[0]
+        self.assertNotIn('<a ', summary)
+        self.assertEqual(SourceClaim.objects.count(), 0)
 
     def test_revision_and_reference_reject_controls_without_creating_records(self):
         self.client.force_login(self.actor)
@@ -147,6 +177,12 @@ class StaffRawTextHttpTests(TestCase):
         reference = {**REFERENCE, 'expected_draft_hash': draft.payload_sha256,
                      'expected_evidence_hash': evidence_state(draft)['fingerprint']}
         url = reverse('staff_clinical_reference_create', args=[draft.pk])
+        hidden_error = self.client.post(url, {**reference, 'expected_draft_hash': 'invalid-token-canary'})
+        self.assertContains(hidden_error, 'اطلاعات پنهان فرم معتبر نیست')
+        summary = hidden_error.content.decode().split('id="staff-form-errors"', 1)[1].split('</section>', 1)[0]
+        self.assertNotIn('invalid-token-canary', summary)
+        self.assertNotIn('href="#id_expected_draft_hash"', summary)
+        self.assertEqual(ClinicalReferenceAssertion.objects.count(), 0)
         response = self.client.post(url, {**reference, 'reference_location': '\t' + reference['reference_location']})
         self.assertEqual(response.status_code, 200)
         self.assertIn('reference_location', response.context['form'].errors)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ page_title }}</title>
+  <title>{% block title %}{{ page_title }}{% endblock %}</title>
   <meta name="description" content="{{ description }}">
   {% if canonical %}<link rel="canonical" href="{{ canonical }}">{% endif %}
   {% if private_staff %}<meta name="robots" content="noindex,nofollow">{% elif noindex %}<meta name="robots" content="noindex,follow">{% endif %}

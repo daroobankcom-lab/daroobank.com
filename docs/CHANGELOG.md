@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — selected staff form error summaries
+
+**Changes:** Selected source, clinical, identity-create and upload forms show a linked error summary and an error-prefixed title after failed validation, including component-formset errors.
+
+**Limits:** No automatic focus or general assistive-technology guarantee; other forms and manual accessibility review remain outstanding. See ADR 0135.
+
 ## 2026-11-24 — empty staff POST feedback
 
 **Changes:** Six selected create, revision, reference and upload views bind even an empty authorized POST so required-field errors are shown; GET stays unbound.

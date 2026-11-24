@@ -268,4 +268,6 @@
 
 - [0134: bound empty staff POSTs](0134-bound-empty-staff-posts.md) — development-only form feedback, 24 November 2026.
 
+- [0135: selected staff form error summaries](0135-selected-staff-form-error-summary.md) — development-only accessibility improvement, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

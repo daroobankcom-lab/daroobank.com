@@ -1,0 +1,12 @@
+{% if form.errors or parts.total_error_count %}
+<section id="staff-form-errors" class="staff-alert staff-alert-error staff-form-errors" aria-labelledby="staff-form-errors-title">
+  <h2 id="staff-form-errors-title">درخواست انجام نشد؛ خطاهای فرم را بررسی کنید</h2>
+  <p>برای بررسی هر بخش روی پیوند آن بروید. توضیح خطا کنار فیلد آمده است.</p>
+  <ul>
+    {% for field in form %}{% if field.errors %}{% if field.is_hidden %}<li>اطلاعات پنهان فرم معتبر نیست؛ صفحه را دوباره باز کنید.</li>{% else %}<li><a href="#{{ field.id_for_label }}">{{ field.label }}</a></li>{% endif %}{% endif %}{% endfor %}
+    {% for part in parts %}{% for field in part %}{% if field.errors %}<li><a href="#{{ field.id_for_label }}">ماده {{ forloop.parentloop.counter }}: {{ field.label }}</a></li>{% endif %}{% endfor %}{% endfor %}
+    {% if form.non_field_errors %}<li>پیام عمومی زیر را نیز بررسی کنید.</li>{% endif %}
+    {% if parts.non_form_errors %}<li>ساختار فرم را بررسی کنید؛ در صورت نیاز صفحه را دوباره باز کنید.</li>{% endif %}
+  </ul>
+</section>
+{% endif %}

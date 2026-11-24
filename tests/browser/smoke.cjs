@@ -1002,6 +1002,8 @@ async function run() {
     })).status);
     assert.equal(rejected, 403, 'missing CSRF token must be rejected');
     await page.goto(base + '/staff/catalog/identity/new/ingredient/');
+    assert.equal(await page.locator('#staff-form-errors').count(), 0);
+    assert.doesNotMatch(await page.title(), /^خطا در فرم/);
     await page.locator('#id_source_name').fill('   ');
     await page.locator('#id_source_url').fill('https://example.org/fixture');
     await page.locator('#id_name_fa').fill('ماده تازه ساختگی مرورگر');
@@ -1016,6 +1018,14 @@ async function run() {
     const describedBy = await sourceField.getAttribute('aria-describedby');
     assert(describedBy && describedBy.split(/\s+/).includes('id_source_name_error'));
     assert((await page.locator('#id_source_name_error').innerText()).trim());
+    assert.match(await page.title(), /^خطا در فرم/);
+    const summary = page.locator('#staff-form-errors');
+    const summaryLink = summary.locator('a[href="#id_source_name"]');
+    assert.equal(await summaryLink.count(), 1);
+    await summaryLink.focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await sourceField.evaluate(el => document.activeElement === el), true, 'error summary link focus');
+    await checkLayout(page, 'invalid identity form 390');
     await auditAccessibility(page, 'invalid identity form');
     await sourceField.fill('منبع ساختگی');
     await Promise.all([page.waitForURL(/\/staff\/catalog\/identity\/ingredient\/\d+\/$/),

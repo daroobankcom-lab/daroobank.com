@@ -385,3 +385,7 @@
 .comparison-differences small {
   color: #526e68;
 }
+
+.staff-form-errors h2 { font-size: 17px; margin: 0 0 6px; }
+.staff-form-errors ul { margin: 6px 0 0; padding-inline-start: 24px; }
+.staff-form-errors a { color: #73212a; text-decoration: underline; font-weight: 700; }

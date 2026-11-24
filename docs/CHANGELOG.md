@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — selected auto-sequence settings
+
+**Changes:** The single-statement PostgreSQL development inspector flags selected owned auto sequences with nonpositive increment, minimum below one or cycling enabled. Synthetic tests include a sequence that reissues a value and a rewound-value negative control.
+
+**Limits:** Intentional settings may be flagged; current values, data alignment and future insert success are not proven. See ADR 0103.
+
 ## 2026-11-24 — synthetic backup argument guards
 
 **Changes:** The synthetic backup guide rejects non-absolute archive paths and libpq connection-string-like source database names before invoking client commands; restore operands use an option terminator. Offline guards and a disposable PostgreSQL restore probe cover selected paths.

@@ -346,7 +346,16 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                 (SELECT COUNT(*) FROM pg_catalog.pg_trigger g JOIN tables t ON t.oid = g.tgrelid
                     WHERE (g.tgenabled = 'R' AND pg_catalog.current_setting('session_replication_role') <> 'replica')
                        OR (g.tgenabled = 'O' AND pg_catalog.current_setting('session_replication_role') = 'replica')),
-                (pg_catalog.current_setting('session_replication_role') = 'replica')::integer
+                (pg_catalog.current_setting('session_replication_role') = 'replica')::integer,
+                (SELECT COUNT(*) FROM expected_auto e
+                    JOIN tables t ON t.oid = e.table_oid
+                    JOIN pg_catalog.pg_class c ON c.oid = t.oid
+                    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                    JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attname = e.column_name
+                        AND a.attnum > 0 AND NOT a.attisdropped
+                    JOIN pg_catalog.pg_sequence s ON s.seqrelid = pg_catalog.pg_get_serial_sequence(
+                        pg_catalog.format('%%I.%%I', n.nspname, c.relname), a.attname)::regclass
+                    WHERE e.supported AND (s.seqincrement <= 0 OR s.seqmin < 1 OR s.seqcycle))
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
@@ -370,7 +379,7 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             'skipped_migration_pk_types', 'column_type_mismatches',
             'expected_field_indexes', 'missing_field_indexes', 'expected_named_indexes', 'unsupported_named_indexes',
             'missing_named_indexes', 'expected_auto_fields', 'unsupported_auto_fields', 'missing_auto_generation',
-            'trigger_session_mismatches', 'session_replication_role_replica')
+            'trigger_session_mismatches', 'session_replication_role_replica', 'nonpositive_or_cycling_auto_sequences')
     result = dict(zip(keys, values))
     # This is a model-metadata coverage count, not a separate database query.
     result['unsupported_unique_constraints'] = len(unsupported_uniques)
@@ -381,5 +390,5 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
         'nondefault_action_foreign_keys', 'missing_unique_keys', 'unsupported_unique_constraints', 'missing_check_constraints', 'missing_columns',
         'column_nullability_mismatches', 'unsupported_column_types', 'column_type_mismatches',
         'missing_field_indexes', 'unsupported_named_indexes', 'missing_named_indexes', 'unsupported_auto_fields',
-        'missing_auto_generation')) else 'no_selected_issues')
+        'missing_auto_generation', 'nonpositive_or_cycling_auto_sequences')) else 'no_selected_issues')
     return result

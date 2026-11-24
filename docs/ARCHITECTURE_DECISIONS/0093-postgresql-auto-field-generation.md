@@ -1,6 +1,6 @@
 # ADR 0093: PostgreSQL auto-field generation clues
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md) and [ADR 0092](0092-postgresql-migration-recorder-primary-key.md). [ADR 0094](0094-postgresql-serial-default-clue.md) adds a selected legacy-default comparison, superseding that limitation below.
+Status: development-only implementation, 24 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md) and [ADR 0092](0092-postgresql-migration-recorder-primary-key.md). [ADR 0094](0094-postgresql-serial-default-clue.md) adds a selected legacy-default comparison, and [ADR 0103](0103-postgresql-auto-sequence-sign-cycle.md) adds selected sequence-setting clues, superseding those specific limitations below.
 
 ## Decision
 

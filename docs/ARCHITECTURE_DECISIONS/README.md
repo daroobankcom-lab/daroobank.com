@@ -292,4 +292,6 @@
 
 - [0146: raw concurrency-token controls](0146-raw-concurrency-token-controls.md) — development-only selected form validation.
 
+- [0147: bounded candidate review scan content](0147-bounded-candidate-review-scan-content.md) — development-only defensive inspection.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

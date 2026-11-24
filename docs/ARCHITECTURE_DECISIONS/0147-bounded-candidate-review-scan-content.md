@@ -1,0 +1,13 @@
+# ADR 0147: bound selected candidate-review scan content transfer
+
+Status: development-only defensive inspection, with synthetic tests. Extends ADR 0141 and does not change review writes, permissions, locking or retention.
+
+## Decision
+
+The private product and price per-candidate scans limit rows but previously loaded each entire JSON review snapshot and reason, and the current candidate's entire JSON source payload. A bypassed write could make any of these fields very large. In the same candidate SELECT, the scan now returns the complete `source_fields` JSON only when the PostgreSQL textual JSON representation is at most 65,536 characters; otherwise it substitutes null before Python validation. An oversized or malformed current payload makes current comparison unknown. The separately read current stager account remains a condition for comparison.
+
+Each review SELECT similarly returns the complete snapshot only when its textual JSON representation is at most 65,536 characters and returns at most the first 1,001 characters of the reason. If either bound is exceeded, the row receives a new fixed `oversized` status and `unknown` comparison; it is not classified from partial data. A reason of at most 1,000 characters and a complete smaller snapshot are passed to the existing classifiers. Malformed, including JSON null, still yields `invalid_record`. The original deferred columns are never read by this scan. The lookahead row is bounded too, but only the first 50 rows are classified. Filtering remains after the batch, including the new `oversized` option; an empty filtered page can still continue.
+
+## Evidence and limits
+
+Synthetic PostgreSQL tests cover million-character JSON and long reasons, exact character boundaries, malformed JSON values, normal rows, no lazy fetch, fixed output and privacy, no writes, filtered continuation and a large sentinel. Chromium checks the new status/filter and non-disclosure in both domains at selected widths. An unkeyed digest is not authentication; separately read rows do not constitute a snapshot. The length checks and database cast can themselves require full decompression and substantial database CPU, storage and time. The bounds count characters in PostgreSQL's JSON textual representation, not exact wire bytes or a global memory cap; 51 bounded JSON values may still be significant. Other fields, parent/detail pages, source/clinical/identity scans, logs, clients and direct SQL remain outside this protection. Oversized means not inspected under this policy, not a determination of source rights, provenance, identity, clinical validity or approval. Thresholds are local defensive limits, not schema constraints or a production sizing decision.

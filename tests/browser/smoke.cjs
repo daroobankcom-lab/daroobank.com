@@ -235,13 +235,22 @@ async function checkCandidateReviewScan(page, path, label, width) {
   await page.keyboard.press('Tab');
   await checkKeyboardFocus(page, '.staff-filter button', `${label} submit`, '.staff-section');
   await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=invalid_record'), page.keyboard.press('Enter')]);
-  assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 2/);
+  assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 3/);
   assert.equal(await page.locator('.staff-candidate').count(), 1);
   const content = await page.locator('main').innerText();
   assert.match(content, /رکورد بازبینی ناسازگار/);
   assert(!content.includes('browser-reviewer'));
   assert(!content.includes('browser-history-reason-canary'));
   assert(!content.includes('browser-product-history-reason-canary'));
+  await page.locator('#category').selectOption('oversized');
+  await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=oversized'),
+                     page.locator('.staff-filter button').click()]);
+  assert.equal(await page.locator('.staff-candidate').count(), 1);
+  const oversized = await page.locator('main').innerText();
+  assert.match(oversized, /داده بازبینی بیش از حد بازرسی است/);
+  assert.match(oversized, /مقایسه با نامزد فعلی نامشخص است/);
+  assert(!oversized.includes('browser-oversized-reason-canary'));
+  assert(!oversized.includes('browser-oversized-snapshot-canary'));
   await checkLayout(page, `${label} ${width}`);
   if (width === 390) await auditAccessibility(page, label);
 }

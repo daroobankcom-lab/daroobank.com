@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded candidate-review scan content
+
+**Changes:** Private product and price review scans bound selected candidate JSON, review snapshot and reason transfers; oversized reviews are explicitly uninspected and filterable.
+
+**Limits:** The database may still read and process large values, and other pages are outside this boundary. This is neither authenticity nor a complete memory/work limit. See ADR 0147.
+
 ## 2026-11-24 — selected raw concurrency-token controls
 
 **Changes:** Selected private review, revision and reference forms reject raw control characters and surrogates in hidden concurrency fields before field cleanup can hide them. Synthetic HTTP tests check invalid requests do not write and selected clean retries succeed.

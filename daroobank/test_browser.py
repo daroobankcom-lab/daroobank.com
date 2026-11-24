@@ -96,6 +96,10 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         ProductCandidateReview.objects.filter(pk=invalid_product_review.pk).update(
             review_snapshot={'unexpected': 'browser-product-history-hidden-canary'},
             reason='browser-product-history-reason-canary توضیح ساختگی')
+        ProductCandidateReview.objects.create(candidate=browser_candidate, reviewer=reviewer, decision='defer',
+            reason='ر' * 100_000 + 'browser-oversized-reason-canary',
+            candidate_payload_sha256=browser_candidate.payload_sha256,
+            review_snapshot={'oversized': 'آ' * 100_000 + 'browser-oversized-snapshot-canary'})
         bad_product_row = {**product_row, 'source_record_id': 'browser-invalid-product', 'irc': '999'}
         stage_products(io.BytesIO(make_csv([bad_product_row])), 'منبع ساختگی مرورگر',
                        'https://example.org/browser-invalid-product', actor=author, commit=True, rights_attested=True)
@@ -141,6 +145,10 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         PriceCandidateReview.objects.filter(pk=invalid_price_review.pk).update(
             review_snapshot={'unexpected': 'browser-history-hidden-canary'},
             reason='browser-history-reason-canary متنی ساختگی برای آزمون')
+        PriceCandidateReview.objects.create(candidate=browser_price, reviewer=reviewer, decision='defer',
+            reason='ر' * 100_000 + 'browser-oversized-reason-canary',
+            candidate_payload_sha256=browser_price.payload_sha256,
+            review_snapshot={'oversized': 'آ' * 100_000 + 'browser-oversized-snapshot-canary'})
         bad_price_row = {**price_row, 'source_record_id': 'browser-invalid-price', 'irc': '999'}
         stage_csv(io.BytesIO(csv_bytes([bad_price_row])), 'منبع ساختگی مرورگر',
                   'https://example.org/browser-invalid-price', staged_by=price_stager, commit=True, rights_attested=True)

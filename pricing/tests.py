@@ -152,6 +152,20 @@ class PriceImportTests(TestCase):
             with self.subTest(amount=amount, currency=currency), self.assertRaises(ImportValidationError):
                 amount_to_rial(amount, currency)
 
+    def test_compatibility_digit_amount_staging_and_invalid_file_is_atomic(self):
+        self.write_csv([{**self.row, 'amount': '⑩.0', 'currency': 'RIAL'},
+                        {**self.row, 'source_record_id': 'bad', 'amount': '1.' + '⑩' * 48, 'currency': 'RIAL'}])
+        with self.assertRaises(ImportValidationError):
+            self.stage(commit=True)
+        self.assertEqual(PriceCandidate.objects.count(), 0)
+        self.write_csv([{**self.row, 'amount': '⑩.0', 'currency': 'RIAL'}])
+        self.stage(commit=True)
+        candidate = PriceCandidate.objects.get()
+        self.assertEqual((candidate.original_amount, candidate.amount_rial), ('⑩.0', 10))
+        self.assertEqual(candidate.source_fields['amount'], '⑩.0')
+        self.assertEqual(self.stage(commit=True)['duplicates'], 1)
+        self.assertEqual(PriceCandidate.objects.count(), 1)
+
     def test_partial_updates_keep_irc_and_search_projection_in_sync(self):
         self.product.irc = '9999'  # not included in partial save; must not leak into derived fields
         self.product.name_fa = 'تغییر موقت'

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL named-index collation and included-column clues
+
+**Changes:** Supported simple named indexes are checked for index-versus-column collation mismatch and additional included columns; synthetic DDL tests cover both.
+
+**Limits:** Column collation is not compared with model intent; exact operator class, storage options, plans and full definitions remain unchecked. See ADR 0084.
+
 ## 2026-11-24 — PostgreSQL named-index operator-class clues
 
 **Changes:** The inspector flags supported named B-tree indexes whose key operator classes are not marked default; synthetic DDL tests include a nondefault pattern operator class.

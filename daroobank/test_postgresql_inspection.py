@@ -433,7 +433,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
-    def test_named_index_collation_is_not_checked(self):
+    def test_named_index_collation_different_from_column_is_reported(self):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute('DROP INDEX receipt_kind_id_idx')
@@ -445,8 +445,29 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                 self.assertTrue(cursor.fetchone()[0])
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
                 expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
+            self.assertEqual(report['missing_named_indexes'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_named_index_storage_options_are_not_checked(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER INDEX receipt_kind_id_idx SET (fillfactor = 42)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
             self.assertEqual(report['missing_named_indexes'], 0)
             self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
+    def test_named_index_extra_included_column_is_reported(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('DROP INDEX receipt_kind_id_idx')
+                cursor.execute('CREATE INDEX receipt_kind_id_idx ON ingestion_importreceipt (kind, id DESC) INCLUDE (source_name)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
+            self.assertEqual(report['missing_named_indexes'], 1)
+            self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
     def test_named_index_ascending_null_order_mismatch_is_reported(self):

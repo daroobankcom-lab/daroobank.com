@@ -101,6 +101,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0083: PostgreSQL named-index operator class](0083-postgresql-index-operator-class.md) — development-only implementation, 24 November 2026.
 
+- [0084: PostgreSQL named-index collation and included columns](0084-postgresql-index-collation-and-include.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

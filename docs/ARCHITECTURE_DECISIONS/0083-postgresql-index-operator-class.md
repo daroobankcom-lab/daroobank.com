@@ -1,6 +1,6 @@
 # ADR 0083: selected PostgreSQL index operator-class clues
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0082](0082-postgresql-index-null-order.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0082](0082-postgresql-index-null-order.md). [ADR 0084](0084-postgresql-index-collation-and-include.md) adds limited index-collation and included-column clues, superseding those limitations below.
 
 ## Decision
 

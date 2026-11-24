@@ -467,7 +467,14 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             call_command('inspect_postgresql_schema', stdout=output)
             report = json.loads(output.getvalue())
             self.assertEqual(report['missing_auto_generation'], 0)
+            self.assertEqual(report['nonpositive_or_cycling_auto_sequences'], 0)
             self.assertEqual(report['status'], 'no_selected_issues')
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER SEQUENCE ' + quoted_name + ' CYCLE')
+            report = inspect_schema(expected_tables(), auto_fields=expected_auto_fields())
+            self.assertEqual(report['nonpositive_or_cycling_auto_sequences'], 1)
+            self.assertEqual(report['status'], 'attention')
+            self.assertNotIn('synthetic odd', json.dumps(report))
             transaction.set_rollback(True)
 
     def test_serial_requires_an_owned_sequence_and_a_default(self):

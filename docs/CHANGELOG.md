@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded identity review display
+
+**Changes:** Private identity-package history and revision pages bound selected review graph and reason transfers. Oversized reviews are explicitly uninspected and preserve ordering and latest-review IDs.
+
+**Limits:** Database work, current graphs, other pages and write-time reads are not bounded. See ADR 0152.
+
 ## 2026-11-24 — hidden review-token recovery
 
 **Changes:** Five staff review forms offer an explicit same-origin GET restart for invalid hidden tokens, with a warning that unsaved inputs are discarded.

@@ -6,19 +6,23 @@ MAX_REVIEW_JSON_TEXT_LENGTH = 65_536
 MAX_REVIEW_REASON_LENGTH = 1_000
 
 
-def bounded_review_fields(queryset):
+def bounded_review_fields(queryset, *, snapshot_field='review_snapshot'):
     """Select only bounded snapshot/reason values; database work is not bounded."""
-    return (queryset.defer('review_snapshot', 'reason')
-        .annotate(_json_length=Length(Cast('review_snapshot', TextField())))
+    if snapshot_field not in ('review_snapshot', 'graph_snapshot'):
+        raise ValueError('Unsupported review snapshot field')
+    return (queryset.defer(snapshot_field, 'reason')
+        .annotate(_json_length=Length(Cast(snapshot_field, TextField())))
         .annotate(_bounded_json=Case(
-            When(_json_length__lte=MAX_REVIEW_JSON_TEXT_LENGTH, then=F('review_snapshot')),
+            When(_json_length__lte=MAX_REVIEW_JSON_TEXT_LENGTH, then=F(snapshot_field)),
             default=Value(None), output_field=JSONField()),
             _bounded_reason=Substr('reason', 1, MAX_REVIEW_REASON_LENGTH + 1)))
 
 
-def materialize_review_fields(row):
+def materialize_review_fields(row, *, snapshot_field='review_snapshot'):
     """Replace deferred originals to avoid lazy fetching; never classify partial content."""
+    if snapshot_field not in ('review_snapshot', 'graph_snapshot'):
+        raise ValueError('Unsupported review snapshot field')
     row.content_oversized = ((row._json_length is not None and row._json_length > MAX_REVIEW_JSON_TEXT_LENGTH)
         or (isinstance(row._bounded_reason, str) and len(row._bounded_reason) > MAX_REVIEW_REASON_LENGTH))
-    row.review_snapshot = None if row.content_oversized else row._bounded_json
+    setattr(row, snapshot_field, None if row.content_oversized else row._bounded_json)
     row.reason = None if row.content_oversized else row._bounded_reason

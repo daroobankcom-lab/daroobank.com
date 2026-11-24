@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'CLAIM', 'CANDIDATE', 'BAD_CANDIDATE', 'BAD_PRICE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'CLAIM', 'CANDIDATE', 'BAD_CANDIDATE', 'BAD_PRICE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -906,6 +906,20 @@ async function run() {
       assert.match(await page.locator('main').innerText(), /این قفل مانع همه درج‌های جدید یا تغییر پس از تراکنش نیست/);
       await checkLayout(page, `identity package detail ${width}`);
       if (width === 390) await auditAccessibility(page, 'identity package detail');
+      response = await page.goto(base + `/staff/catalog/identity/package/${ids.oversized_package}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /بازبینی بیش از حد نمایش است؛ محتوا بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-oversized-graph-canary'));
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-oversized-reason-canary'));
+      await checkLayout(page, `identity oversized review ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity oversized review');
+      response = await page.goto(base + `/staff/catalog/identity/package/${ids.oversized_package}/revise/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /ثبت نسخه اصلاحی تا بررسی وضعیت آن غیرفعال است/);
+      assert.equal(await page.locator('form.staff-review-form').count(), 0);
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-oversized-reason-canary'));
+      await checkLayout(page, `identity oversized revision ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity oversized revision');
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);
       assert.equal(response.status(), 200);
       assert.match(await page.locator('main').innerText(), /وجود حساب ثبت‌کنندگان زنجیره و پیوندهای اصلاح در این بررسی کنترل نمی‌شود/);

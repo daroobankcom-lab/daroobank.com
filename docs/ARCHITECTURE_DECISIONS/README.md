@@ -302,4 +302,6 @@
 
 - [0151: hidden review-token recovery](0151-hidden-review-token-recovery.md) — development-only staff navigation.
 
+- [0152: bounded identity review display](0152-bounded-identity-review-display.md) — development-only defensive display.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

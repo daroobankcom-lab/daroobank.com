@@ -13,12 +13,12 @@ from django.db import connection
 from django.test import override_settings
 from django.utils import timezone
 
-from catalog.identity import digest, ingredient_snapshot, revise_identity
+from catalog.identity import create_package, digest, ingredient_snapshot, revise_identity
 from catalog.intake import review_product, stage_products
 from catalog.test_intake import make_csv
 from catalog.models import IngredientDraft, IdentityPackageReview, ProductCandidate, ProductCandidateReview, ProductPresentation
 from catalog.quality import MAX_INSPECTED_SEARCH_LENGTH
-from catalog.test_identity import ALL, INGREDIENT, build, user
+from catalog.test_identity import ALL, INGREDIENT, PACKAGE, build, user
 from clinical.services import create_draft, draft_data, review_draft
 from clinical.models import ClinicalDraftReview
 from clinical.evidence import evidence_state
@@ -122,6 +122,11 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         price_stager.user_permissions.add(*Permission.objects.filter(content_type__app_label='pricing',
                                          codename__in=['view_pricecandidate', 'add_pricecandidate']))
         ingredient, _, formulation, product, package = build(author)
+        oversized_package = create_package(actor=author, data={**PACKAGE, 'description': 'بسته ساختگی بزرگ مرورگر'},
+                                           product_id=product.pk)
+        IdentityPackageReview.objects.create(package=oversized_package, reviewer=reviewer, decision='defer',
+            reason='ر' * 100_000 + 'browser-identity-oversized-reason-canary', graph_sha256='0' * 64,
+            graph_snapshot={'oversized': 'آ' * 100_000 + 'browser-identity-oversized-graph-canary'})
         leaf = ingredient
         for i in range(22):
             leaf = revise_identity(actor=author, kind='ingredient', parent_id=leaf.pk,
@@ -169,6 +174,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         env.update(BROWSER_BASE_URL=self.live_server_url, BROWSER_AUTHOR='browser-author', BROWSER_REVIEWER='browser-reviewer',
                    BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
+                   BROWSER_OVERSIZED_PACKAGE=str(oversized_package.pk),
                    BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
                    BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk),
                    BROWSER_CANDIDATE=str(browser_candidate.pk), BROWSER_BAD_CANDIDATE=str(bad_product.pk),
@@ -185,7 +191,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(result.returncode, 0, f'Chromium test failed:\n{result.stdout}\n{result.stderr}')
         self.assertEqual(IngredientDraft.objects.filter(name_fa='csrf-canary').count(), 0)
         self.assertEqual(IngredientDraft.objects.filter(name_fa='ماده تازه ساختگی مرورگر').count(), 1)
-        self.assertEqual(IdentityPackageReview.objects.count(), 1)
+        self.assertEqual(IdentityPackageReview.objects.count(), 2)
         self.assertEqual(ClinicalDraftReview.objects.count(), 2)
         self.assertEqual(SourceClaimReview.objects.count(), 2)
         self.assertEqual(PriceCandidate.objects.count(), 2)

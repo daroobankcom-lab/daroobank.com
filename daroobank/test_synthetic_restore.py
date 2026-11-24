@@ -119,16 +119,10 @@ class SyntheticRestoreDrill(TransactionTestCase):
                     check = run([sys.executable, 'manage.py', *args], restored_env)
                     self.assertEqual(check.returncode, 0, f'Restored synthetic database check failed: {args[0]}')
                 script = (
-                    "import os; from catalog.identity import digest, package_snapshot, review_is_consistent; "
-                    "from catalog.models import IdentityPackageDraft, IdentityPackageReview; "
-                    "p=IdentityPackageDraft.objects.get(pk=int(os.environ['SYNTHETIC_PACKAGE_ID'])); "
-                    "r=IdentityPackageReview.objects.get(pk=int(os.environ['SYNTHETIC_REVIEW_ID'])); "
-                    "assert IdentityPackageDraft.objects.count()==1 and IdentityPackageReview.objects.count()==1; "
-                    "assert digest(package_snapshot(p))==os.environ['SYNTHETIC_GRAPH_HASH']; "
-                    "assert r.package_id==p.pk and r.graph_sha256==os.environ['SYNTHETIC_GRAPH_HASH']; "
-                    "assert review_is_consistent(r,p.pk) and r.reviewer.username=='synthetic-restore-reviewer'; "
-                    "assert p.recorded_by.username=='synthetic-restore-author'; "
-                    "from daroobank.synthetic_restore_fixture import verify_cross_domain_fixture, verify_post_restore_writes; "
+                    "import os; from daroobank.synthetic_restore_fixture import "
+                    "verify_identity_fixture, verify_cross_domain_fixture, verify_post_restore_writes; "
+                    "verify_identity_fixture(int(os.environ['SYNTHETIC_PACKAGE_ID']), "
+                    "int(os.environ['SYNTHETIC_REVIEW_ID']), os.environ['SYNTHETIC_GRAPH_HASH']); "
                     "verify_cross_domain_fixture(); verify_post_restore_writes()"
                 )
                 check = run([sys.executable, 'manage.py', 'shell', '-c', script], restored_env)
@@ -185,6 +179,50 @@ class SyntheticRestoreDrill(TransactionTestCase):
         ImportReceiptItem.objects.filter(pk=item.pk).update(payload_sha256='0' * 64)
         with self.assertRaises(AssertionError):
             verify_cross_domain_fixture()
+
+    def test_optimized_verifier_rejects_selected_corruption(self):
+        from ingestion.models import ImportReceiptItem
+        from .synthetic_restore_fixture import build_cross_domain_fixture
+
+        author = user('synthetic-restore-author', *ALL)
+        reviewer = user('synthetic-restore-reviewer', *ALL)
+        package = build(author)[-1]
+        graph_hash = digest(package_snapshot(package))
+        review = review_package(actor=reviewer, package_id=package.pk, decision='defer',
+            reason='دلیل ساختگی برای تمرین بازگردانی', expected_review=0, expected_graph_hash=graph_hash)
+        build_cross_domain_fixture(author, reviewer)
+        config = connection.settings_dict
+        self.assertRegex(config['NAME'], r'^test_daroobank_restore_[0-9a-f]{32}$')
+        env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG', 'TMPDIR') if key in os.environ}
+        env.update(DAROOBANK_DEBUG='1', POSTGRES_DB=config['NAME'], POSTGRES_HOST=str(config['HOST']),
+                   POSTGRES_PORT=str(config['PORT']), POSTGRES_USER=str(config['USER']))
+        if config.get('PASSWORD'):
+            env['POSTGRES_PASSWORD'] = str(config['PASSWORD'])
+        if config.get('OPTIONS', {}).get('sslmode'):
+            env['POSTGRES_SSLMODE'] = str(config['OPTIONS']['sslmode'])
+        command = [sys.executable, '-O', 'manage.py', 'shell', '-c',
+                   'from daroobank.synthetic_restore_fixture import verify_cross_domain_fixture; verify_cross_domain_fixture()']
+
+        def run(args=command, child_env=env):
+            return subprocess.run(args, cwd=ROOT, env=child_env, stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90, check=False)
+
+        self.assertEqual(run().returncode, 0, 'Optimized verifier rejected the valid synthetic fixture')
+        identity_env = {**env, 'SYNTHETIC_PACKAGE_ID': str(package.pk), 'SYNTHETIC_REVIEW_ID': str(review.pk),
+                        'SYNTHETIC_GRAPH_HASH': graph_hash}
+        identity_command = [sys.executable, '-O', 'manage.py', 'shell', '-c',
+            "import os; from daroobank.synthetic_restore_fixture import verify_identity_fixture; "
+            "verify_identity_fixture(int(os.environ['SYNTHETIC_PACKAGE_ID']), "
+            "int(os.environ['SYNTHETIC_REVIEW_ID']), os.environ['SYNTHETIC_GRAPH_HASH'])"]
+        self.assertEqual(run(identity_command, identity_env).returncode, 0, 'Optimized identity verifier rejected valid graph')
+        wrong_hash = run(identity_command, {**identity_env, 'SYNTHETIC_GRAPH_HASH': '0' * 64})
+        self.assertNotEqual(wrong_hash.returncode, 0, 'Optimized identity verifier accepted a wrong hash')
+        self.assertIn(b'AssertionError', wrong_hash.stderr, 'Identity verifier failed for an unexpected reason')
+        item = ImportReceiptItem.objects.first()
+        ImportReceiptItem.objects.filter(pk=item.pk).update(payload_sha256='0' * 64)
+        result = run()
+        self.assertNotEqual(result.returncode, 0, 'Optimized verifier accepted a corrupt synthetic receipt')
+        self.assertIn(b'AssertionError', result.stderr, 'Verifier failed for an unexpected reason')
 
     def test_created_target_is_removed_when_dump_fails(self):
         from types import SimpleNamespace

@@ -26,12 +26,33 @@ from sources.review_inspection import classify_review
 from sources.services import record_claim, review_claim, valid_claim
 
 
+def _require(condition):
+    """Keep synthetic-fixture checks active even when Python runs with -O."""
+    if not condition:
+        raise AssertionError('Synthetic restore fixture verification failed.')
+
+
 def _require_disposable_name():
     # This does not prove the server is disposable. It is an additional guard,
     # never a substitute for independently checking the server and data.
     if (not settings.DEBUG or connection.vendor != 'postgresql'
             or not re.fullmatch(r'test_daroobank_restore_(?:target_)?[0-9a-f]{32}', connection.settings_dict['NAME'])):
         raise RuntimeError('Synthetic restore fixture requires an isolated restore database.')
+
+
+def verify_identity_fixture(package_id, review_id, graph_hash):
+    """Check the selected synthetic identity graph in the isolated database."""
+    _require_disposable_name()
+    from catalog.identity import digest, package_snapshot, review_is_consistent
+    from catalog.models import IdentityPackageDraft, IdentityPackageReview
+
+    package = IdentityPackageDraft.objects.get(pk=package_id)
+    review = IdentityPackageReview.objects.get(pk=review_id)
+    _require(IdentityPackageDraft.objects.count() == 1 and IdentityPackageReview.objects.count() == 1)
+    _require(digest(package_snapshot(package)) == graph_hash)
+    _require(review.package_id == package.pk and review.graph_sha256 == graph_hash)
+    _require(review_is_consistent(review, package.pk) and review.reviewer.username == 'synthetic-restore-reviewer')
+    _require(package.recorded_by.username == 'synthetic-restore-author')
 
 
 def build_cross_domain_fixture(author, reviewer):
@@ -64,7 +85,7 @@ def build_cross_domain_fixture(author, reviewer):
         'evidence_url': 'https://example.org/synthetic-evidence', 'evidence_note': '',
         'claims_collection': True, 'claims_storage': True, 'claims_publication': False,
         'starts_on': date(2025, 1, 2), 'expires_on': None})
-    assert created
+    _require(created)
     review_claim(actor=reviewer, claim_id=claim.pk, decision='defer', reason=reason,
                  expected_review=0, expected_hash=claim.payload_sha256)
 
@@ -105,32 +126,32 @@ def verify_cross_domain_fixture():
     reviewer = get_user_model().objects.get(username='synthetic-restore-reviewer')
     for app, entity in (('sources', 'sourceclaim'), ('catalog', 'productcandidate'),
                         ('pricing', 'pricecandidate'), ('clinical', 'clinicaldraft')):
-        assert author.has_perm(f'{app}.view_{entity}') and author.has_perm(f'{app}.add_{entity}')
-        assert reviewer.has_perm(f'{app}.view_{entity}') and reviewer.has_perm(f'{app}.review_{entity}')
+        _require(author.has_perm(f'{app}.view_{entity}') and author.has_perm(f'{app}.add_{entity}'))
+        _require(reviewer.has_perm(f'{app}.view_{entity}') and reviewer.has_perm(f'{app}.review_{entity}'))
     claim, claim_review = SourceClaim.objects.get(), SourceClaimReview.objects.get()
-    assert valid_claim(claim) and claim.recorded_by_id == author.pk and claim_review.reviewer_id == reviewer.pk
-    assert classify_review(claim_review, claim, True) == ('consistent', 'same')
+    _require(valid_claim(claim) and claim.recorded_by_id == author.pk and claim_review.reviewer_id == reviewer.pk)
+    _require(classify_review(claim_review, claim, True) == ('consistent', 'same'))
     product, product_review = ProductCandidate.objects.get(), ProductCandidateReview.objects.get()
     price, price_review = PriceCandidate.objects.get(), PriceCandidateReview.objects.get()
-    assert valid_product(product) and valid_price(price) and price.amount_rial == 100
-    assert product.staged_by_id == author.pk and product_review.candidate_id == product.pk
-    assert price.staged_by_id == author.pk and price_review.candidate_id == price.pk
-    assert product_review.candidate_payload_sha256 == product.payload_sha256
-    assert price_review.candidate_payload_sha256 == price.payload_sha256
-    assert product_review.reviewer_id == price_review.reviewer_id == reviewer.pk
-    assert ImportReceipt.objects.count() == 2 and ImportReceiptItem.objects.count() == 4
+    _require(valid_product(product) and valid_price(price) and price.amount_rial == 100)
+    _require(product.staged_by_id == author.pk and product_review.candidate_id == product.pk)
+    _require(price.staged_by_id == author.pk and price_review.candidate_id == price.pk)
+    _require(product_review.candidate_payload_sha256 == product.payload_sha256)
+    _require(price_review.candidate_payload_sha256 == price.payload_sha256)
+    _require(product_review.reviewer_id == price_review.reviewer_id == reviewer.pk)
+    _require(ImportReceipt.objects.count() == 2 and ImportReceiptItem.objects.count() == 4)
     for receipt in ImportReceipt.objects.all():
-        assert receipt.actor_id == author.pk and (receipt.rows, receipt.created, receipt.duplicates) == (2, 1, 1)
-        assert manifest_structure(receipt) == 'available'
-        assert all(manifest_item_safe(receipt, item) for item in receipt.items.all())
+        _require(receipt.actor_id == author.pk and (receipt.rows, receipt.created, receipt.duplicates) == (2, 1, 1))
+        _require(manifest_structure(receipt) == 'available')
+        _require(all(manifest_item_safe(receipt, item) for item in receipt.items.all()))
     draft, draft_review = ClinicalDraft.objects.get(), ClinicalDraftReview.objects.get()
     reference = ClinicalReferenceAssertion.objects.get()
-    assert valid_draft(draft) and draft.author_id == author.pk and draft_review.reviewer_id == reviewer.pk
-    assert draft_review.draft_id == draft.pk and draft_review.draft_payload_sha256 == draft.payload_sha256
-    assert reference.draft_id == draft.pk and reference.recorded_by_id == author.pk
+    _require(valid_draft(draft) and draft.author_id == author.pk and draft_review.reviewer_id == reviewer.pk)
+    _require(draft_review.draft_id == draft.pk and draft_review.draft_payload_sha256 == draft.payload_sha256)
+    _require(reference.draft_id == draft.pk and reference.recorded_by_id == author.pk)
     current, historical = evidence_state(draft), reviewed_evidence(draft_review)
-    assert current['status'] == historical['status'] == 'available' and current['fingerprint'] == historical['fingerprint']
-    assert draft_review.review_snapshot['evidence_snapshot'][0]['id'] == reference.pk
+    _require(current['status'] == historical['status'] == 'available' and current['fingerprint'] == historical['fingerprint'])
+    _require(draft_review.review_snapshot['evidence_snapshot'][0]['id'] == reference.pk)
 
 
 def verify_post_restore_writes():
@@ -158,7 +179,7 @@ def verify_post_restore_writes():
         'evidence_url': 'https://example.org/synthetic-after-evidence', 'evidence_note': '',
         'claims_collection': True, 'claims_storage': False, 'claims_publication': False,
         'starts_on': None, 'expires_on': None})
-    assert created
+    _require(created)
     review_claim(actor=reviewer, claim_id=claim.pk, decision='defer', reason=reason,
                  expected_review=0, expected_hash=claim.payload_sha256)
     product_row = {'source_record_id': 'restore-product-new', 'name_fa': 'فرآورده ساختگی دوم', 'name_en': '',
@@ -191,7 +212,7 @@ def verify_post_restore_writes():
     review_package(actor=reviewer, package_id=package.pk, decision='defer', reason=reason,
                    expected_review=0, expected_graph_hash=digest(package_snapshot(package)))
     for model in models:
-        assert model.objects.aggregate(value=Max('pk'))['value'] > before[model]
+        _require(model.objects.aggregate(value=Max('pk'))['value'] > before[model])
 
 
 def verify_source_sequence_probe():
@@ -206,4 +227,4 @@ def verify_source_sequence_probe():
         'evidence_url': 'https://example.org/synthetic-sequence-evidence', 'evidence_note': '',
         'claims_collection': True, 'claims_storage': False, 'claims_publication': False,
         'starts_on': None, 'expires_on': None})
-    assert created and valid_claim(claim)
+    _require(created and valid_claim(claim))

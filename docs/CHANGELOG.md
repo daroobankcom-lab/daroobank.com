@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — optimization-safe synthetic restore checks
+
+**Changes:** The opt-in synthetic restore fixture and identity-graph verification use explicit checks instead of Python assertions, so optimization cannot erase them. PostgreSQL tests verify valid and deliberately corrupted fixtures under `python -O`.
+
+**Limits:** Only selected fixture checks and corruptions are exercised; this does not prove recovery of production backups. See ADR 0090.
+
 ## 2026-11-24 — PostgreSQL migration-recorder column clues
 
 **Changes:** The inspector checks recorder-column presence, nullability and supported non-primary types. PostgreSQL tests remove each recorder column and alter selected nullability and types in rolled-back transactions.

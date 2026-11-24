@@ -113,6 +113,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0089: PostgreSQL migration-recorder columns](0089-postgresql-migration-recorder-columns.md) — development-only implementation, 24 November 2026.
 
+- [0090: optimization-safe synthetic restore verification](0090-optimized-synthetic-restore-verification.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

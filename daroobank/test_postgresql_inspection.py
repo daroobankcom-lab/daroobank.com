@@ -31,6 +31,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertGreater(report['expected_check_constraints'], 0)
         self.assertEqual(report['expected_columns'], len(expected_columns()))
         self.assertGreater(report['expected_columns'], 0)
+        self.assertEqual(report['skipped_migration_pk_types'], 1)
         self.assertEqual(report['expected_field_indexes'], len(expected_field_indexes()))
         self.assertGreater(report['expected_field_indexes'], 0)
         self.assertEqual(report['expected_named_indexes'], len(expected_named_indexes()))
@@ -365,6 +366,48 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
             self.assertEqual(report['missing_check_constraints'], 1)
             self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_migration_recorder_missing_column_is_reported(self):
+        for column in ('id', 'app', 'name', 'applied'):
+            with self.subTest(column=column), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE django_migrations DROP COLUMN ' + connection.ops.quote_name(column))
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report['missing_columns'], 1)
+                self.assertEqual(report['status'], 'attention')
+                self.assertNotIn('django_migrations', output.getvalue())
+                self.assertNotIn(json.dumps(column), output.getvalue())
+                transaction.set_rollback(True)
+
+    def test_migration_recorder_column_nullability_and_type_are_reported(self):
+        for sql, finding in [('ALTER TABLE django_migrations ALTER COLUMN app DROP NOT NULL', 'column_nullability_mismatches'),
+                             ('ALTER TABLE django_migrations ALTER COLUMN name TYPE varchar(100)', 'column_type_mismatches')]:
+            with self.subTest(finding=finding), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(sql)
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report[finding], 1)
+                self.assertEqual(report['status'], 'attention')
+                transaction.set_rollback(True)
+
+    def test_migration_recorder_primary_key_type_is_skipped(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE django_migrations ALTER COLUMN id TYPE integer')
+            output = io.StringIO()
+            call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['skipped_migration_pk_types'], 1)
+            self.assertEqual(report['skipped_auto_m2m_pk_types'], 3)
+            self.assertEqual(report['column_type_mismatches'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
             transaction.set_rollback(True)
 
     def test_missing_managed_column_is_reported_without_names(self):

@@ -1,6 +1,6 @@
 # ADR 0078: PostgreSQL managed-column type clues
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0075](0075-postgresql-column-clues.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0075](0075-postgresql-column-clues.md). [ADR 0089](0089-postgresql-migration-recorder-columns.md) adds selected migration-recorder columns, superseding that limitation below.
 
 ## Decision
 

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL migration-recorder column clues
+
+**Changes:** The inspector checks recorder-column presence, nullability and supported non-primary types. PostgreSQL tests remove each recorder column and alter selected nullability and types in rolled-back transactions.
+
+**Limits:** The recorder primary-key type is skipped and counted; key constraint, sequence and migration-history content remain unchecked. See ADR 0089.
+
 ## 2026-11-24 — PostgreSQL unique-key operator and collation clues
 
 **Changes:** Selected simple unique-key matches require B-tree, default operator-class flags and index collations matching their current columns. Rolled-back PostgreSQL tests cover discrepancies on both keys of a composite index.

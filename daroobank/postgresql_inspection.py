@@ -4,6 +4,7 @@ import re
 
 from django.apps import apps
 from django.db import connection
+from django.db.migrations.recorder import MigrationRecorder
 from django.db.models import CheckConstraint, Index, UniqueConstraint
 
 
@@ -115,6 +116,14 @@ def expected_columns():
                 skip_type = bool(meta.auto_created and field.primary_key)
                 result.add((meta.db_table, field.column, not field.null,
                             None if skip_type else _catalog_type(field.db_type(connection)), skip_type))
+    # MigrationRecorder isn't in the installed app registry. Its key type can
+    # vary with the setting in effect when the table was first created.
+    meta = MigrationRecorder.Migration._meta
+    for field in meta.local_fields:
+        if field.column:
+            skip_type = bool(field.primary_key)
+            result.add((meta.db_table, field.column, not field.null,
+                        None if skip_type else _catalog_type(field.db_type(connection)), skip_type))
     return sorted(result)
 
 
@@ -184,7 +193,7 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, constraint_name
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, constraint_name text)
             ), expected_columns AS (
-                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name, not_null, expected_type, skip_type
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, table_name, column_name, not_null, expected_type, skip_type
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, column_name text, not_null boolean, expected_type text, skip_type boolean)
             ), expected_indexes AS (
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name
@@ -250,7 +259,8 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                     ON a.attrelid = e.table_oid AND a.attname = e.column_name AND a.attnum > 0 AND NOT a.attisdropped
                     JOIN tables t ON t.oid = a.attrelid WHERE a.attnotnull <> e.not_null),
                 (SELECT COUNT(*) FROM expected_columns WHERE expected_type IS NULL AND NOT skip_type),
-                (SELECT COUNT(*) FROM expected_columns WHERE skip_type),
+                (SELECT COUNT(*) FROM expected_columns WHERE skip_type AND table_name <> 'django_migrations'),
+                (SELECT COUNT(*) FROM expected_columns WHERE skip_type AND table_name = 'django_migrations'),
                 (SELECT COUNT(*) FROM expected_columns e JOIN pg_catalog.pg_attribute a
                     ON a.attrelid = e.table_oid AND a.attname = e.column_name AND a.attnum > 0 AND NOT a.attisdropped
                     JOIN tables t ON t.oid = a.attrelid WHERE e.expected_type IS NOT NULL
@@ -312,7 +322,8 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',
             'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'expected_unique_keys', 'missing_unique_keys',
             'expected_check_constraints', 'missing_check_constraints', 'expected_columns', 'missing_columns',
-            'column_nullability_mismatches', 'unsupported_column_types', 'skipped_auto_m2m_pk_types', 'column_type_mismatches',
+            'column_nullability_mismatches', 'unsupported_column_types', 'skipped_auto_m2m_pk_types',
+            'skipped_migration_pk_types', 'column_type_mismatches',
             'expected_field_indexes', 'missing_field_indexes', 'expected_named_indexes', 'unsupported_named_indexes',
             'missing_named_indexes')
     result = dict(zip(keys, values))

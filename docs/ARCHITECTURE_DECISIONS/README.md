@@ -111,6 +111,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0088: PostgreSQL unique-key operator and collation clues](0088-postgresql-unique-operator-collation.md) — development-only implementation, 24 November 2026.
 
+- [0089: PostgreSQL migration-recorder columns](0089-postgresql-migration-recorder-columns.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

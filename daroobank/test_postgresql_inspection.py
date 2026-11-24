@@ -477,6 +477,31 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertNotIn('selected_true_a', json.dumps(report))
             transaction.set_rollback(True)
 
+    def test_constant_check_scope_safely_resolves_quoted_untrusted_identifiers(self):
+        table = 'x\'); DROP TABLE auth_user; --"_نمونه'
+        true_name = 't"; DROP TABLE auth_user; --'
+        false_name = "f'); SELECT 1; --"
+        null_name = 'n"\\_نمونه'
+        def quote(identifier):
+            return '"' + identifier.replace('"', '""') + '"'
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('CREATE TABLE ' + quote(table) + ' (id integer, CONSTRAINT '
+                    + quote(true_name) + ' CHECK (true), CONSTRAINT ' + quote(false_name)
+                    + ' CHECK (false), CONSTRAINT ' + quote(null_name) + ' CHECK (NULL))')
+            with CaptureQueriesContext(connection) as queries:
+                report = inspect_schema([table], check_constraints=[(table, name)
+                    for name in (true_name, false_name, null_name)])
+            self.assertEqual(len(queries), 1)
+            self.assertEqual((report['unresolved_tables'], report['missing_check_constraints']), (0, 0))
+            self.assertEqual((report['canonical_accept_all_named_checks'], report['canonical_reject_all_named_checks']), (2, 1))
+            self.assertEqual(report['status'], 'attention')
+            rendered = json.dumps(report, ensure_ascii=False)
+            for name in (table, true_name, false_name, null_name):
+                self.assertNotIn(name, rendered)
+            self.assertIn('auth_user', connection.introspection.table_names())
+            transaction.set_rollback(True)
+
     def test_unvalidated_constant_false_has_two_distinct_findings(self):
         with transaction.atomic():
             with connection.cursor() as cursor:

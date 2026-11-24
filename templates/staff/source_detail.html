@@ -1,8 +1,10 @@
 {% extends 'base.html' %}{% load static %}
+{% block title %}{% include 'staff/form_title.html' with form=review_form %}{% endblock %}
 {% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
 {% block content %}<section class="staff-section"><div class="container">
   <div class="staff-topline"><div><a class="staff-back" href="{% url 'staff_sources' %}">→ بازگشت به ادعاهای منبع</a><div class="kicker"><span></span> ادعای مستندنشده</div><h1>ادعای منبع {{ claim.pk }}</h1><p>این رکورد و بازبینی اولیه، اثبات مجوز یا اختیار قانونی نیستند.</p></div><form method="post" action="{% url 'staff_logout' %}">{% csrf_token %}<button class="staff-logout" type="submit">خروج از حساب</button></form></div>
   <div class="staff-alert">هیچ نشانی‌ای به‌صورت خودکار باز نمی‌شود. تاریخ‌ها و دامنه‌ها صرفاً ادعا هستند و هیچ فرایند جمع‌آوری، ذخیره یا انتشار را فعال نمی‌کنند.</div>
+  {% include 'staff/review_form_errors.html' %}
   <div class="staff-detail-grid"><article class="staff-panel"><h2>منبع و مدرک اعلام‌شده</h2><dl class="staff-definition">
     <div><dt>نام منبع</dt><dd>{{ claim.source_name }}</dd></div><div><dt>نشانی منبع</dt><dd class="staff-break"><bdi dir="ltr">{{ claim.source_url }}</bdi></dd></div><div><dt>مالک اعلام‌شده</dt><dd>{{ claim.owner }}</dd></div><div><dt>نشانی مدرک</dt><dd class="staff-break"><bdi dir="ltr">{{ claim.evidence_url }}</bdi></dd></div><div><dt>شرح مدرک</dt><dd>{{ claim.evidence_note|default:'نامشخص' }}</dd></div><div><dt>ثبت‌کننده</dt><dd>{% if claim.display_recorder %}{{ claim.display_recorder.get_username }}{% else %}نامشخص{% endif %}</dd></div><div><dt>زمان ثبت (میلادی، تهران)</dt><dd><time datetime="{{ claim.recorded_at|date:'c' }}">{{ claim.recorded_at|date:'Y-m-d H:i' }}</time></dd></div><div><dt>اثر انگشت ادعا</dt><dd class="staff-break"><bdi dir="ltr">{{ claim.payload_sha256 }}</bdi></dd></div>
   </dl></article><article class="staff-panel"><h2>دامنه و تاریخ اعلام‌شده</h2><dl class="staff-definition">

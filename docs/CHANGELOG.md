@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## More review error summaries
+
+**Changes:** Selected source, clinical and identity review responses now have an error-specific title and summary; unavailable forms use a fixed notice instead of broken links.
+
+**Limits:** Selected tests are not comprehensive accessibility validation; identity conflicts still require reloading. See ADR 0143.
+
 ## Selected raw multiline controls
 
 **Changes:** Selected staff review reasons, clinical statements and revision reasons reject forbidden raw controls before form whitespace cleanup can hide them; permitted multiline whitespace remains supported.

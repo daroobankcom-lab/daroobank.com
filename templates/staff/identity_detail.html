@@ -1,7 +1,9 @@
 {% extends 'base.html' %}{% load static %}
+{% block title %}{% include 'staff/form_title.html' with form=review_form %}{% endblock %}
 {% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
 {% block content %}<section class="staff-section"><div class="container"><p><a href="{% url 'staff_identity_list' %}?kind={{ kind }}">بازگشت ←</a></p><h1>{{ label }} · شناسه {{ obj.pk }}</h1>
 <div class="staff-alert">داده ساختگی و ادعایی؛ هیچ منبع، هویت، ایمنی یا معادل بودن تأیید نشده و چیزی منتشر نمی‌شود. هش فقط برای تشخیص بعضی ناسازگاری‌هاست. در ثبت وابسته، بازبینی و اصلاح، وجود فعلی حساب ثبت‌کنندگان زنجیره بررسی می‌شود؛ نمایش و بازرسی پیوندها آن را کنترل نمی‌کنند.</div>
+{% if review_conflict %}{% include 'staff/review_form_errors.html' with can_review=False %}{% else %}{% include 'staff/review_form_errors.html' %}{% endif %}
 {% if snapshot %}
 {% if kind == 'ingredient' %}{% include 'staff/identity/ingredient.html' with ingredient=snapshot only %}
 {% elif kind == 'formulation' %}{% include 'staff/identity/formulation.html' with formulation=snapshot only %}

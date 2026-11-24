@@ -284,4 +284,6 @@
 
 - [0142: raw multiline controls](0142-raw-multiline-controls.md) — development-only selected form validation.
 
+- [0143: more review error summaries](0143-more-review-error-summaries.md) — development-only server-rendered usability.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

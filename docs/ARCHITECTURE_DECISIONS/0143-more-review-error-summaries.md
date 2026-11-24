@@ -1,0 +1,7 @@
+# ADR 0143: selected source, clinical and identity review error summaries
+
+Status: development-only server-rendered usability. Extends ADR 0139 to source-claim, clinical-draft and identity-package review responses.
+
+Those long private detail pages previously presented review errors near the form without an error-specific document title or top-level error summary. On a selected invalid or stale POST, the shared summary now names visible fields via links and provides generic guidance for hidden and non-field errors, without repeating submitted values. Existing field errors, source/clinical hidden-token retry guidance, HTTP statuses, permissions, CSRF and write behavior are unchanged. If the form is not shown, the summary instead uses a fixed notice without broken field links. In particular, identity review conflicts deliberately suppress the form and retain the existing instruction to reload; the submitted text is not retained in that case.
+
+Synthetic tests cover normal GET, CSRF rejection, invalid visible and hidden fields, stale conflicts, unavailable self-review forms, no writes and private headers. Selected Chromium checks exercise field errors, keyboard navigation and native fragment focus. They do not establish comprehensive accessibility or security. No automatic focus or live announcement is added, and invalid submitted values may still be redisplayed in an available bound form. Other pages and outputs remain outside this decision.

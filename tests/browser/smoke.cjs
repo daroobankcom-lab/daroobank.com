@@ -1040,11 +1040,14 @@ async function run() {
       assert.equal(await reviewPage.locator('form.staff-review-form #id_reason').inputValue(), '');
       assert.equal(await reviewPage.locator('form.staff-review-form #id_decision').inputValue(), '');
     }
-    // Product and price detail POST errors retain the form; exercise a visible
-    // field error and native keyboard navigation to its summary link.
+    // Selected detail POST errors retain the form; exercise visible field
+    // errors and native keyboard navigation to the summary link.
     for (const [detailPath, reviewPath, domain] of [
       [`/staff/products/${ids.candidate}/`, `/staff/products/${ids.candidate}/review/`, 'product'],
       [`/staff/prices/${ids.price}/`, `/staff/prices/${ids.price}/review/`, 'price'],
+      [`/staff/sources/${ids.claim}/`, `/staff/sources/${ids.claim}/review/`, 'source'],
+      [`/staff/clinical/${ids.clinical_leaf}/`, `/staff/clinical/${ids.clinical_leaf}/review/`, 'clinical'],
+      [`/staff/catalog/identity/package/${ids.package}/`, `/staff/catalog/identity/package/${ids.package}/review/`, 'identity'],
     ]) {
       let response = await reviewPage.goto(base + detailPath);
       assert.equal(response.status(), 200);

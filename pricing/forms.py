@@ -1,7 +1,7 @@
 import re
 
 from django import forms
-from daroobank.forms import RawControlsMixin, RawMultilineControlsMixin, SourceUploadRawControlsMixin
+from daroobank.forms import ExplicitBooleanField, RawControlsMixin, RawMultilineControlsMixin, SourceUploadRawControlsMixin
 from .importer import MAX_FILE_BYTES
 from .models import PriceCandidateReview
 from .reviews import MAX_PK
@@ -15,7 +15,7 @@ class PriceUploadForm(SourceUploadRawControlsMixin, forms.Form):
         label='نوع عملیات', choices=[('preview', 'فقط بررسی آزمایشی'), ('stage', 'ثبت برای بررسی')],
         initial='preview',
     )
-    rights_attested = forms.BooleanField(
+    rights_attested = ExplicitBooleanField(
         label='تأیید می‌کنم مجوز جمع‌آوری و ذخیره داخلی این داده را دارم.', required=False,
     )
 

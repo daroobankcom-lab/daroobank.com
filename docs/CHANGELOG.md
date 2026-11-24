@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — explicit staff checkbox values
+
+**Changes:** Selected acknowledgements, source scopes and upload-rights checkboxes reject unknown or duplicate values; explicit `0` is false. Normal browser submissions remain supported.
+
+**Limits:** A submitted checkbox does not establish consent, rights, authorization or safety; clients using other strings must update. See ADR 0171.
+
 ## 2026-11-24 — bounded price-list CLI payloads
 
 **Changes:** The local price-list command limits selected candidate JSON transfer and emits an explicit oversized/unknown row without matching or printing its payload.

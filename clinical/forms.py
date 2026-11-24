@@ -1,6 +1,6 @@
 from django import forms
 
-from daroobank.forms import RawControlsMixin, RawMultilineControlsMixin
+from daroobank.forms import ExplicitBooleanField, RawControlsMixin, RawMultilineControlsMixin
 
 from .models import ClinicalDraft, ClinicalDraftReview
 from .services import FIELDS, HASH, MAX_PK, DraftError, validate_data
@@ -24,7 +24,7 @@ class DraftForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
                                              widget=forms.DateInput(attrs={'type': 'date'}))
     reference_accessed_on = forms.DateField(label='تاریخ دسترسی اعلام‌شده (میلادی)', input_formats=['%Y-%m-%d'], required=False,
                                             widget=forms.DateInput(attrs={'type': 'date'}))
-    synthetic_ack = forms.BooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
+    synthetic_ack = ExplicitBooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
 
     def clean(self):
         data = super().clean()
@@ -89,7 +89,7 @@ class ReferenceForm(RawControlsMixin, forms.Form):
     relation = forms.ChoiceField(label='رابطه ادعایی با گزاره', choices=[('', 'انتخاب کنید'),
         ('supports', 'پشتیبان ادعایی'), ('contradicts', 'متناقض ادعایی'),
         ('context', 'زمینه ادعایی'), ('unclear', 'رابطه نامشخص')])
-    synthetic_ack = forms.BooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
+    synthetic_ack = ExplicitBooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
     expected_draft_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
     expected_evidence_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
 

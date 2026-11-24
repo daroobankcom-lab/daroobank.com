@@ -340,4 +340,6 @@
 
 - [0170: bounded price CLI candidate JSON](0170-bounded-price-cli-candidate-json.md) — development-only diagnostic reads.
 
+- [0171: explicit staff checkbox values](0171-explicit-staff-checkbox-values.md) — development-only form validation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

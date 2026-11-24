@@ -1,7 +1,7 @@
 import re
 from django import forms
 
-from daroobank.forms import RawControlsMixin, RawMultilineControlsMixin, SourceUploadRawControlsMixin
+from daroobank.forms import ExplicitBooleanField, RawControlsMixin, RawMultilineControlsMixin, SourceUploadRawControlsMixin
 from .intake import MAX_FILE_BYTES, MAX_PK
 from .models import ProductCandidateReview
 
@@ -11,7 +11,7 @@ class ProductUploadForm(SourceUploadRawControlsMixin, forms.Form):
     source_url = forms.URLField(label='نشانی HTTPS منبع', max_length=200)
     csv_file = forms.FileField(label='فایل CSV مجاز')
     action = forms.ChoiceField(label='نوع عملیات', choices=[('preview', 'فقط بررسی آزمایشی'), ('stage', 'ثبت برای بررسی')], initial='preview')
-    rights_attested = forms.BooleanField(label='مجوز جمع‌آوری و ذخیره داخلی این داده را دارم.', required=False)
+    rights_attested = ExplicitBooleanField(label='مجوز جمع‌آوری و ذخیره داخلی این داده را دارم.', required=False)
 
     def clean_csv_file(self):
         file = self.cleaned_data['csv_file']

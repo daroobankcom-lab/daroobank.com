@@ -1,8 +1,48 @@
 """Forms shared by the development-only staff portal."""
+from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
 
 from .validation import has_control_or_surrogate, has_forbidden_multiline_control
+
+
+class ExplicitCheckboxInput(forms.CheckboxInput):
+    """Pass raw values to validation rather than treating any nonempty text as true."""
+
+    def value_from_datadict(self, data, files, name):
+        if hasattr(data, 'getlist'):
+            values = data.getlist(name)
+            if not values:
+                return None
+            if len(values) != 1:
+                return values  # Rejected rather than silently choosing one value.
+            return values[0]
+        return data.get(name)
+
+
+class ExplicitBooleanField(forms.BooleanField):
+    """Accept common explicit checkbox tokens only; omission means unchecked."""
+
+    widget = ExplicitCheckboxInput
+
+    def to_python(self, value):
+        if value is None or value is False:
+            return False
+        if value is True:
+            return True
+        if isinstance(value, str):
+            if value.lower() in ('on', 'true', '1'):
+                return True
+            if value.lower() in ('', 'off', 'false', '0'):
+                return False
+        raise ValidationError('مقدار انتخاب معتبر نیست.', code='invalid')
+
+    def has_changed(self, initial, data):
+        try:
+            return super().has_changed(initial, data)
+        except ValidationError:
+            # Invalid input must not crash formsets or change detection.
+            return True
 
 
 class RawControlsMixin:

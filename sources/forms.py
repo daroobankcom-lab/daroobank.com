@@ -1,7 +1,7 @@
 import re
 from django import forms
 
-from daroobank.forms import RawControlsMixin, RawMultilineControlsMixin
+from daroobank.forms import ExplicitBooleanField, RawControlsMixin, RawMultilineControlsMixin
 
 from .models import SourceClaimReview
 from .services import FIELDS, MAX_PK, ClaimError, validate_data
@@ -14,14 +14,14 @@ class SourceClaimForm(RawControlsMixin, forms.Form):
     owner = forms.CharField(label='مالک یا دارنده حق اعلام‌شده', max_length=200)
     evidence_url = forms.URLField(label='نشانی HTTPS مدرک اعلام‌شده', max_length=200)
     evidence_note = forms.CharField(label='شرح کوتاه مدرک (بدون اطلاعات محرمانه)', max_length=1000, required=False)
-    claims_collection = forms.BooleanField(label='جمع‌آوری', required=False)
-    claims_storage = forms.BooleanField(label='ذخیره داخلی', required=False)
-    claims_publication = forms.BooleanField(label='بازنشر', required=False)
+    claims_collection = ExplicitBooleanField(label='جمع‌آوری', required=False)
+    claims_storage = ExplicitBooleanField(label='ذخیره داخلی', required=False)
+    claims_publication = ExplicitBooleanField(label='بازنشر', required=False)
     starts_on = forms.DateField(label='شروع اعلام‌شده (میلادی YYYY-MM-DD)', input_formats=['%Y-%m-%d'], required=False,
                                 widget=forms.DateInput(attrs={'type': 'date'}))
     expires_on = forms.DateField(label='پایان اعلام‌شده (میلادی YYYY-MM-DD)', input_formats=['%Y-%m-%d'], required=False,
                                  widget=forms.DateInput(attrs={'type': 'date'}))
-    attestation = forms.BooleanField(label='این موارد را به عنوان ادعای مستند، نه مجوز اثبات‌شده، ثبت می‌کنم.')
+    attestation = ExplicitBooleanField(label='این موارد را به عنوان ادعای مستند، نه مجوز اثبات‌شده، ثبت می‌کنم.')
 
     def clean(self):
         data = super().clean()

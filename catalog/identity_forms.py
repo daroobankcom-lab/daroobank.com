@@ -2,7 +2,7 @@ from decimal import Decimal
 from django import forms
 from django.forms import BaseFormSet, formset_factory
 
-from daroobank.forms import RawControlsMixin, RawMultilineControlsMixin
+from daroobank.forms import ExplicitBooleanField, RawControlsMixin, RawMultilineControlsMixin
 from .identity import MAX_COMPONENTS
 
 
@@ -10,7 +10,7 @@ class AssertionForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
     raw_control_fields = ('source_name', 'source_url')
     source_name = forms.CharField(label='نام منبع ادعایی', max_length=200)
     source_url = forms.URLField(label='نشانی HTTPS منبع ادعایی', max_length=200)
-    synthetic_ack = forms.BooleanField(label='فقط داده ساختگی و غیرمحرمانه وارد می‌کنم.')
+    synthetic_ack = ExplicitBooleanField(label='فقط داده ساختگی و غیرمحرمانه وارد می‌کنم.')
 
 
 class IngredientForm(AssertionForm):

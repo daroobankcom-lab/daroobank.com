@@ -288,4 +288,6 @@
 
 - [0144: identity revision error navigation](0144-identity-revision-error-navigation.md) — development-only server-rendered usability.
 
+- [0145: window form input and errors](0145-window-form-input-and-errors.md) — development-only offline calculation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

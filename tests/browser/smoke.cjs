@@ -1093,6 +1093,27 @@ async function run() {
     const authorContext = await contextFor(browser, 390, errors);
     const page = await authorContext.newPage();
     await login(page, author);
+    // The offline time-window form reports a bad boundary as a field error.
+    await page.goto(base + '/staff/operations/window/?start=25%3A00&end=10%3A00&zone=UTC');
+    assert.match(await page.title(), /^خطا در فرم/);
+    assert.equal(await page.locator('#id_start').getAttribute('aria-invalid'), 'true');
+    assert.match(await page.locator('#id_start').getAttribute('aria-describedby'), /id_start_error/);
+    const windowErrorLink = page.locator('#staff-form-errors a[href="#id_start"]');
+    let windowLinkReached = false;
+    for (let tab = 0; tab < 30 && !windowLinkReached; tab++) {
+      await page.keyboard.press('Tab');
+      windowLinkReached = await windowErrorLink.evaluate(el => document.activeElement === el);
+    }
+    assert(windowLinkReached, 'window error link reachable by Tab');
+    await Promise.all([page.waitForURL(url => url.hash === '#id_start'), page.keyboard.press('Enter')]);
+    await page.waitForFunction(() => document.activeElement === document.getElementById('id_start'));
+    await checkLayout(page, 'window form error 390');
+    await auditAccessibility(page, 'window form error');
+    await page.locator('#id_start').fill('09:00');
+    await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      page.locator('form.staff-review-form button[type=submit]').click()]);
+    assert.equal(await page.locator('#staff-form-errors').count(), 0);
+    assert.match(await page.locator('body').innerText(), /نتیجه محاسبه/);
     await page.goto(base + '/staff/products/import/');
     const [productSample] = await Promise.all([
       page.waitForEvent('download'),

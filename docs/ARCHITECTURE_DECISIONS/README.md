@@ -240,4 +240,6 @@
 
 - [0120: synthetic search-index experiment](0120-synthetic-search-index-experiment.md) — opt-in experiment, 24 November 2026; no index migration.
 
+- [0121: development content-security policy](0121-development-content-security-policy.md) — baseline only, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

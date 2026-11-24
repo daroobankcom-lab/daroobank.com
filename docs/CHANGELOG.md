@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — baseline content-security policy
+
+**Changes:** Django responses receive a same-origin CSP baseline; synthetic Chromium checks selected blocked inline/off-origin behaviors and existing workflows. It intentionally leaves preview framing to existing environment-specific controls.
+
+**Limits:** Same-origin script remains allowed, views and upstream infrastructure can set different headers, no reports are collected, and this is not a security assessment or deployment approval. See ADR 0121.
+
 ## 2026-11-24 — synthetic search index experiment
 
 **Changes:** Added an opt-in 100,000-record synthetic PostgreSQL experiment comparing existing search and temporary trigram and ordering indexes, with selected warm search queries, result checks and rollback-only updates.

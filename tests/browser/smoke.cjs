@@ -31,6 +31,84 @@ async function contextFor(browser, width, errors, options = {}) {
   return context;
 }
 
+// Test-only CSSOM mutations preserve the response's CSP while exercising
+// accessibility negative controls; production templates do not use this helper.
+async function addTestStyles(page, css) {
+  return page.evaluateHandle(text => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(text);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    return sheet;
+  }, css);
+}
+async function removeTestStyles(sheet) {
+  await sheet.evaluate(value => {
+    document.adoptedStyleSheets = document.adoptedStyleSheets.filter(other => other !== value);
+  });
+  await sheet.dispose();
+}
+
+async function checkCsp(browser, errors) {
+  const context = await contextFor(browser, 390, errors);
+  // Fulfilled only in the synthetic browser; the app does not serve this script.
+  await context.route('**/synthetic-csp-same-origin.js', route => route.fulfill({
+    status: 200, contentType: 'application/javascript', body: 'window.syntheticCspSameOrigin = true;',
+  }));
+  const page = await context.newPage();
+  const response = await page.goto(base + '/');
+  assert.equal(response.status(), 200);
+  assert.match(response.headers()['content-security-policy'] || '', /script-src 'self'/);
+  assert.equal(await page.locator('script[type="application/ld+json"]').count(), 1);
+  const structuredData = JSON.parse(await page.locator('script[type="application/ld+json"]').textContent());
+  assert.equal(structuredData['@type'], 'WebSite');
+  await page.evaluate(() => {
+    window.syntheticCspViolations = [];
+    document.addEventListener('securitypolicyviolation', event =>
+      window.syntheticCspViolations.push({directive: event.effectiveDirective, blocked: event.blockedURI}));
+    const inline = document.createElement('script');
+    inline.textContent = 'window.syntheticCspInlineExecuted = true';
+    document.body.append(inline);
+    const remote = document.createElement('script');
+    remote.src = 'https://example.org/synthetic-csp.js';
+    document.body.append(remote);
+    const style = document.createElement('style');
+    style.textContent = '.synthetic-csp-probe { color: rgb(1, 2, 3) !important; }';
+    document.head.append(style);
+    const baseTag = document.createElement('base');
+    baseTag.href = 'https://example.org/';
+    document.head.append(baseTag);
+    const sameOrigin = document.createElement('script');
+    sameOrigin.src = '/synthetic-csp-same-origin.js';
+    document.body.append(sameOrigin);
+    fetch('https://example.org/synthetic-csp-fetch').catch(() => {});
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://example.org/synthetic-csp-frame';
+    document.body.append(iframe);
+    const form = document.createElement('form');
+    form.action = 'https://example.org/synthetic-csp-form';
+    form.method = 'post';
+    document.body.append(form);
+    form.submit();
+  });
+  await page.waitForFunction(() => window.syntheticCspSameOrigin &&
+    window.syntheticCspViolations.some(v => v.directive === 'script-src-elem' && v.blocked === 'inline') &&
+    window.syntheticCspViolations.some(v => v.directive === 'script-src-elem' && v.blocked.startsWith('https://example.org')) &&
+    window.syntheticCspViolations.some(v => v.directive === 'style-src-elem' && v.blocked === 'inline') &&
+    window.syntheticCspViolations.some(v => v.directive === 'base-uri') &&
+    ['connect-src', 'frame-src', 'form-action'].every(directive =>
+      window.syntheticCspViolations.some(v => v.directive === directive && v.blocked.startsWith('https://example.org'))),
+    null, {timeout: 5000});
+  assert.equal(await page.evaluate(() => Boolean(window.syntheticCspInlineExecuted)), false);
+  assert.equal(await page.evaluate(() => document.baseURI), base + '/');
+  // A cross-origin about:blank parent is a narrow framing check, not a full
+  // Arena proxy test. Development intentionally does not block embedding.
+  assert.equal(response.headers()['x-frame-options'], undefined);
+  const parent = await context.newPage();
+  await parent.setContent(`<iframe title="synthetic preview" src="${base}/"></iframe>`);
+  assert.equal(await parent.frameLocator('iframe').locator('html').getAttribute('lang'), 'fa');
+  await context.close();
+}
+
 async function checkLayout(page, label) {
   const state = await page.evaluate(() => ({
     width: document.documentElement.clientWidth,
@@ -359,6 +437,7 @@ async function run() {
     browser = await chromium.launch({executablePath: await packed.executablePath(), args, headless: true,
       env: {...process.env, LD_LIBRARY_PATH: [libraryPath, process.env.LD_LIBRARY_PATH || ''].filter(Boolean).join(':')}});
     const errors = [];
+    await checkCsp(browser, errors);
     for (const width of [320, 390, 768, 1440]) {
       const context = await contextFor(browser, width, errors);
       const page = await context.newPage();
@@ -383,11 +462,11 @@ async function run() {
           ['.header-cta { opacity: 0.5 !important; }', /opacity, filter or blending/],
           ['.header-cta { color: white !important; }', /text contrast below 4.5/],
         ]) {
-          const mutation = await page.addStyleTag({content: css});
+          const mutation = await addTestStyles(page, css);
           try {
             await assert.rejects(checkTextContrast(page, '.header-cta > span:first-child', '.header-cta', 'mutated header'), error);
           } finally {
-            await mutation.evaluate(el => el.remove());
+            await removeTestStyles(mutation);
           }
         }
         const headerKeyboard = await context.newPage();
@@ -414,20 +493,20 @@ async function run() {
           ['.hero-lead { color: white !important; }', /contrast below 4.5/],
           ['#drug-search::placeholder { color: white !important; }', /contrast below 4.5/],
         ]) {
-          const brokenLayer = await page.addStyleTag({content: css});
+          const brokenLayer = await addTestStyles(page, css);
           try {
             await assert.rejects(checkHeroContrast(page), error);
           } finally {
-            await brokenLayer.evaluate(el => el.remove());
+            await removeTestStyles(brokenLayer);
           }
         }
         await checkTextContrast(page, '.eyebrow', '.eyebrow', 'hero eyebrow');
         await checkTextContrast(page, '.art-card-top small', '.art-card', 'art card caption');
         await checkTextContrast(page, '.label-one small', '.float-label', 'first art label caption');
         await checkTextContrast(page, '.label-two small', '.float-label', 'second art label caption');
-        const lowContrast = await page.addStyleTag({content: '.eyebrow { color: #e3f4eb !important; }'});
+        const lowContrast = await addTestStyles(page, '.eyebrow { color: #e3f4eb !important; }');
         await assert.rejects(checkTextContrast(page, '.eyebrow', '.eyebrow', 'mutated eyebrow'), /contrast below/);
-        await lowContrast.evaluate(el => el.remove());
+        await removeTestStyles(lowContrast);
         const broken = await context.newPage();
         await broken.goto(base + '/');
         await broken.locator('.skip-link').evaluate(el => el.setAttribute('href', '#wrong'));
@@ -436,7 +515,7 @@ async function run() {
         await broken.locator('.skip-link').evaluate(el => el.setAttribute('tabindex', '-1'));
         await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: initial focus/);
         await broken.goto(base + '/');
-        await broken.addStyleTag({content: '.skip-link:focus { transform: translateY(-200%) !important; }'});
+        await addTestStyles(broken, '.skip-link:focus { transform: translateY(-200%) !important; }');
         await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: visible focus/);
         await broken.goto(base + '/');
         await broken.locator('#drug-search').evaluate(el => el.setAttribute('tabindex', '-1'));
@@ -602,9 +681,9 @@ async function run() {
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '#category', `scan category ${width}`, '.staff-section');
       if (width === 390) {
-        const mutation = await page.addStyleTag({content: '#category:focus-visible { outline: none !important; }'});
+        const mutation = await addTestStyles(page, '#category:focus-visible { outline: none !important; }');
         await assert.rejects(checkKeyboardFocus(page, '#category', 'mutated scan category', '.staff-section'), /missing focus outline/);
-        await mutation.evaluate(node => node.remove());
+        await removeTestStyles(mutation);
       }
       await page.locator('#category').selectOption('expired');
       await page.keyboard.press('Tab');
@@ -625,12 +704,12 @@ async function run() {
         await checkTextContrast(page, '.staff-filter button', '.staff-filter button', 'scan submit text');
         await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'scan result status');
         await checkTextContrast(page, '.staff-candidate .staff-detail-link', '.staff-candidate', 'scan result link');
-        const mutation = await page.addStyleTag({content: '.staff-candidate p { color: #eee !important; }'});
+        const mutation = await addTestStyles(page, '.staff-candidate p { color: #eee !important; }');
         await assert.rejects(checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'mutated status'), /below 4.5:1/);
-        await mutation.evaluate(node => node.remove());
-        const backgroundMutation = await page.addStyleTag({content: '.staff-candidate { background-image: linear-gradient(white, black) !important; }'});
+        await removeTestStyles(mutation);
+        const backgroundMutation = await addTestStyles(page, '.staff-candidate { background-image: linear-gradient(white, black) !important; }');
         await assert.rejects(checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'mutated background'), /background images/);
-        await backgroundMutation.evaluate(node => node.remove());
+        await removeTestStyles(backgroundMutation);
       }
       await page.goto(base + '/staff/clinical/');
       await page.getByRole('link', {name: 'بازرسی فنی محدود پیش‌نویس‌ها ←'}).click();
@@ -966,10 +1045,10 @@ async function run() {
     };
     await checkReducedTiming('.skip-link');
     await checkReducedTiming('.service-card');
-    const brokenTiming = await accessiblePage.addStyleTag({content:
-      '.skip-link { transition-duration: 1ms !important; animation-duration: 1ms !important; }'});
+    const brokenTiming = await addTestStyles(accessiblePage,
+      '.skip-link { transition-duration: 1ms !important; animation-duration: 1ms !important; }');
     await assert.rejects(checkReducedTiming('.skip-link'), /reduced motion timing/);
-    await brokenTiming.evaluate(el => el.remove());
+    await removeTestStyles(brokenTiming);
     await checkSkipLink(accessiblePage, 'skip forced-home 390', '#drug-search');
     await checkKeyboardFocus(accessiblePage, '#drug-search', 'forced-colors search', '.search-form');
     await accessiblePage.locator('#drug-search').fill('Browser Synthetic Product');

@@ -1,6 +1,6 @@
 # Security and privacy strategy
 
-Django escaping, HTTPS source validation, bounded queries and basic security headers are implemented and tested in the development slice. Most controls below remain proposed; these are not proof of compliance or production readiness. Iranian legal, professional, data residency and telehealth obligations require advice from qualified local counsel and review by clinical governance before handling patient data or launching consultations.
+Django escaping, HTTPS source validation, bounded queries and basic security headers are implemented and tested in the development slice. A limited same-origin content-security policy is enforced on Django responses, with explicit exceptions and important deployment limitations described in [ADR 0121](ARCHITECTURE_DECISIONS/0121-development-content-security-policy.md). Most controls below remain proposed; these are not proof of compliance or production readiness. Iranian legal, professional, data residency and telehealth obligations require advice from qualified local counsel and review by clinical governance before handling patient data or launching consultations.
 
 ## Threats and access
 

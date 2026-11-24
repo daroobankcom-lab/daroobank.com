@@ -4,6 +4,26 @@ from django.conf import settings
 from django.http import HttpResponseNotFound
 
 
+# The current server-rendered slice has no executable inline scripts or styles.
+# Do not set frame-ancestors here: development previews embed the page, while
+# production framing remains governed by the separately configured X-Frame-Options.
+DEVELOPMENT_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
+                   "img-src 'self'; font-src 'self'; connect-src 'self'; "
+                   "object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'")
+
+
+class ContentSecurityPolicyMiddleware:
+    """Set a conservative baseline, without replacing an explicit view policy."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.setdefault('Content-Security-Policy', DEVELOPMENT_CSP)
+        return response
+
+
 def _is_staff_path(path):
     return path == '/staff' or path.startswith('/staff/')
 

@@ -45,6 +45,19 @@ class PriceAmountBoundaryTests(SimpleTestCase):
                 amount_to_rial(amount, 'TOMAN')
         self.assertEqual(amount_to_rial('000.10000', 'TOMAN'), 1)
 
+    def test_all_two_decimal_amounts_below_one_hundred_against_integer_arithmetic(self):
+        for integer in range(100):
+            for fraction in range(100):
+                text = f'{integer:02}.{fraction:02}'
+                for currency, factor in (('RIAL', 1), ('TOMAN', 10)):
+                    quotient, remainder = divmod((100 * integer + fraction) * factor, 100)
+                    expected = quotient if not remainder and quotient else None
+                    try:
+                        actual = amount_to_rial(text, currency)
+                    except ImportValidationError:
+                        actual = None
+                    self.assertEqual(actual, expected, f'synthetic {text} {currency}')
+
     def test_expanded_unicode_amounts_against_integer_arithmetic(self):
         rng = random.Random(24011226)
         chars = '0123456789۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩⑩⑪⑳㉚㊿'

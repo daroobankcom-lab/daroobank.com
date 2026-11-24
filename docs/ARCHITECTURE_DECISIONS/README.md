@@ -89,6 +89,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0077: cross-domain synthetic restore drill](0077-cross-domain-restore-drill.md) — development-only implementation, 23 November 2026.
 
+- [0078: PostgreSQL column type clues](0078-postgresql-column-type-clues.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

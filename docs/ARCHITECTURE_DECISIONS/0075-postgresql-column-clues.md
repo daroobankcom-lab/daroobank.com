@@ -1,6 +1,6 @@
 # ADR 0075: PostgreSQL managed-column clues
 
-Status: development-only implementation, 23 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md).
+Status: development-only implementation, 23 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md). [ADR 0078](0078-postgresql-column-type-clues.md) later adds selected column-type comparisons and supersedes that specific limitation below.
 
 ## Decision
 

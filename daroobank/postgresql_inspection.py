@@ -1,5 +1,6 @@
 """Read-only, deliberately limited PostgreSQL catalog clues for synthetic development."""
 import json
+import re
 
 from django.apps import apps
 from django.db import connection
@@ -66,8 +67,25 @@ def expected_check_constraints():
     return sorted(result)
 
 
+def _catalog_type(db_type):
+    """Map only the explicitly supported Django/PostgreSQL type spellings."""
+    if not isinstance(db_type, str):
+        return None
+    if db_type in {'bigint', 'integer', 'smallint', 'boolean', 'text', 'date', 'jsonb', 'timestamp with time zone'}:
+        return db_type
+    if db_type == 'varchar':
+        return 'character varying'
+    match = re.fullmatch(r'varchar\(([1-9][0-9]*)\)', db_type)
+    if match:
+        return f'character varying({match.group(1)})'
+    match = re.fullmatch(r'numeric\(([1-9][0-9]*),\s*([0-9]+)\)', db_type)
+    if match:
+        return f'numeric({match.group(1)},{match.group(2)})'
+    return None
+
+
 def expected_columns():
-    """Concrete local fields for managed model and auto-created through tables."""
+    """Concrete managed fields with nullability and supported PostgreSQL types."""
     result = set()
     for model in apps.get_models(include_auto_created=True):
         meta = model._meta
@@ -75,7 +93,11 @@ def expected_columns():
             continue
         for field in meta.local_fields:
             if field.column:
-                result.add((meta.db_table, field.column, not field.null))
+                # Django's auto-created M2M primary-key metadata can differ from
+                # the historical migration's physical key type; do not guess.
+                skip_type = bool(meta.auto_created and field.primary_key)
+                result.add((meta.db_table, field.column, not field.null,
+                            None if skip_type else _catalog_type(field.db_type(connection)), skip_type))
     return sorted(result)
 
 
@@ -115,8 +137,8 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, constraint_name
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, constraint_name text)
             ), expected_columns AS (
-                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name, not_null
-                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, column_name text, not_null boolean)
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name, not_null, expected_type, skip_type
+                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, column_name text, not_null boolean, expected_type text, skip_type boolean)
             )
             SELECT
                 (SELECT COUNT(*) FROM names),
@@ -160,24 +182,31 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                     WHERE a.attrelid = e.table_oid AND a.attname = e.column_name AND a.attnum > 0 AND NOT a.attisdropped)),
                 (SELECT COUNT(*) FROM expected_columns e JOIN pg_catalog.pg_attribute a
                     ON a.attrelid = e.table_oid AND a.attname = e.column_name AND a.attnum > 0 AND NOT a.attisdropped
-                    JOIN tables t ON t.oid = a.attrelid WHERE a.attnotnull <> e.not_null)
+                    JOIN tables t ON t.oid = a.attrelid WHERE a.attnotnull <> e.not_null),
+                (SELECT COUNT(*) FROM expected_columns WHERE expected_type IS NULL AND NOT skip_type),
+                (SELECT COUNT(*) FROM expected_columns WHERE skip_type),
+                (SELECT COUNT(*) FROM expected_columns e JOIN pg_catalog.pg_attribute a
+                    ON a.attrelid = e.table_oid AND a.attname = e.column_name AND a.attnum > 0 AND NOT a.attisdropped
+                    JOIN tables t ON t.oid = a.attrelid WHERE e.expected_type IS NOT NULL
+                    AND pg_catalog.format_type(a.atttypid, a.atttypmod) <> e.expected_type)
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
                           for table, columns, primary in unique_keys]),
               json.dumps([{'table_name': table, 'constraint_name': name} for table, name in check_constraints]),
-              json.dumps([{'table_name': table, 'column_name': name, 'not_null': not_null}
-                          for table, name, not_null in columns])])
+              json.dumps([{'table_name': table, 'column_name': name, 'not_null': not_null,
+                           'expected_type': data_type, 'skip_type': skip_type}
+                          for table, name, not_null, data_type, skip_type in columns])])
         values = cursor.fetchone()
     keys = ('expected_tables', 'unresolved_tables', 'non_table_relations', 'unvalidated_constraints',
             'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',
             'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'expected_unique_keys', 'missing_unique_keys',
             'expected_check_constraints', 'missing_check_constraints', 'expected_columns', 'missing_columns',
-            'column_nullability_mismatches')
+            'column_nullability_mismatches', 'unsupported_column_types', 'skipped_auto_m2m_pk_types', 'column_type_mismatches')
     result = dict(zip(keys, values))
     result['status'] = ('attention' if any(result[key] for key in (
         'unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes',
         'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
         'nondefault_action_foreign_keys', 'missing_unique_keys', 'missing_check_constraints', 'missing_columns',
-        'column_nullability_mismatches')) else 'no_selected_issues')
+        'column_nullability_mismatches', 'unsupported_column_types', 'column_type_mismatches')) else 'no_selected_issues')
     return result

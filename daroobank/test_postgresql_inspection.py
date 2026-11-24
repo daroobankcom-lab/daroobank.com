@@ -31,7 +31,8 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertGreater(report['expected_columns'], 0)
         for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
                     'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys',
-                    'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches'):
+                    'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches',
+                    'column_type_mismatches', 'unsupported_column_types'):
             self.assertEqual(report[key], 0, key)
         self.assertEqual(set(connection.introspection.table_names()), before)
         self.assertIn('sources_sourceclaim', expected_tables())
@@ -278,15 +279,51 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                 self.assertEqual(report['status'], 'attention')
                 transaction.set_rollback(True)
 
-    def test_existing_column_with_wrong_type_is_not_detected(self):
+    def test_existing_column_with_wrong_type_is_reported(self):
+        for sql in ('ALTER TABLE sources_sourceclaim ALTER COLUMN owner TYPE text',
+                    'ALTER TABLE sources_sourceclaim ALTER COLUMN owner TYPE varchar(100)',
+                    'ALTER TABLE catalog_formulationcomponent ALTER COLUMN numerator TYPE numeric(10,3)',
+                    "ALTER TABLE sources_sourceclaim ALTER COLUMN recorded_at TYPE timestamp without time zone USING recorded_at AT TIME ZONE 'UTC'"):
+            with self.subTest(sql=sql), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(sql)
+                report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                                        expected_check_constraints(), expected_columns())
+                self.assertEqual(report['missing_columns'], 0)
+                self.assertEqual(report['column_type_mismatches'], 1)
+                self.assertEqual(report['status'], 'attention')
+                transaction.set_rollback(True)
+
+    def test_type_mapping_is_small_and_fails_closed_for_other_types(self):
+        from .postgresql_inspection import _catalog_type
+        self.assertEqual(_catalog_type('varchar(200)'), 'character varying(200)')
+        self.assertEqual(_catalog_type('numeric(12, 4)'), 'numeric(12,4)')
+        self.assertEqual(_catalog_type('timestamp with time zone'), 'timestamp with time zone')
+        for bad in ('numeric', 'varchar(0)', 'uuid', 'integer[]', 'numeric(12,-1)', '', None):
+            with self.subTest(db_type=bad):
+                self.assertIsNone(_catalog_type(bad))
+
+    def test_auto_created_m2m_primary_key_type_is_explicitly_skipped(self):
         with transaction.atomic():
             with connection.cursor() as cursor:
-                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN owner TYPE text')
+                cursor.execute('ALTER TABLE auth_user_groups ALTER COLUMN id TYPE integer')
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
                                     expected_check_constraints(), expected_columns())
-            self.assertEqual(report['missing_columns'], 0)
+            self.assertGreater(report['skipped_auto_m2m_pk_types'], 0)
+            self.assertEqual(report['column_type_mismatches'], 0)
             self.assertEqual(report['status'], 'no_selected_issues')
             transaction.set_rollback(True)
+
+    def test_unknown_model_type_is_reported_as_incomplete_not_clean(self):
+        with patch('catalog.management.commands.inspect_postgresql_schema.expected_columns',
+                   return_value=[('sources_sourceclaim', 'owner', True, None, False)]):
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['unsupported_column_types'], 1)
+            self.assertEqual(report['column_type_mismatches'], 0)
+            self.assertEqual(report['status'], 'attention')
 
     def test_out_of_scope_catalog_issues_are_not_reported(self):
         with connection.cursor() as cursor:

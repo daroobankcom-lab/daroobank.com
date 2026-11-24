@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL managed-column type clues
+
+**Changes:** Catalog inspection compares selected managed field types, including varchar length and numeric precision, against PostgreSQL. Unsupported types cause an incomplete/attention result. Synthetic rolled-back DDL exercises varchar, numeric and timestamp mismatches.
+
+**Limits:** Auto-created many-to-many primary-key types are skipped and counted because runtime metadata and historical migrations differ; defaults, collations, generation, sequence state and complete schema equivalence are not checked. See ADR 0078.
+
 ## 2026-11-23 — cross-domain synthetic restore drill
 
 **Changes:** The opt-in PostgreSQL restore drill now also restores and verifies selected synthetic source, product, price, receipt and clinical records and relationships, and runs the read-only catalog inspector on the restored database. A corruption probe checks that altered manifest and evidence snapshots are detected; additional fixture guards run before writes.

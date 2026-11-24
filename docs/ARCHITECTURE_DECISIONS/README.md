@@ -304,4 +304,6 @@
 
 - [0152: bounded identity review display](0152-bounded-identity-review-display.md) — development-only defensive display.
 
+- [0153: bounded locked identity review](0153-bounded-locked-identity-review.md) — development-only defensive writer read.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

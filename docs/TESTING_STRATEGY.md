@@ -316,9 +316,13 @@ Direct service tests reject selected truthy and falsey non-boolean `commit` valu
 
 Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. `daroobank/test_staff_raw_text_controls.py` checks selected source, clinical and identity forms and selected HTTP writes; an unchanged empty extra component row is skipped rather than validated (ADR 0133). `daroobank/test_staff_empty_posts.py` checks required errors and no selected writes for six empty staff POSTs with CSRF enforcement (ADR 0134). `daroobank/test_sample_downloads.py` checks the two fixed synthetic downloads, permissions and preview without writes; the browser smoke exercises both downloads (ADR 0136). Selected form summaries and their handling of field, hidden, general and formset errors are checked in these HTTP tests; the Chromium smoke checks a summary link by keyboard on one invalid identity form (ADR 0135). Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
+## Bounded locked identity review
+
+`catalog/test_identity_review_bounded_lock.py` checks synthetic oversized graph/reason, PostgreSQL threshold boundaries and locked SQL, no lazy reads, revision rollback and unchanged latest-ID-only review policy. The selected identity latest-review concurrency and conflict suites exercise existing locks; they do not cover all races or bound database work. See [ADR 0153](ARCHITECTURE_DECISIONS/0153-bounded-locked-identity-review.md).
+
 ## Bounded identity review display
 
-`catalog/test_identity_review_bounded_content.py` checks synthetic oversized identity graphs and reasons, exact PostgreSQL character thresholds, missing reviewer, privacy, cursor/lookahead, malformed smaller values, disabled revision and write conflict. Chromium checks the fixed warning and unavailable correction form at four selected widths. Writer reads and database work are not bounded by this display policy. See [ADR 0152](ARCHITECTURE_DECISIONS/0152-bounded-identity-review-display.md).
+`catalog/test_identity_review_bounded_content.py` checks synthetic oversized identity graphs and reasons, exact PostgreSQL character thresholds, missing reviewer, privacy, cursor/lookahead, malformed smaller values, disabled revision and write conflict. Chromium checks the fixed warning and unavailable correction form at four selected widths. Writer reads and database work are not bounded by this display policy; ADR 0153 subsequently limits selected locked latest-review transfers. See [ADR 0152](ARCHITECTURE_DECISIONS/0152-bounded-identity-review-display.md).
 
 ## Hidden review-token recovery
 

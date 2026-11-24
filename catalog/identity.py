@@ -12,6 +12,7 @@ from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_accounts
+from daroobank.review_content_bounds import bounded_review_fields, materialize_review_fields
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import (IngredientDraft, FormulationDraft, FormulationComponent,
                      IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview, IdentityPackageRevision,
@@ -351,8 +352,12 @@ def _lock_latest_package_review(package):
     using = package._state.db
     if not transaction.get_connection(using).in_atomic_block:
         raise TransactionManagementError('Latest identity review locking requires an atomic writer transaction.')
-    return (IdentityPackageReview.objects.using(using).filter(package_id=package.pk)
-            .order_by('-pk').select_for_update().first())
+    queryset = (IdentityPackageReview.objects.using(using).filter(package_id=package.pk)
+                .order_by('-pk').select_for_update())
+    review = bounded_review_fields(queryset, snapshot_field='graph_snapshot').first()
+    if review is not None:
+        materialize_review_fields(review, snapshot_field='graph_snapshot')
+    return review
 
 
 def _revision_payload(parent_id, child_id, recorded_by_id, change_reason, parent_graph_sha256, child_graph_sha256):
@@ -382,8 +387,8 @@ def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash
         latest = _lock_latest_package_review(parent)
         if (latest.pk if latest else 0) != expected_review:
             raise IdentityConflict('بازبینی جدیدی برای بسته پیشین ثبت شده است.')
-        if latest and not review_is_consistent(latest, parent.pk):
-            raise IdentityConflict('بازبینی اخیر بسته پیشین ناسازگار است.')
+        if latest and (latest.content_oversized or not review_is_consistent(latest, parent.pk)):
+            raise IdentityConflict('بازبینی اخیر بسته پیشین بررسی‌پذیر یا سازگار نیست.')
         if canonical(data) == {key: parent_graph[key] for key in PACKAGE_FIELDS}:
             raise IdentityError('حداقل یکی از داده‌های بسته یا منبع باید تغییر کند.')
         child = create_package(actor=actor, data=data, product_id=parent.product_id)

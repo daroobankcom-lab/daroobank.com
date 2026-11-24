@@ -2,11 +2,17 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded locked identity review
+
+**Changes:** Identity review and revision writers bound selected fields in the same locked latest-review read; revision refuses an uninspected oversized latest review without partial classification.
+
+**Limits:** Database work and other graph reads remain unbounded; review creation retains its prior latest-ID-only policy. See ADR 0153.
+
 ## 2026-11-24 — bounded identity review display
 
 **Changes:** Private identity-package history and revision pages bound selected review graph and reason transfers. Oversized reviews are explicitly uninspected and preserve ordering and latest-review IDs.
 
-**Limits:** Database work, current graphs, other pages and write-time reads are not bounded. See ADR 0152.
+**Limits:** Database work, current graphs and other pages are not bounded; the later ADR 0153 bounds selected latest-review fields in the identity writer lock read. See ADR 0152.
 
 ## 2026-11-24 — hidden review-token recovery
 

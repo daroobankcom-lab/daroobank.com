@@ -138,7 +138,8 @@ def price_candidates(request):
 @require_http_methods(['GET', 'POST'])
 def price_upload(request):
     _require_permission(request.user, 'pricing.add_pricecandidate')
-    form = PriceUploadForm(request.POST or None, request.FILES or None)
+    form = PriceUploadForm(request.POST if request.method == 'POST' else None,
+                           request.FILES if request.method == 'POST' else None)
     result = None
     status = 200
     if request.method == 'POST' and form.is_valid():

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — empty staff POST feedback
+
+**Changes:** Six selected create, revision, reference and upload views bind even an empty authorized POST so required-field errors are shown; GET stays unbound.
+
+**Limits:** Other views and all client or assistive-technology combinations were not exhaustively checked. See ADR 0134.
+
 ## 2026-11-24 — raw controls on selected staff forms
 
 **Changes:** Selected source, clinical and identity assertion forms reject controls and surrogates in raw single-line input even when Django would trim them away; ordinary outer spaces and clinical multiline statement behavior remain unchanged.

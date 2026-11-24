@@ -109,7 +109,7 @@ def review_inspection(request, pk):
 @require_http_methods(['GET', 'POST'])
 def create(request):
     require_staff(request.user, VIEW, ADD)
-    form = SourceClaimForm(request.POST or None)
+    form = SourceClaimForm(request.POST if request.method == 'POST' else None)
     status = 200
     if request.method == 'POST' and form.is_valid():
         try:

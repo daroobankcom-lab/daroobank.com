@@ -266,4 +266,6 @@
 
 - [0133: staff form raw controls](0133-staff-form-raw-controls.md) — development-only input hardening, 24 November 2026.
 
+- [0134: bound empty staff POSTs](0134-bound-empty-staff-posts.md) — development-only form feedback, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

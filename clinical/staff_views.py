@@ -73,7 +73,7 @@ def inspection(request):
 @require_http_methods(['GET', 'POST'])
 def create(request):
     require_staff(request.user, VIEW, ADD)
-    form = DraftForm(request.POST or None)
+    form = DraftForm(request.POST if request.method == 'POST' else None)
     status = 200
     if request.method == 'POST' and form.is_valid():
         try:
@@ -97,7 +97,7 @@ def revise(request, pk):
     if not valid_draft(parent) or not current_account_exists(parent.author_id, using=parent._state.db):
         return detail_response(request, parent, status=409)
     initial = {**draft_data(parent), 'expected_parent_hash': parent.payload_sha256}
-    form = RevisionForm(request.POST or None, initial=initial)
+    form = RevisionForm(request.POST if request.method == 'POST' else None, initial=initial)
     status = 200
     if request.method == 'POST' and form.is_valid():
         try:
@@ -243,7 +243,7 @@ def reference_create(request, pk):
     state = evidence_state(draft)
     if state['status'] != 'available':
         return detail_response(request, draft, status=409)
-    form = ReferenceForm(request.POST or None, initial={'expected_draft_hash': draft.payload_sha256,
+    form = ReferenceForm(request.POST if request.method == 'POST' else None, initial={'expected_draft_hash': draft.payload_sha256,
                                                         'expected_evidence_hash': state['fingerprint']})
     status = 200
     if request.method == 'POST' and form.is_valid():

@@ -53,7 +53,8 @@ def candidates(request):
 @require_http_methods(['GET', 'POST'])
 def upload(request):
     require_staff(request.user, VIEW, ADD)
-    form = ProductUploadForm(request.POST or None, request.FILES or None)
+    form = ProductUploadForm(request.POST if request.method == 'POST' else None,
+                             request.FILES if request.method == 'POST' else None)
     result = None
     status = 200
     if request.method == 'POST' and form.is_valid():

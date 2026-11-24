@@ -1233,6 +1233,21 @@ async function run() {
       page.locator('form.staff-review-form button[type=submit]').click()]);
     assert.equal(await page.locator('#staff-form-errors').count(), 0);
     assert.match(await page.locator('body').innerText(), /نتیجه محاسبه/);
+    await page.goto(base + '/staff/sources/new/');
+    await page.locator('#id_source_name').fill('ادعای ساختگی طولانی مرورگر');
+    await page.locator('#id_source_url').fill('https://example.org/oversized-claim');
+    await page.locator('#id_owner').fill('مالک فرضی');
+    await page.locator('#id_evidence_url').fill('https://example.org/evidence');
+    await page.locator('#id_claims_collection').check();
+    await page.locator('#id_attestation').check();
+    const [claimConflict] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      page.locator('.staff-review-form button[type=submit]').click()]);
+    assert.equal(claimConflict.status(), 409);
+    assert.match(claimConflict.headers()['cache-control'], /no-store/);
+    assert(!(await page.locator('main').innerText()).includes('browser-claim-note-canary'));
+    assert.match(await page.locator('main').innerText(), /ادعای قبلی در دسترس نیست یا تغییر کرده است/);
+    await checkLayout(page, 'oversized claim replay conflict');
+    await auditAccessibility(page, 'oversized claim replay conflict');
     await page.goto(base + '/staff/products/import/');
     const [productSample] = await Promise.all([
       page.waitForEvent('download'),

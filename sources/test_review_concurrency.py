@@ -77,6 +77,22 @@ class SourceReviewConcurrencyTests(TransactionTestCase):
                 pool.submit(self.worker, attempt).result(timeout=10)
         self.assertFalse(SourceClaimReview.objects.exists())
 
+    def test_review_waits_for_oversized_note_then_rejects_without_event(self):
+        def attempt():
+            return self.review(get_user_model().objects.get(pk=self.reviewers[0].pk))
+        with transaction.atomic():
+            SourceClaim.objects.select_for_update().get(pk=self.claim.pk)
+            SourceClaim.objects.filter(pk=self.claim.pk).update(evidence_note='ر' * 100_000 + 'race-canary')
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                with self.assertRaises(ReviewConflict) as caught:
+                    pool.submit(self.worker, attempt, '300ms').result(timeout=10)
+                driver = caught.exception.__cause__.__cause__
+                self.assertEqual(getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None), '55P03')
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with self.assertRaises(ReviewConflict):
+                pool.submit(self.worker, attempt).result(timeout=10)
+        self.assertFalse(SourceClaimReview.objects.exists())
+
     def test_review_lock_blocks_write_but_later_bypass_still_changes_claim(self):
         ready, resume = Event(), Event()
         review_thread = []

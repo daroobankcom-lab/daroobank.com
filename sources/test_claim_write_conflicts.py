@@ -10,7 +10,7 @@ from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from .models import SourceClaim
-from .services import record_claim
+from .services import _find_or_create_claim, record_claim
 
 DATA = {'source_name': 'منبع ساختگی', 'source_url': 'https://example.org/synthetic',
         'owner': 'مالک فرضی', 'evidence_url': 'https://example.org/evidence', 'evidence_note': '',
@@ -45,12 +45,12 @@ class ClaimWriteConflictTests(TestCase):
 
     def test_selected_failures_after_create_roll_back_and_preserve_cause(self):
         from .services import ClaimConflict
-        create = SourceClaim.objects.get_or_create
+        create = _find_or_create_claim
         for code in ('55P03', '40P01', '40001'):
             def create_then_fail(*args, **kwargs):
                 create(*args, **kwargs)
                 fail_with(code)
-            with self.subTest(code=code), patch('sources.services.SourceClaim.objects.get_or_create', side_effect=create_then_fail):
+            with self.subTest(code=code), patch('sources.services._find_or_create_claim', side_effect=create_then_fail):
                 with self.assertRaises(ClaimConflict) as caught:
                     record_claim(actor=self.actor, data=DATA)
                 self.assertIsInstance(caught.exception.__cause__, OperationalError)
@@ -94,7 +94,7 @@ class ClaimWriteConflictTests(TestCase):
         from .services import ClaimConflict
         claim, _ = record_claim(actor=self.actor, data=DATA)
         SourceClaim.objects.filter(pk=claim.pk).delete()
-        with patch('sources.services.SourceClaim.objects.get_or_create', return_value=(claim, False)):
+        with patch('sources.services._find_or_create_claim', return_value=(claim, False)):
             with self.assertRaises(ClaimConflict):
                 record_claim(actor=self.actor, data=DATA)
         self.assertFalse(SourceClaim.objects.exists())
@@ -112,7 +112,7 @@ class ClaimWriteConflictTests(TestCase):
         self.assertEqual(SourceClaim.objects.count(), 1)
 
     def test_unselected_database_failure_is_not_masked(self):
-        with patch('sources.services.SourceClaim.objects.get_or_create', side_effect=lambda *a, **k: fail_with('23505')):
+        with patch('sources.services._find_or_create_claim', side_effect=lambda *a, **k: fail_with('23505')):
             with self.assertRaises(OperationalError):
                 record_claim(actor=self.actor, data=DATA)
         self.assertFalse(SourceClaim.objects.exists())
@@ -120,7 +120,7 @@ class ClaimWriteConflictTests(TestCase):
     def test_http_selected_failure_is_private_and_not_reflected(self):
         self.client.force_login(self.actor)
         payload = {**DATA, 'claims_collection': 'on', 'starts_on': '', 'expires_on': '', 'attestation': 'on'}
-        with patch('sources.services.SourceClaim.objects.get_or_create', side_effect=lambda *a, **k: fail_with('40P01')):
+        with patch('sources.services._find_or_create_claim', side_effect=lambda *a, **k: fail_with('40P01')):
             response = self.client.post(reverse('staff_source_create'), payload)
         self.assertEqual(response.status_code, 409)
         self.assertContains(response, 'تداخل هم‌زمان', status_code=409)
@@ -163,11 +163,30 @@ class ClaimWriteRealLockTests(TransactionTestCase):
         self.assertEqual(SourceClaim.objects.get().recorded_by_id, self.actor.pk)
         self.assertEqual(SourceClaim.objects.get().pk, original.pk)
 
+    def test_replay_rereads_oversized_note_committed_after_lookup(self):
+        from .services import ClaimConflict
+        original, _ = record_claim(actor=self.actor, data=DATA)
+        observed = Event()
+        def lookup_then_signal(*args, **kwargs):
+            result = _find_or_create_claim(*args, **kwargs)
+            observed.set()
+            return result
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with patch('sources.services._find_or_create_claim', side_effect=lookup_then_signal):
+                with transaction.atomic():
+                    SourceClaim.objects.filter(pk=original.pk).update(evidence_note='ر' * 100_000 + 'race-canary')
+                    future = executor.submit(self.worker, lambda: record_claim(actor=self.other, data=DATA), '4s')
+                    self.assertTrue(observed.wait(3), 'Replay did not complete its pre-lock lookup')
+                with self.assertRaises(ClaimConflict):
+                    future.result(timeout=10)
+        self.assertEqual(SourceClaim.objects.count(), 1)
+        self.assertEqual(len(SourceClaim.objects.get(pk=original.pk).evidence_note), 100_000 + len('race-canary'))
+
     def test_replay_rereads_after_concurrent_uncommitted_mutation(self):
         from .services import ClaimConflict
         original, _ = record_claim(actor=self.actor, data=DATA)
         observed = Event()
-        get_or_create = SourceClaim.objects.get_or_create
+        get_or_create = _find_or_create_claim
 
         def lookup_then_signal(*args, **kwargs):
             result = get_or_create(*args, **kwargs)
@@ -175,7 +194,7 @@ class ClaimWriteRealLockTests(TransactionTestCase):
             return result
 
         with ThreadPoolExecutor(max_workers=1) as executor:
-            with patch('sources.services.SourceClaim.objects.get_or_create', side_effect=lookup_then_signal):
+            with patch('sources.services._find_or_create_claim', side_effect=lookup_then_signal):
                 with transaction.atomic():
                     SourceClaim.objects.filter(pk=original.pk).update(owner='مالک تغییر یافته ساختگی')
                     future = executor.submit(self.worker, lambda: record_claim(actor=self.other, data=DATA), '4s')

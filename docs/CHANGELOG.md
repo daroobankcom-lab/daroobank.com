@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded locked source evidence notes
+
+**Changes:** Source replay and review writers avoid transferring oversized evidence notes and reject them under their existing row locks.
+
+**Limits:** Database work and other fields remain outside the bound. See ADR 0161.
+
 ## 2026-11-24 — bounded source evidence-note reads
 
 **Changes:** Selected source claim displays and inspections bound evidence-note transfers and hide over-limit content, which is provably invalid under the existing field limit.

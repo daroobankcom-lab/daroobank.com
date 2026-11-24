@@ -96,21 +96,28 @@ def valid_claim(claim):
         return False
 
 
+def _find_or_create_claim(**kwargs):
+    # The replay pre-lookup needs only the ID before its authoritative lock.
+    return SourceClaim.objects.only('pk').get_or_create(**kwargs)
+
+
 def record_claim(*, actor, data):
     require_staff(actor, VIEW, ADD)
     validate_data(data)
     digest = fingerprint(data)
     with write_conflict_boundary(ClaimConflict):
-        claim, created = SourceClaim.objects.get_or_create(source_url=data['source_url'], payload_sha256=digest,
+        claim, created = _find_or_create_claim(source_url=data['source_url'], payload_sha256=digest,
                                                              defaults={**data, 'recorded_by': actor})
         if not created:
             # Re-read under the same row lock used by review, rather than trusting
             # a pre-lock replay object or only its stored digest.
             try:
-                claim = SourceClaim.objects.using(claim._state.db).select_for_update().get(pk=claim.pk)
+                claim = bounded_claim_notes(SourceClaim.objects.using(claim._state.db)
+                    .select_for_update()).get(pk=claim.pk)
             except SourceClaim.DoesNotExist as exc:
                 raise ClaimConflict('ادعای قبلی در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
-            if (not valid_claim(claim) or claim_data(claim) != data
+            materialize_claim_note(claim)
+            if (claim.note_oversized or not valid_claim(claim) or claim_data(claim) != data
                     or not current_account_exists(claim.recorded_by_id, using=claim._state.db)):
                 raise ClaimConflict('ادعای قبلی در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.')
         return claim, created
@@ -133,10 +140,11 @@ def review_claim(*, actor, claim_id, decision, reason, expected_review, expected
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
     with write_conflict_boundary(ReviewConflict):
-        claim = SourceClaim.objects.select_for_update().get(pk=claim_id)
+        claim = bounded_claim_notes(SourceClaim.objects.select_for_update()).get(pk=claim_id)
+        materialize_claim_note(claim)
         if claim.recorded_by_id == actor.pk:
             raise PermissionDenied
-        if (not valid_claim(claim) or claim.payload_sha256 != expected_hash
+        if (claim.note_oversized or not valid_claim(claim) or claim.payload_sha256 != expected_hash
                 or not current_account_exists(claim.recorded_by_id, using=claim._state.db)):
             raise ReviewConflict('اطلاعات منبع یا ثبت‌کننده در دسترس نیست یا تغییر کرده است؛ بازبینی متوقف شد.')
         latest = _lock_latest_review(claim)

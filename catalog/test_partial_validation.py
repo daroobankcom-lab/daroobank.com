@@ -1,5 +1,6 @@
 """Synthetic partial-save validation against the locked persisted presentation."""
 from datetime import datetime, timezone
+from itertools import product
 
 from django.core.exceptions import ValidationError
 from django.db.models.signals import pre_save
@@ -19,6 +20,29 @@ class PresentationPartialValidationTests(TestCase):
 
     def copies(self):
         return (ProductPresentation.objects.get(pk=self.product.pk), ProductPresentation.objects.get(pk=self.product.pk))
+
+    def test_publication_date_prospective_truth_table(self):
+        date = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        for current_published, current_dated, local_published, local_dated, field in product(
+                (False, True), (False, True), (False, True), (False, True), ('published', 'verified_at')):
+            with self.subTest(current_published=current_published, current_dated=current_dated,
+                              local_published=local_published, local_dated=local_dated, field=field):
+                ProductPresentation.objects.filter(pk=self.product.pk).update(
+                    published=current_published, verified_at=date if current_dated else None)
+                instance = ProductPresentation.objects.get(pk=self.product.pk)
+                instance.published = local_published
+                instance.verified_at = date if local_dated else None
+                next_published = local_published if field == 'published' else current_published
+                next_dated = local_dated if field == 'verified_at' else current_dated
+                if next_published and not next_dated:
+                    with self.assertRaises(ValidationError):
+                        instance.save(update_fields=[field])
+                    expected = (current_published, date if current_dated else None)
+                else:
+                    instance.save(update_fields=[field])
+                    expected = (next_published, date if next_dated else None)
+                current = ProductPresentation.objects.get(pk=self.product.pk)
+                self.assertEqual((current.published, current.verified_at), expected)
 
     def test_stale_publish_does_not_bypass_current_missing_verification(self):
         stale, fresh = self.copies()

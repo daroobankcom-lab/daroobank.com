@@ -283,17 +283,33 @@ class SyntheticRestoreDrill(TransactionTestCase):
         target = f'test_daroobank_restore_target_{target_token}'
         # The pre-existing target is itself a fresh synthetic database created for this test.
         created = False
+        probe = None
         try:
             with connection.cursor() as cursor:
                 cursor.execute(f'CREATE DATABASE {connection.ops.quote_name(target)}')
-            created = True
+                created = True
+                cursor.execute('SELECT oid FROM pg_catalog.pg_database WHERE datname = %s', [target])
+                original_oid = cursor.fetchone()[0]
+            probe = connection.copy(alias='synthetic_restore_collision_probe')
+            probe.settings_dict['NAME'] = target
+            with probe.cursor() as cursor:
+                cursor.execute('CREATE TABLE synthetic_restore_canary (value integer NOT NULL)')
+                cursor.execute('INSERT INTO synthetic_restore_canary VALUES (975)')
+            probe.close()
             with patch('daroobank.test_synthetic_restore.uuid4', return_value=SimpleNamespace(hex=target_token)):
-                with self.assertRaises(DatabaseError):
+                with self.assertRaises(DatabaseError) as error:
                     self.test_dump_and_restore_into_new_database()
+            self.assertEqual(getattr(error.exception.__cause__, 'sqlstate', None), '42P04')
             with connection.cursor() as cursor:
-                cursor.execute('SELECT 1 FROM pg_database WHERE datname = %s', [target])
-                self.assertIsNotNone(cursor.fetchone(), 'A pre-existing target was removed')
+                cursor.execute('SELECT oid FROM pg_catalog.pg_database WHERE datname = %s', [target])
+                self.assertEqual(cursor.fetchone(), (original_oid,), 'Existing target was removed or replaced')
+            with probe.cursor() as cursor:
+                cursor.execute('SELECT value FROM synthetic_restore_canary')
+                self.assertEqual(cursor.fetchone(), (975,))
+            probe.close()
         finally:
+            if probe is not None:
+                probe.close()
             if created:
                 with connection.cursor() as cursor:
                     cursor.execute(f'DROP DATABASE {connection.ops.quote_name(target)}')

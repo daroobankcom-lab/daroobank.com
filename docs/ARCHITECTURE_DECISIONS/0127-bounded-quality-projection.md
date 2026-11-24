@@ -10,6 +10,6 @@ For a projection at or below the threshold, its full text and the prior checks a
 
 ## Evidence and limitations
 
-Synthetic tests exercise a million-character projection, the character boundary, controls at the edge, selected SQL and no-echo/read-only behavior, plus the permission-scoped page and command. Existing quality, IRC and repair tests remain relevant. The output meaning changes for oversized rows and callers consuming issue codes must handle the new warning and `unknown` status.
+Synthetic tests exercise a million-character projection, the character boundary, controls at the edge, selected SQL and no-echo/read-only behavior, plus the permission-scoped page and command. A selected Chromium smoke test observes the new warning, unknown status and absence of a suffix canary at four viewport widths. Existing quality, IRC and repair tests remain relevant. The output meaning changes for oversized rows and callers consuming issue codes must handle the new warning and `unknown` status.
 
 The limit applies to the projection returned to Python, not PostgreSQL's storage, substring work, decompression, query time, all other fields, all callers or every configuration. It does not make the report a complete scan, snapshot, security audit, verification or production monitoring system. Unknown rows need separately authorized investigation, not automatic repair.

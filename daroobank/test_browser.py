@@ -17,6 +17,7 @@ from catalog.identity import digest, ingredient_snapshot, revise_identity
 from catalog.intake import review_product, stage_products
 from catalog.test_intake import make_csv
 from catalog.models import IngredientDraft, IdentityPackageReview, ProductCandidate, ProductPresentation
+from catalog.quality import MAX_INSPECTED_SEARCH_LENGTH
 from catalog.test_identity import ALL, INGREDIENT, build, user
 from clinical.services import create_draft, draft_data, review_draft
 from clinical.models import ClinicalDraftReview
@@ -101,10 +102,14 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
             leaf = revise_identity(actor=author, kind='ingredient', parent_id=leaf.pk,
                 data={**INGREDIENT, 'name_fa': f'ماده ساختگی خصوصی مرورگر {i}'},
                 change_reason='اصلاح ساختگی برای آزمایش مرورگر', expected_graph_hash=digest(ingredient_snapshot(leaf)))
-        ProductPresentation.objects.create(name_fa='داروی عمومی ساختگی مرورگر', name_en='Browser Synthetic Product',
+        public_product = ProductPresentation.objects.create(name_fa='داروی عمومی ساختگی مرورگر', name_en='Browser Synthetic Product',
             manufacturer='سازنده فرضی', strength='1 mg', dosage_form='قرص', package_description='10 عدد',
             irc='001', source_name='منبع ساختگی', source_url='https://example.org/public',
             verified_at=timezone.now(), published=True)
+        # Bypass-write a long projection to exercise the private quality warning;
+        # keep the genuine terms so the public current-field recheck still matches.
+        ProductPresentation.objects.filter(pk=public_product.pk).update(
+            search_text=public_product.search_text + ' ' + 'x' * (MAX_INSPECTED_SEARCH_LENGTH + 1) + 'browser-private-canary')
         price_row = dict(source_record_id='browser-detail', irc='001', manufacturer='سازنده فرضی',
             strength='1 mg', dosage_form='قرص', package_description='10 عدد', amount='100', currency='RIAL',
             category='retail', unit='package', effective_date='', source_published_date='')

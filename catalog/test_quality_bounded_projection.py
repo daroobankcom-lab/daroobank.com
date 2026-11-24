@@ -36,8 +36,20 @@ class QualityBoundedProjectionTests(TestCase):
         self.assertNotRegex(select, r'(?:^select |, )"catalog_productpresentation"\."search_text"(?:,|$)')
         self.assertEqual(report['rows'][0]['public_filter'], 'unknown')
         self.assertIn('oversized_search_projection', report['rows'][0]['issues'])
+        self.assertNotIn('invalid_text', report['rows'][0]['issues'])  # the control is in the omitted suffix
         self.assertNotIn('synthetic-private-canary', json.dumps(report))
         self.assertEqual(ProductPresentation.objects.get(pk=self.product.pk).search_text, original)
+
+    def test_oversized_row_does_not_claim_page_local_duplicate(self):
+        ProductPresentation.objects.create(
+            name_fa='نام ساختگی دیگر', manufacturer='سازنده فرضی', strength='5 mg', dosage_form='قرص',
+            package_description='10 عدد', irc='123', source_name='منبع',
+            source_url='https://example.org/synthetic')
+        ProductPresentation.objects.filter(pk=self.product.pk).update(search_text='x' * (MAX_INSPECTED_SEARCH_LENGTH + 1))
+        rows = inspect_batch()['rows']
+        self.assertEqual(rows[0]['issues'], ['oversized_search_projection'])
+        self.assertNotIn('duplicate_irc_in_batch', rows[1]['issues'])
+        self.assertEqual(rows[1]['public_filter'], 'blocked')
 
     @override_settings(STAFF_PORTAL_ENABLED=True)
     def test_private_page_and_command_report_fixed_warning_without_payload(self):

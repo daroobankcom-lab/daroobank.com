@@ -807,7 +807,11 @@ async function run() {
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '.staff-filter button', `quality submit ${width}`, '.staff-section');
       await Promise.all([page.waitForURL('**/staff/catalog/quality/?after=0'), page.keyboard.press('Enter')]);
-      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      const qualityText = await page.locator('main').innerText();
+      assert.match(qualityText, /بررسی‌شده در این بخش: 1/);
+      assert.match(qualityText, /شاخص جست‌وجو برای این بازرسی بیش از حد طولانی است/);
+      assert.match(qualityText, /فیلتر فنی عمومی: نامشخص/);
+      assert.doesNotMatch(qualityText, /browser-private-canary/);
       await checkLayout(page, `catalog quality ${width}`);
       if (width === 390) {
         await auditAccessibility(page, 'catalog quality');

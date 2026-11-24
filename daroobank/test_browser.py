@@ -89,6 +89,12 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         review_product(actor=reviewer, candidate_id=browser_candidate.pk, decision='defer',
                        reason='بازبینی فرآورده ساختگی برای مرورگر', expected_review=0,
                        expected_hash=browser_candidate.payload_sha256)
+        bad_product_row = {**product_row, 'source_record_id': 'browser-invalid-product', 'irc': '999'}
+        stage_products(io.BytesIO(make_csv([bad_product_row])), 'منبع ساختگی مرورگر',
+                       'https://example.org/browser-invalid-product', actor=author, commit=True, rights_attested=True)
+        bad_product = ProductCandidate.objects.get(source_record_id='browser-invalid-product')
+        ProductCandidate.objects.filter(pk=bad_product.pk).update(
+            source_fields={**bad_product_row, 'name_fa': 'browser-product-hidden-canary'})
         review_draft(actor=reviewer, draft_id=clinical_leaf.pk, decision='defer',
                      reason='دلیل خصوصی ساختگی بازبینی مرورگر', expected_review=0,
                      expected_hash=clinical_leaf.payload_sha256,
@@ -121,6 +127,13 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         record_preliminary_review(actor=reviewer, candidate_id=browser_price.pk, decision='defer',
                                   reason='بازبینی قیمت ساختگی برای مرورگر', expected_review=0,
                                   expected_product=0, expected_product_hash='')
+        bad_price_row = {**price_row, 'source_record_id': 'browser-invalid-price', 'irc': '999'}
+        stage_csv(io.BytesIO(csv_bytes([bad_price_row])), 'منبع ساختگی مرورگر',
+                  'https://example.org/browser-invalid-price', staged_by=price_stager, commit=True, rights_attested=True)
+        bad_price = PriceCandidate.objects.get(source_record_id='browser-invalid-price')
+        PriceCandidate.objects.filter(pk=bad_price.pk).update(
+            source_fields={**bad_price_row, 'manufacturer': 'browser-price-hidden-canary'},
+            original_amount='browser-amount-hidden-canary')
         # The subprocess receives only what it needs; database credentials are not propagated.
         env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG', 'TMPDIR') if key in os.environ}
         env.update(BROWSER_BASE_URL=self.live_server_url, BROWSER_AUTHOR='browser-author', BROWSER_REVIEWER='browser-reviewer',
@@ -128,7 +141,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
                    BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
                    BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk),
-                   BROWSER_CANDIDATE=str(browser_candidate.pk))
+                   BROWSER_CANDIDATE=str(browser_candidate.pk), BROWSER_BAD_CANDIDATE=str(bad_product.pk),
+                   BROWSER_BAD_PRICE=str(bad_price.pk))
         try:
             result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
                                     capture_output=True, text=True, timeout=180)
@@ -144,7 +158,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
         self.assertEqual(ClinicalDraftReview.objects.count(), 1)
         self.assertEqual(SourceClaimReview.objects.count(), 1)
-        self.assertEqual(PriceCandidate.objects.count(), 1)
+        self.assertEqual(PriceCandidate.objects.count(), 2)
         self.assertEqual(ImportReceipt.objects.count(), 1)
         self.assertEqual(browser_receipt.items.count(), 2)
         self.assertIn('browser checks passed', result.stdout)

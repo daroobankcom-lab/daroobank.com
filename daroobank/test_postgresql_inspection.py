@@ -41,7 +41,8 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
                     'trigger_session_mismatches', 'session_replication_role_replica', 'nonpositive_or_cycling_auto_sequences',
                     'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys',
-                    'unsupported_unique_constraints', 'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches',
+                    'unsupported_unique_constraints', 'missing_check_constraints', 'canonical_accept_all_named_checks',
+                    'missing_columns', 'column_nullability_mismatches',
                     'column_type_mismatches', 'unsupported_column_types', 'missing_field_indexes',
                     'unsupported_named_indexes', 'missing_named_indexes', 'unsupported_auto_fields', 'missing_auto_generation'):
             self.assertEqual(report[key], 0, key)
@@ -344,9 +345,10 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT source_claim_scope_present')
-                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT source_claim_scope_present CHECK (true)')
+                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT source_claim_scope_present CHECK (1 = 1)')
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
             self.assertEqual(report['missing_check_constraints'], 0)
+            self.assertEqual(report['canonical_accept_all_named_checks'], 0)
             self.assertEqual(report['status'], 'no_selected_issues')
             transaction.set_rollback(True)
 
@@ -358,6 +360,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
             self.assertEqual(report['missing_check_constraints'], 0)
             self.assertEqual(report['unvalidated_constraints'], 1)
+            self.assertEqual(report['canonical_accept_all_named_checks'], 1)
             self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
@@ -369,6 +372,49 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(), expected_check_constraints())
             self.assertEqual(report['missing_check_constraints'], 1)
             self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_canonical_always_accepting_named_check_constraints_are_flagged(self):
+        from django.contrib.auth import get_user_model
+        from sources.models import SourceClaim
+        user = get_user_model().objects.create_user('synthetic-check-probe')
+        fields = dict(source_name='منبع مصنوعی', source_url='https://example.org/check-probe',
+                      owner='مالک ساختگی', evidence_url='https://example.org/check-evidence', evidence_note='',
+                      claims_collection=False, claims_storage=False, claims_publication=False,
+                      payload_sha256='a' * 64, recorded_by=user)
+        # The real model constraint rejects a claim with no asserted scope.
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            SourceClaim.objects.create(**fields)
+        for expression, flagged in [('true', True), ('NULL', True), ('1 = 1', False)]:
+            with self.subTest(expression=expression), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT source_claim_scope_present')
+                    cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT source_claim_scope_present CHECK (' + expression + ')')
+                SourceClaim.objects.create(**fields)
+                report = inspect_schema(expected_tables(), check_constraints=expected_check_constraints())
+                self.assertEqual(report['missing_check_constraints'], 0)
+                self.assertEqual(report['canonical_accept_all_named_checks'], int(flagged))
+                self.assertEqual(report['status'], 'attention' if flagged else 'no_selected_issues')
+                output = io.StringIO()
+                if flagged:
+                    with self.assertRaises(CommandError):
+                        call_command('inspect_postgresql_schema', stdout=output)
+                    self.assertEqual(json.loads(output.getvalue())['canonical_accept_all_named_checks'], 1)
+                    self.assertNotIn('source_claim_scope_present', output.getvalue())
+                else:
+                    call_command('inspect_postgresql_schema', stdout=output)
+                    self.assertEqual(json.loads(output.getvalue())['status'], 'no_selected_issues')
+                # 1 = 1 is also tautological, but deliberately outside the exact
+                # deparsed constant subset. No semantic-equivalence claim.
+                transaction.set_rollback(True)
+
+    def test_unexpected_canonical_true_check_is_outside_the_selected_scope(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT synthetic_extra_true CHECK (true)')
+            report = inspect_schema(expected_tables(), check_constraints=expected_check_constraints())
+            self.assertEqual(report['canonical_accept_all_named_checks'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
             transaction.set_rollback(True)
 
     def test_migration_recorder_missing_column_is_reported(self):

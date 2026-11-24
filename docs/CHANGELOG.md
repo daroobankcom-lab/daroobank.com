@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — selected constant check clues
+
+**Changes:** The PostgreSQL inspector flags exact deparsed true/null expressions on selected named model checks; synthetic tests demonstrate rows that those checks allow.
+
+**Limits:** Other tautologies and unexpected checks remain outside this narrow test; it is not full expression comparison or data validation. See ADR 0104.
+
 ## 2026-11-24 — selected auto-sequence settings
 
 **Changes:** The single-statement PostgreSQL development inspector flags selected owned auto sequences with nonpositive increment, minimum below one or cycling enabled. Synthetic tests include a sequence that reissues a value and a rewound-value negative control.
@@ -180,7 +186,7 @@ Entries describe the state at each change; later entries can supersede earlier l
 
 **Changes:** Catalog inspection now reports missing explicitly named model check constraints and wrong constraint types; unvalidated checks remain separately flagged. Synthetic rolled-back PostgreSQL DDL exercises each case.
 
-**Limits:** The check compares name and type only; a same-named `CHECK (true)` can pass, and an equivalent check under another name is flagged. It does not validate data, compare migrations or certify production safety; see ADR 0074.
+**Limits at that point:** The check compared name and type only. ADR 0104 later added exact true/null clues, but other tautologies still pass and an equivalent check under another name is flagged. It does not validate data, compare migrations or certify production safety; see ADR 0074.
 
 ## 2026-11-23 — PostgreSQL unique-key clues
 

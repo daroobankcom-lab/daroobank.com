@@ -5,9 +5,9 @@ from django.db.models import Count, Max, Min, Q
 
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from catalog.comparisons import valid_candidate as valid_product
-from catalog.intake import stage_products
+from catalog.intake import MAX_ROWS as MAX_PRODUCT_ROWS, stage_products
 from pricing.comparisons import valid_candidate as valid_price
-from pricing.importer import stage_csv, validate_source
+from pricing.importer import MAX_ROWS as MAX_PRICE_ROWS, stage_csv, validate_source
 from .exceptions import StagingConflict
 from .models import ImportReceipt, ImportReceiptItem
 
@@ -77,7 +77,20 @@ def manifest_structure(receipt):
     """Check manifest aggregate structure; this is not proof of authenticity."""
     if receipt.manifest_version is None:
         return 'legacy'
-    if receipt.manifest_version != MANIFEST_VERSION:
+    if type(receipt.manifest_version) is not int or receipt.manifest_version != MANIFEST_VERSION:
+        return 'invalid'
+    limits = {ImportReceipt.PRODUCT: MAX_PRODUCT_ROWS, ImportReceipt.PRICE: MAX_PRICE_ROWS}
+    maximum = limits.get(receipt.kind)
+    counts = (receipt.rows, receipt.created, receipt.duplicates)
+    if (maximum is None or any(type(value) is not int or value < 0 for value in counts)
+            or not 1 <= receipt.rows <= maximum or receipt.created + receipt.duplicates != receipt.rows):
+        return 'invalid'
+    matches = (receipt.suggested, receipt.ambiguous, receipt.unmatched)
+    if receipt.kind == ImportReceipt.PRODUCT:
+        if any(value is not None for value in matches):
+            return 'invalid'
+    elif (any(type(value) is not int or value < 0 for value in matches)
+          or sum(matches) != receipt.rows):
         return 'invalid'
     rows = receipt.items.all()
     totals = rows.aggregate(total=Count('pk'), distinct_ordinals=Count('ordinal', distinct=True),

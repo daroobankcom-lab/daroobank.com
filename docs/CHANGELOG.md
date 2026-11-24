@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — manifest header consistency
+
+**Changes:** Validate selected version-1 receipt header totals, domain limits and suggestion counts before aggregating manifest rows; invalid headers stop row inspection, while legacy receipts stay legacy.
+
+**Limits:** Selected consistency only; the check is not a snapshot, provenance proof or schema repair. See ADR 0100.
+
 ## 2026-11-24 — manifest ordinal distinctness
 
 **Changes:** Manifest structural checks now count distinct ordinals, detecting gaps masked by duplicate positions even if a uniqueness constraint is missing or bypassed. Product and price detail and inspection stop displaying structurally inconsistent rows.

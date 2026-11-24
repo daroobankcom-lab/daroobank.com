@@ -1,5 +1,6 @@
 """Synthetic tests for private, bounded per-receipt consistency scans."""
 import io
+from copy import copy
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -148,6 +149,52 @@ class ManifestInspectionTests(TestCase):
                     self.assertEqual(scan['Cache-Control'], 'private, no-store, max-age=0')
                     transaction.set_rollback(True)
                 self.assertEqual(manifest_structure(receipt), 'available')
+
+    def test_invalid_v1_header_is_rejected_before_row_aggregation(self):
+        cases = [
+            (self.product_receipt, {'rows': 1001}),
+            (self.product_receipt, {'suggested': 0}),
+            (self.product_receipt, {'ambiguous': 0}),
+            (self.product_receipt, {'unmatched': 0}),
+            (self.product_receipt, {'created': -1, 'duplicates': 2}),
+            (self.price_receipt, {'rows': 5001}),
+            (self.price_receipt, {'suggested': None}),
+            (self.price_receipt, {'unmatched': -1, 'suggested': 2}),
+            (self.price_receipt, {'created': True, 'duplicates': 0}),
+        ]
+        for original, changes in cases:
+            with self.subTest(kind=original.kind, changes=changes):
+                receipt = copy(original)
+                for name, value in changes.items():
+                    setattr(receipt, name, value)
+                with self.assertNumQueries(0):
+                    self.assertEqual(manifest_structure(receipt), 'invalid')
+        legacy = copy(self.product_receipt)
+        legacy.manifest_version = None
+        legacy.suggested = 0
+        with self.assertNumQueries(0):
+            self.assertEqual(manifest_structure(legacy), 'legacy')
+
+    def test_product_header_corruption_stops_staff_manifest_when_check_is_missing(self):
+        self.client.force_login(self.product_user)
+        receipt = self.product_receipt
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('SET CONSTRAINTS ALL IMMEDIATE')
+                cursor.execute('ALTER TABLE ingestion_importreceipt DROP CONSTRAINT receipt_kind_and_matches_consistent')
+            ImportReceipt.objects.filter(pk=receipt.pk).update(suggested=0)
+            receipt.refresh_from_db()
+            self.assertEqual(manifest_structure(receipt), 'invalid')
+            self.assertEqual(self.scan(receipt, self.product_user)['status'], 'invalid')
+            detail = self.client.get(reverse('staff_import_receipt_detail', args=[receipt.pk]))
+            inspection = self.client.get(self.url(receipt))
+            self.assertContains(detail, 'تعداد یا ساختار فهرست ناسازگار است')
+            self.assertContains(inspection, 'ساختار یا شمارش فهرست ناسازگار است')
+            self.assertNotContains(detail, 'ردیف داده 1')
+            self.assertNotContains(inspection, 'ردیف داده 1')
+            transaction.set_rollback(True)
+        receipt.refresh_from_db()
+        self.assertEqual(manifest_structure(receipt), 'available')
 
     def test_invalid_candidate_and_mismatched_item_are_fixed_status_only(self):
         for receipt, user, model, fk in [(self.product_receipt, self.product_user, ProductCandidate, 'product_candidate_id'),

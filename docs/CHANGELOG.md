@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — historical migration failure and lock evidence
+
+**Changes:** Four historical catalog migration tests register schema restoration before setup can fail; synthetic injected failures verify restoration is attempted before Django flush. Presentation projection migration tests also cover selected old rows, transactional failure and a two-connection lock conflict. One-off 5,000-row probes counted per-row updates for both projection backfills.
+
+**Limits:** Cleanup can fail or be interrupted; these selected synthetic checks and timings do not establish safe production deployment, recovery or performance. See ADRs 0112 and 0113.
+
 ## 2026-11-24 — selected legacy-data migration tests
 
 **Changes:** PostgreSQL migration tests verify selected old receipt summaries and clinical draft/review fixtures survive existing additive migrations without invented manifest or reference rows; selected new constraints reject invalid values.

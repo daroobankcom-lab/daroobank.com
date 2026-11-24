@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — price-review snapshot clues
+
+**Changes:** The selected price detail history checks recent stored review snapshots, suppresses details of inconsistent records, and compares consistent snapshots with the current candidate.
+
+**Limits:** This is not authentication, audit or price approval; coherent rewrites can pass, reads are not snapshots and other outputs remain outside this display. See ADR 0137.
+
 ## 2026-11-24 — synthetic CSV sample downloads
 
 **Changes:** The two staff upload pages link to their fixed repository-provided synthetic CSV examples, with the same permissions as upload and private download headers.

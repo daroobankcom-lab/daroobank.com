@@ -930,6 +930,11 @@ async function run() {
       assert.equal(await pricePage.getByText('این بازبینی تضمین یکتایی نیست', {exact: false}).count(), 1);
       assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'بازبینی قیمت ساختگی برای مرورگر'}).innerText(), /بازبینی قیمت ساختگی برای مرورگر/);
       assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      const priceHistory = await pricePage.locator('main').innerText();
+      assert.match(priceHistory, /رکورد بازبینی یا تصویر آن ناسازگار است/);
+      assert.match(priceHistory, /این مقایسه تأیید اصالت یا قیمت نیست/);
+      assert(!priceHistory.includes('browser-history-hidden-canary'));
+      assert(!priceHistory.includes('browser-history-reason-canary'));
       assert.match(response.headers()['cache-control'], /no-store/);
       assert.match(await pricePage.locator('#price-comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
       await checkLayout(pricePage, `price detail ${width}`);

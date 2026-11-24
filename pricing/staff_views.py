@@ -22,6 +22,7 @@ from .comparisons import price_revision_context, valid_candidate
 from .forms import PriceReviewForm, PriceUploadForm
 from .importer import ImportValidationError, match_fields_valid, stage_csv, suggest_product
 from .models import PriceCandidate, PriceCandidateReview
+from .review_inspection import classify_review
 from .reviews import ReviewConflict, ensure_candidate_integrity, product_fingerprint, record_preliminary_review
 
 STATUS_LABELS = {
@@ -82,6 +83,9 @@ def _detail_response(request, candidate, *, form=None, status=200):
     current_status, current_product = _current_suggestion(candidate)
     reviews = recent_reviews_with_reviewers(candidate.reviews.all())
     candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
+    for review in reviews:
+        review.technical_status, review.candidate_comparison = classify_review(
+            review, candidate, current_status != 'invalid' and candidate.display_stager is not None)
     can_review = bool(current_status != 'invalid' and request.user.has_perm('pricing.review_pricecandidate')
                       and candidate.display_stager is not None and candidate.source_rights_attested
                       and candidate.staged_by_id != request.user.pk)

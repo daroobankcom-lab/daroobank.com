@@ -272,4 +272,6 @@
 
 - [0136: synthetic CSV downloads](0136-synthetic-csv-downloads.md) — development-only staff workflow, 24 November 2026.
 
+- [0137: price-review snapshot clues](0137-price-review-snapshot-clues.md) — development-only defensive display, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

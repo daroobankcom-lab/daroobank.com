@@ -126,7 +126,7 @@ class PriceWorkflowTests(TestCase):
         detail = self.client.get(reverse('staff_price_detail', args=[candidate.pk]))
         self.assertContains(detail, 'ثبت بازبینی اولیه')
         self.assertContains(detail, 'این بازبینی تضمین یکتایی نیست')
-        self.assertContains(detail, 'فقط شناسه آخرین بازبینی موجود بررسی می‌شود')
+        self.assertContains(detail, 'فقط شناسه آخرین بازبینی موجود برای تشخیص تغییر بررسی می‌شود')
         self.assertContains(detail, 'تغییر هم‌زمان یا بعدی تاریخچه همچنان ممکن است')
         self.assertEqual(self.review(candidate).status_code, 302)
         event = PriceCandidateReview.objects.get()

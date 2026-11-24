@@ -25,7 +25,7 @@ from clinical.evidence import evidence_state
 from ingestion.models import ImportReceipt
 from ingestion.receipts import stage_price_with_receipt
 from pricing.importer import stage_csv
-from pricing.models import PriceCandidate
+from pricing.models import PriceCandidate, PriceCandidateReview
 from pricing.test_workflow import csv_bytes
 from pricing.reviews import record_preliminary_review
 from sources.services import record_claim, review_claim
@@ -124,9 +124,16 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         _, browser_receipt = stage_price_with_receipt(io.BytesIO(csv_bytes([price_row, price_row])), 'منبع ساختگی مرورگر',
             'https://example.org/browser-detail', actor=price_stager, rights_attested=True)
         browser_price = PriceCandidate.objects.get(source_record_id='browser-detail')
-        record_preliminary_review(actor=reviewer, candidate_id=browser_price.pk, decision='defer',
+        valid_price_review = record_preliminary_review(actor=reviewer, candidate_id=browser_price.pk, decision='defer',
                                   reason='بازبینی قیمت ساختگی برای مرورگر', expected_review=0,
                                   expected_product=0, expected_product_hash='')
+        invalid_price_review = record_preliminary_review(actor=reviewer, candidate_id=browser_price.pk, decision='defer',
+                                  reason='بازبینی ساختگی برای تغییر در آزمون مرورگر', expected_review=valid_price_review.pk,
+                                  expected_product=0, expected_product_hash='')
+        # Bypass only the isolated synthetic DB to exercise the invalid-history display.
+        PriceCandidateReview.objects.filter(pk=invalid_price_review.pk).update(
+            review_snapshot={'unexpected': 'browser-history-hidden-canary'},
+            reason='browser-history-reason-canary متنی ساختگی برای آزمون')
         bad_price_row = {**price_row, 'source_record_id': 'browser-invalid-price', 'irc': '999'}
         stage_csv(io.BytesIO(csv_bytes([bad_price_row])), 'منبع ساختگی مرورگر',
                   'https://example.org/browser-invalid-price', staged_by=price_stager, commit=True, rights_attested=True)

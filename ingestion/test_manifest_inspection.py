@@ -1,5 +1,6 @@
 """Synthetic tests for private, bounded per-receipt consistency scans."""
 import io
+import random
 from copy import copy
 from unittest.mock import patch
 
@@ -149,6 +150,45 @@ class ManifestInspectionTests(TestCase):
                     self.assertEqual(scan['Cache-Control'], 'private, no-store, max-age=0')
                     transaction.set_rollback(True)
                 self.assertEqual(manifest_structure(receipt), 'available')
+
+    def test_structural_ordinal_check_against_seeded_independent_oracle(self):
+        rng = random.Random(8917417)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('SET CONSTRAINTS ALL IMMEDIATE')
+                cursor.execute('ALTER TABLE ingestion_importreceiptitem DROP CONSTRAINT receipt_item_unique_ordinal')
+            for receipt in (self.product_receipt, self.price_receipt):
+                sample = receipt.items.first()
+                candidate = {'product_candidate_id': sample.product_candidate_id,
+                             'price_candidate_id': sample.price_candidate_id}
+                found = {True: 0, False: 0}
+                for trial in range(100):
+                    count = rng.randint(3, 20)
+                    positions = list(range(1, count + 1))
+                    if trial % 2:
+                        positions[rng.randrange(1, count - 1)] = rng.choice([1, count])
+                    rng.shuffle(positions)
+                    created = [bool(rng.getrandbits(1)) for _ in positions]
+                    statuses = [rng.choice(('suggested', 'ambiguous', 'unmatched')) for _ in positions] \
+                        if receipt.kind == 'price' else [''] * count
+                    updates = {'rows': count, 'created': sum(created), 'duplicates': count - sum(created)}
+                    if receipt.kind == 'price':
+                        updates.update({key: statuses.count(key) for key in ('suggested', 'ambiguous', 'unmatched')})
+                    ImportReceipt.objects.filter(pk=receipt.pk).update(**updates)
+                    receipt.refresh_from_db()
+                    receipt.items.all().delete()
+                    ImportReceiptItem.objects.bulk_create([
+                        ImportReceiptItem(receipt=receipt, ordinal=ordinal, source_record_id='oracle-synthetic',
+                                          payload_sha256='a' * 64, was_created=was_created,
+                                          match_status=status, **candidate)
+                        for ordinal, was_created, status in zip(positions, created, statuses)
+                    ])
+                    expected = sorted(positions) == list(range(1, count + 1))
+                    found[expected] += 1
+                    with self.subTest(kind=receipt.kind, trial=trial):
+                        self.assertEqual(manifest_structure(receipt), 'available' if expected else 'invalid')
+                self.assertEqual(found, {True: 50, False: 50})
+            transaction.set_rollback(True)
 
     def test_invalid_v1_header_is_rejected_before_row_aggregation(self):
         cases = [

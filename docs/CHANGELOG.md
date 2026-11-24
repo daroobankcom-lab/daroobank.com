@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — synthetic backup argument guards
+
+**Changes:** The synthetic backup guide rejects non-absolute archive paths and libpq connection-string-like source database names before invoking client commands; restore operands use an option terminator. Offline guards and a disposable PostgreSQL restore probe cover selected paths.
+
+**Limits:** It cannot verify server identity, a trusted filesystem or inherited environment and intentionally accepts only simple ASCII database names; see ADR 0102.
+
 ## 2026-11-24 — PostgreSQL trigger session clues
 
 **Changes:** The single-statement development schema inspector flags replica session mode and selected trigger enabled modes that do not fire in that session, in addition to disabled triggers. Synthetic tests demonstrate an origin-mode replica-only trigger and a replica-mode foreign-key bypass.

@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class SyntheticBackupGuideTests(SimpleTestCase):
-    def run_example(self, failed_step='', existing_dump=False, missing_setting=''):
+    def run_example(self, failed_step='', existing_dump=False, missing_setting='', archive_setting=None, source_setting=None):
         guide = (ROOT / 'docs/DEVELOPMENT_GUIDE.md').read_text()
         script = guide.split('For a **synthetic development**', 1)[1].split('```sh\n', 1)[1].split('\n```', 1)[0]
         with tempfile.TemporaryDirectory(prefix='daroobank-backup-guide-test-') as directory:
@@ -23,7 +23,12 @@ class SyntheticBackupGuideTests(SimpleTestCase):
 name=${0##*/}
 case "$name" in
   pg_dump) step=dump ;;
-  pg_restore) if [ "$1" = "--list" ]; then step=list; else step=restore; fi ;;
+  pg_restore)
+    if [ "$1" = "--list" ]; then step=list; else step=restore; fi
+    separator=0
+    for argument do [ "$argument" != '--' ] || separator=1; done
+    [ "$separator" = 1 ] || exit 98 ;;
+
   createdb) step=createdb ;;
   python) step=$2 ;;
   *) exit 99 ;;
@@ -36,12 +41,16 @@ exit 0
             for executable in (bin_dir / 'pg_dump', bin_dir / 'pg_restore', bin_dir / 'createdb', python_dir / 'python'):
                 executable.write_text(fake)
                 executable.chmod(0o700)
-            dump = root / 'synthetic.dump'
+            dump = root / 'synthetic archive.dump'
             if existing_dump:
                 dump.write_text('do not overwrite')
             env = {'PATH': f'{bin_dir}:/usr/bin:/bin', 'HOME': str(root), 'TRACE': str(root / 'trace'),
                    'FAIL_STEP': failed_step, 'SYNTHETIC_DUMP_FILE': str(dump), 'POSTGRES_HOST': 'synthetic.invalid',
                    'POSTGRES_PORT': '5432', 'POSTGRES_USER': 'synthetic', 'POSTGRES_DB': 'synthetic_source'}
+            if archive_setting is not None:
+                env['SYNTHETIC_DUMP_FILE'] = archive_setting
+            if source_setting is not None:
+                env['POSTGRES_DB'] = source_setting
             if missing_setting:
                 env.pop(missing_setting)
             result = subprocess.run(['/bin/sh', '-c', script], cwd=root, env=env, stdin=subprocess.DEVNULL,
@@ -71,6 +80,28 @@ exit 0
         self.assertNotEqual(code, 0)
         self.assertEqual(trace, [])
         self.assertEqual(contents, 'do not overwrite')
+
+    def test_relative_archive_paths_are_rejected_before_dump(self):
+        for path in ('synthetic.dump', '../synthetic.dump', '--help', '-'):
+            with self.subTest(path=path):
+                code, trace, _, _ = self.run_example(archive_setting=path)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(trace, [])
+
+    def test_connection_string_database_names_are_rejected_before_dump(self):
+        for name in ('postgresql://other.example/production', 'host=other dbname=production',
+                     'dbname=other', '-danger', 'db name', 'db-name', 'déb', '١٢', 'x' * 64):
+            with self.subTest(name=name):
+                code, trace, contents, _ = self.run_example(source_setting=name)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(trace, [])
+                self.assertIsNone(contents)
+
+    def test_simple_ascii_database_name_at_length_limit_is_accepted(self):
+        code, trace, contents, _ = self.run_example(source_setting='x' * 63)
+        self.assertEqual(code, 0)
+        self.assertEqual(trace, ['dump', 'list', 'createdb', 'restore', 'migrate', 'check'])
+        self.assertEqual(contents, 'synthetic archive')
 
     def test_missing_required_setting_stops_before_any_command(self):
         for setting in ('SYNTHETIC_DUMP_FILE', 'POSTGRES_DB', 'POSTGRES_HOST', 'POSTGRES_USER'):

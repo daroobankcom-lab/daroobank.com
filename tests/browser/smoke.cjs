@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'OVERSIZED_RECEIPT', 'CLAIM', 'OVERSIZED_CLAIM', 'CANDIDATE', 'OVERSIZED_CANDIDATE', 'OVERSIZED_PRICE', 'BAD_CANDIDATE', 'BAD_PRICE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'OVERSIZED_DRAFT', 'PRICE', 'RECEIPT', 'OVERSIZED_RECEIPT', 'CLAIM', 'OVERSIZED_CLAIM', 'CANDIDATE', 'OVERSIZED_CANDIDATE', 'OVERSIZED_PRICE', 'BAD_CANDIDATE', 'BAD_PRICE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -828,6 +828,15 @@ async function run() {
       assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
       assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
       await checkLayout(page, `clinical oversized scan ${width}`);
+      await page.goto(base + `/staff/clinical/${ids.oversized_draft}/`);
+      assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
+      assert.equal(await page.locator('.staff-review-form').count(), 0);
+      await checkLayout(page, `clinical oversized detail ${width}`);
+      await page.goto(base + `/staff/clinical/${ids.oversized_draft}/lineage/`);
+      assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
+      await checkLayout(page, `clinical oversized lineage ${width}`);
       await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
       const clinicalDetail = page.locator('main');
       assert.match(await clinicalDetail.innerText(), /اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند/);

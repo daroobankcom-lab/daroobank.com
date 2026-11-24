@@ -206,7 +206,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                    BROWSER_PASSWORD='test-only', BROWSER_INGREDIENT=str(ingredient.pk), BROWSER_LEAF=str(leaf.pk),
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
                    BROWSER_OVERSIZED_PACKAGE=str(oversized_package.pk), BROWSER_OVERSIZED_INGREDIENT=str(oversized_ingredient.pk),
-                   BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
+                   BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_OVERSIZED_DRAFT=str(oversized_draft.pk), BROWSER_PRICE=str(browser_price.pk),
                    BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_OVERSIZED_RECEIPT=str(oversized_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk), BROWSER_OVERSIZED_CLAIM=str(oversized_claim.pk),
                    BROWSER_CANDIDATE=str(browser_candidate.pk), BROWSER_OVERSIZED_CANDIDATE=str(oversized_product_candidate.pk),
                    BROWSER_OVERSIZED_PRICE=str(oversized_price_candidate.pk), BROWSER_BAD_CANDIDATE=str(bad_product.pk),

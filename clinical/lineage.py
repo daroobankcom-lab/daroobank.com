@@ -6,6 +6,7 @@ from django.utils.crypto import constant_time_compare, salted_hmac
 
 from daroobank.signed_cursors import loads_nonfuture
 
+from .draft_reads import bounded_draft_text, draft_text_uninspected, materialize_draft_text
 from .models import ClinicalDraft
 from .services import VIEW, require_staff, valid_draft, valid_payload
 
@@ -66,10 +67,21 @@ def inspect_lineage(*, actor, anchor_id, cursor=''):
         raise LineageNotFound
     if not isinstance(cursor, str):
         raise InvalidLineageCursor
-    objects = ClinicalDraft.objects.select_related('parent')
-    anchor = objects.filter(pk=anchor_id).first()
+    objects = bounded_draft_text(ClinicalDraft.objects.select_related('parent'))
+
+    def read(pk):
+        draft = objects.filter(pk=pk).first()
+        if draft is not None:
+            materialize_draft_text(draft)
+        return draft
+
+    anchor = read(anchor_id)
     if anchor is None:
         raise LineageNotFound
+    if draft_text_uninspected(anchor):
+        if cursor:
+            raise InvalidLineageCursor
+        return {'anchor_id': anchor_id, 'status': 'oversized', 'rows': [], 'next_cursor': None}
     if not valid_payload(anchor):
         if cursor:
             raise InvalidLineageCursor
@@ -77,13 +89,15 @@ def inspect_lineage(*, actor, anchor_id, cursor=''):
     current, depth = anchor, 0
     if cursor:
         current_id, expected, depth = _decode(cursor, anchor)
-        current = objects.filter(pk=current_id).first()
-        if (current is None or not valid_payload(current)
+        current = read(current_id)
+        if (current is None or draft_text_uninspected(current) or not valid_payload(current)
                 or not constant_time_compare(expected, _keyed_hash(current.payload_sha256))):
             raise InvalidLineageCursor
     rows = []
     expected_current_hash = None
     for step in range(PAGE_SIZE):
+        if current is not None and draft_text_uninspected(current):
+            return {'anchor_id': anchor_id, 'status': 'oversized', 'rows': rows, 'next_cursor': None}
         if (current is None or not valid_payload(current)
                 or (expected_current_hash is not None
                     and not constant_time_compare(expected_current_hash, current.payload_sha256))):
@@ -101,7 +115,7 @@ def inspect_lineage(*, actor, anchor_id, cursor=''):
             # can tell us whether continuation is needed without another query.
             current = parent
         else:
-            current = objects.filter(pk=parent.pk).first()
+            current = read(parent.pk)
     more = current.parent_id is not None
     return {'anchor_id': anchor_id, 'status': 'more' if more else 'no_parent', 'rows': rows,
             'next_cursor': _encode(anchor, current, depth) if more else None}

@@ -24,7 +24,9 @@ from .services import ADD, FIELDS, REVIEW, VIEW, DraftConflict, DraftError, crea
 def get_draft(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Draft not found')
-    return get_object_or_404(ClinicalDraft.objects.select_related('parent'), pk=pk)
+    draft = get_object_or_404(bounded_draft_text(ClinicalDraft.objects.select_related('parent')), pk=pk)
+    materialize_draft_text(draft)
+    return draft
 
 
 @login_required(login_url='staff_login')
@@ -155,11 +157,15 @@ def detail_response(request, draft, *, form=None, status=200):
             review.evidence_status = 'invalid'
         else:
             review.evidence_status = 'unknown'
-    children = list(draft.revisions.select_related('parent').order_by('-pk')[:11]) if valid else []
-    for child in children[:10]: child.is_valid = valid_draft(child)
+    children = list(bounded_draft_text(draft.revisions.select_related('parent').order_by('-pk'))[:11]) if valid else []
+    for child in children[:10]:
+        materialize_draft_text(child)
+        child.text_uninspected = draft_text_uninspected(child)
+        child.is_valid = not child.text_uninspected and valid_draft(child)
     return render(request, 'staff/clinical_detail.html', {
         'page_title': 'پیش‌نویس علمی | داروبانک', 'description': 'جزئیات داخلی پیش‌نویس.',
         'noindex': True, 'private_staff': True, 'draft': draft, 'valid': valid, 'reviews': reviews,
+        'text_uninspected': draft_text_uninspected(draft),
         'review_form': form, 'can_review': can_review, 'can_add': valid and request.user.has_perm(ADD),
         'evidence': evidence, 'reviewer_is_contributor': contributor,
         'children': children[:10], 'children_limited': len(children) > 10,

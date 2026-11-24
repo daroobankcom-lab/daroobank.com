@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded clinical detail and lineage
+
+**Changes:** Selected draft, immediate-parent and child text in private clinical detail and lineage reads is bounded; excessive values remain uninspected and disable unsafe affordances.
+
+**Limits:** This is not a snapshot or clinical validation; locked writer reads and other paths remain outside this bound. See ADR 0163.
+
 ## 2026-11-24 — bounded clinical scan text
 
 **Changes:** Clinical queue and technical scan bound selected draft and parent text, reporting oversized values as uninspected rather than necessarily inconsistent.

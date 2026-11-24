@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL model-index presence clues
+
+**Changes:** The catalog inspector checks selected field-index coverage and named model B-tree indexes against the current metadata, reporting unsupported named definitions as attention. Rolled-back PostgreSQL tests cover missing, partial, hash, reordered and alternate indexes.
+
+**Limits:** Sort direction, operator class, collation, complete schema definitions and query performance are not verified; a useful alternative can be flagged. See ADR 0080.
+
 ## 2026-11-24 — synthetic post-restore sequence probes
 
 **Changes:** The disposable PostgreSQL restore drill exercises new service writes across selected domains and checks generated IDs advance beyond restored records. A negative control rewinds one target-only synthetic sequence, detects an integrity failure, then resets it for a successful probe.

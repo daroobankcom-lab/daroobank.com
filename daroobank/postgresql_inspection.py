@@ -4,7 +4,7 @@ import re
 
 from django.apps import apps
 from django.db import connection
-from django.db.models import CheckConstraint, UniqueConstraint
+from django.db.models import CheckConstraint, Index, UniqueConstraint
 
 
 def expected_tables():
@@ -101,7 +101,35 @@ def expected_columns():
     return sorted(result)
 
 
-def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constraints=(), columns=()):
+def expected_field_indexes():
+    """Local fields whose current model metadata explicitly requests a DB index."""
+    result = set()
+    for model in apps.get_models(include_auto_created=True):
+        meta = model._meta
+        if not meta.managed or meta.proxy or meta.swapped:
+            continue
+        for field in meta.local_fields:
+            if field.column and field.db_index:
+                result.add((meta.db_table, field.column))
+    return sorted(result)
+
+
+def expected_named_indexes():
+    """Named simple model indexes; unsupported declarations remain explicit."""
+    result = set()
+    for model in apps.get_models(include_auto_created=True):
+        meta = model._meta
+        if not meta.managed or meta.proxy or meta.swapped:
+            continue
+        for index in meta.indexes:
+            supported = (type(index) is Index and bool(index.fields) and not index.expressions
+                         and index.condition is None and not index.include and not index.opclasses)
+            columns = tuple(meta.get_field(name.lstrip('-')).column for name in index.fields) if supported else ()
+            result.add((meta.db_table, index.name, columns, bool(supported)))
+    return sorted(result)
+
+
+def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constraints=(), columns=(), field_indexes=(), named_indexes=()):
     """Return aggregate clues from one PostgreSQL statement, never catalog names or data.
 
     Resolution follows the active search path. This is not a comparison to the
@@ -139,6 +167,12 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             ), expected_columns AS (
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name, not_null, expected_type, skip_type
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, column_name text, not_null boolean, expected_type text, skip_type boolean)
+            ), expected_indexes AS (
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name
+                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS i(table_name text, column_name text)
+            ), expected_named AS (
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, index_name, columns, supported
+                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS i(table_name text, index_name text, columns jsonb, supported boolean)
             )
             SELECT
                 (SELECT COUNT(*) FROM names),
@@ -188,7 +222,30 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                 (SELECT COUNT(*) FROM expected_columns e JOIN pg_catalog.pg_attribute a
                     ON a.attrelid = e.table_oid AND a.attname = e.column_name AND a.attnum > 0 AND NOT a.attisdropped
                     JOIN tables t ON t.oid = a.attrelid WHERE e.expected_type IS NOT NULL
-                    AND pg_catalog.format_type(a.atttypid, a.atttypmod) <> e.expected_type)
+                    AND pg_catalog.format_type(a.atttypid, a.atttypmod) <> e.expected_type),
+                (SELECT COUNT(*) FROM expected_indexes),
+                (SELECT COUNT(*) FROM expected_indexes e WHERE NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_index i
+                    JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
+                    JOIN pg_catalog.pg_am am ON am.oid = idx.relam
+                    JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+                    WHERE i.indrelid = e.table_oid AND a.attname = e.column_name
+                      AND i.indisvalid AND i.indisready AND i.indislive AND i.indnkeyatts >= 1
+                      AND i.indpred IS NULL AND i.indexprs IS NULL AND am.amname = 'btree')),
+                (SELECT COUNT(*) FROM expected_named),
+                (SELECT COUNT(*) FROM expected_named WHERE NOT supported),
+                (SELECT COUNT(*) FROM expected_named e WHERE e.supported AND NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_index i
+                    JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
+                    JOIN pg_catalog.pg_am am ON am.oid = idx.relam
+                    WHERE i.indrelid = e.table_oid AND idx.relname = e.index_name AND am.amname = 'btree'
+                      AND i.indisvalid AND i.indisready AND i.indislive AND i.indpred IS NULL AND i.indexprs IS NULL
+                      AND i.indnkeyatts = pg_catalog.jsonb_array_length(e.columns)
+                      AND (SELECT pg_catalog.array_agg(a.attname::text ORDER BY k.ordinal)
+                           FROM pg_catalog.unnest(i.indkey::smallint[]) WITH ORDINALITY AS k(attnum, ordinal)
+                           JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+                           WHERE k.ordinal <= i.indnkeyatts)
+                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(e.columns))))
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
@@ -196,17 +253,23 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
               json.dumps([{'table_name': table, 'constraint_name': name} for table, name in check_constraints]),
               json.dumps([{'table_name': table, 'column_name': name, 'not_null': not_null,
                            'expected_type': data_type, 'skip_type': skip_type}
-                          for table, name, not_null, data_type, skip_type in columns])])
+                          for table, name, not_null, data_type, skip_type in columns]),
+              json.dumps([{'table_name': table, 'column_name': name} for table, name in field_indexes]),
+              json.dumps([{'table_name': table, 'index_name': name, 'columns': keys, 'supported': supported}
+                          for table, name, keys, supported in named_indexes])])
         values = cursor.fetchone()
     keys = ('expected_tables', 'unresolved_tables', 'non_table_relations', 'unvalidated_constraints',
             'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',
             'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'expected_unique_keys', 'missing_unique_keys',
             'expected_check_constraints', 'missing_check_constraints', 'expected_columns', 'missing_columns',
-            'column_nullability_mismatches', 'unsupported_column_types', 'skipped_auto_m2m_pk_types', 'column_type_mismatches')
+            'column_nullability_mismatches', 'unsupported_column_types', 'skipped_auto_m2m_pk_types', 'column_type_mismatches',
+            'expected_field_indexes', 'missing_field_indexes', 'expected_named_indexes', 'unsupported_named_indexes',
+            'missing_named_indexes')
     result = dict(zip(keys, values))
     result['status'] = ('attention' if any(result[key] for key in (
         'unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes',
         'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
         'nondefault_action_foreign_keys', 'missing_unique_keys', 'missing_check_constraints', 'missing_columns',
-        'column_nullability_mismatches', 'unsupported_column_types', 'column_type_mismatches')) else 'no_selected_issues')
+        'column_nullability_mismatches', 'unsupported_column_types', 'column_type_mismatches',
+        'missing_field_indexes', 'unsupported_named_indexes', 'missing_named_indexes')) else 'no_selected_issues')
     return result

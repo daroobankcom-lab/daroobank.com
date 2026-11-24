@@ -8,8 +8,9 @@ from django.db import DatabaseError, connection, transaction
 from django.test import TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from .postgresql_inspection import (expected_check_constraints, expected_columns, expected_foreign_keys, expected_tables,
-                                     expected_unique_keys, inspect_schema)
+from .postgresql_inspection import (expected_check_constraints, expected_columns, expected_field_indexes,
+                                     expected_foreign_keys, expected_named_indexes, expected_tables, expected_unique_keys,
+                                     inspect_schema)
 
 
 @override_settings(DEBUG=True)
@@ -29,10 +30,15 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertGreater(report['expected_check_constraints'], 0)
         self.assertEqual(report['expected_columns'], len(expected_columns()))
         self.assertGreater(report['expected_columns'], 0)
+        self.assertEqual(report['expected_field_indexes'], len(expected_field_indexes()))
+        self.assertGreater(report['expected_field_indexes'], 0)
+        self.assertEqual(report['expected_named_indexes'], len(expected_named_indexes()))
+        self.assertGreater(report['expected_named_indexes'], 0)
         for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
                     'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys',
                     'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches',
-                    'column_type_mismatches', 'unsupported_column_types'):
+                    'column_type_mismatches', 'unsupported_column_types', 'missing_field_indexes',
+                    'unsupported_named_indexes', 'missing_named_indexes'):
             self.assertEqual(report[key], 0, key)
         self.assertEqual(set(connection.introspection.table_names()), before)
         self.assertIn('sources_sourceclaim', expected_tables())
@@ -45,7 +51,8 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                 cursor.execute('SET TRANSACTION READ ONLY')
             with CaptureQueriesContext(connection) as queries:
                 report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
-                                        expected_check_constraints(), expected_columns())
+                                        expected_check_constraints(), expected_columns(), expected_field_indexes(),
+                                        expected_named_indexes())
             self.assertEqual(len(queries), 1)
             self.assertEqual(report['status'], 'no_selected_issues')
 
@@ -323,6 +330,85 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             report = json.loads(output.getvalue())
             self.assertEqual(report['unsupported_column_types'], 1)
             self.assertEqual(report['column_type_mismatches'], 0)
+            self.assertEqual(report['status'], 'attention')
+
+    def test_missing_db_index_and_partial_or_hash_replacements_are_reported(self):
+        for replacement in ('',
+                            "CREATE INDEX synthetic_partial_irc ON catalog_productcandidate (irc_normalized) WHERE irc_normalized <> ''",
+                            'CREATE INDEX synthetic_hash_irc ON catalog_productcandidate USING hash (irc_normalized)'):
+            with self.subTest(replacement=replacement), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('''SELECT idx.relname FROM pg_catalog.pg_index i
+                        JOIN pg_catalog.pg_class idx ON idx.oid=i.indexrelid
+                        JOIN pg_catalog.pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=i.indkey[0]
+                        WHERE i.indrelid='catalog_productcandidate'::regclass AND a.attname='irc_normalized' ''')
+                    names = [row[0] for row in cursor.fetchall()]
+                    self.assertGreaterEqual(len(names), 1)
+                    for name in names:
+                        cursor.execute('DROP INDEX ' + connection.ops.quote_name(name))
+                    if replacement:
+                        cursor.execute(replacement)
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report['missing_field_indexes'], 1)
+                self.assertNotIn('irc_normalized', output.getvalue())
+                transaction.set_rollback(True)
+
+    def test_longer_index_with_same_leading_field_satisfies_selected_check(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('''SELECT idx.relname FROM pg_catalog.pg_index i
+                    JOIN pg_catalog.pg_class idx ON idx.oid=i.indexrelid
+                    JOIN pg_catalog.pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=i.indkey[0]
+                    WHERE i.indrelid='catalog_productcandidate'::regclass AND a.attname='irc_normalized' ''')
+                names = [row[0] for row in cursor.fetchall()]
+                self.assertGreaterEqual(len(names), 1)
+                for name in names:
+                    cursor.execute('DROP INDEX ' + connection.ops.quote_name(name))
+                cursor.execute('CREATE INDEX synthetic_composite_irc ON catalog_productcandidate (irc_normalized, id)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                                    expected_check_constraints(), expected_columns(), expected_field_indexes())
+            self.assertEqual(report['missing_field_indexes'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
+    def test_missing_and_wrong_key_order_named_indexes_are_reported(self):
+        for replacement in ('CREATE INDEX synthetic_receipt_index ON ingestion_importreceipt (kind, id DESC)',
+                            'CREATE INDEX receipt_kind_id_idx ON ingestion_importreceipt (id, kind)'):
+            with self.subTest(replacement=replacement), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('DROP INDEX receipt_kind_id_idx')
+                    cursor.execute(replacement)
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report['missing_named_indexes'], 1)
+                self.assertNotIn('receipt_kind_id_idx', output.getvalue())
+                transaction.set_rollback(True)
+
+    def test_named_index_sort_direction_is_not_checked(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('DROP INDEX receipt_kind_id_idx')
+                cursor.execute('CREATE INDEX receipt_kind_id_idx ON ingestion_importreceipt (kind, id ASC)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
+            self.assertEqual(report['missing_named_indexes'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
+    def test_unsupported_named_index_does_not_report_clean(self):
+        with patch('catalog.management.commands.inspect_postgresql_schema.expected_named_indexes',
+                   return_value=[('ingestion_importreceipt', 'synthetic', (), False)]):
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['unsupported_named_indexes'], 1)
+            self.assertEqual(report['missing_named_indexes'], 0)
             self.assertEqual(report['status'], 'attention')
 
     def test_out_of_scope_catalog_issues_are_not_reported(self):

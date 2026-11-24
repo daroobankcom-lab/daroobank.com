@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — isolated test teardown name guard
+
+**Changes:** The isolated test backend records a successful CREATE on the creation instance and allows a single teardown attempt only for that exact name. A real synthetic canary and mocked failed-DROP tests cover selected refusal paths.
+
+**Limits:** The record is not ownership or database identity, and replacement before DROP remains possible. Crashes and failures may leave databases behind; see ADR 0114.
+
 ## 2026-11-24 — historical migration failure and lock evidence
 
 **Changes:** Four historical catalog migration tests register schema restoration before setup can fail; synthetic injected failures verify restoration is attempted before Django flush. Presentation projection migration tests also cover selected old rows, transactional failure and a two-connection lock conflict. One-off 5,000-row probes counted per-row updates for both projection backfills.

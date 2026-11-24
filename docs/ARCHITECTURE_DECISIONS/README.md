@@ -226,4 +226,6 @@
 
 - [0113: historical test setup cleanup](0113-historical-test-setup-cleanup.md) — development-only test reliability, 24 November 2026.
 
+- [0114: isolated teardown name guard](0114-isolated-teardown-name-guard.md) — development-only safeguard, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

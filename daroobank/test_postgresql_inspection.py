@@ -875,6 +875,48 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual((report['session_replication_role_replica'], report['trigger_session_mismatches']), (0, 0))
             transaction.set_rollback(True)
 
+    def test_replica_only_internal_fk_triggers_do_not_enforce_in_origin_mode(self):
+        # Altering internal RI triggers requires a superuser and is strictly a
+        # disposable, rolled-back test; never do this as a repair operation.
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = current_user')
+            if not cursor.fetchone()[0]:
+                self.skipTest('Synthetic role cannot alter internal FK triggers')
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('CREATE TABLE synthetic_origin_fk_parent (id integer PRIMARY KEY)')
+                cursor.execute('CREATE TABLE synthetic_origin_fk_child (parent_id integer REFERENCES synthetic_origin_fk_parent(id))')
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('INSERT INTO synthetic_origin_fk_child VALUES (11)')
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT tgname FROM pg_catalog.pg_trigger WHERE tgrelid = 'synthetic_origin_fk_child'::regclass AND tgisinternal ORDER BY tgname")
+                names = [row[0] for row in cursor.fetchall()]
+                self.assertEqual(len(names), 2)
+                for name in names:
+                    quoted = '"' + name.replace('"', '""') + '"'
+                    cursor.execute('ALTER TABLE synthetic_origin_fk_child ENABLE REPLICA TRIGGER ' + quoted)
+                cursor.execute('INSERT INTO synthetic_origin_fk_child VALUES (11)')
+                self.assertEqual(cursor.rowcount, 1)
+            report = inspect_schema(['synthetic_origin_fk_child'])
+            self.assertEqual(report['disabled_triggers'], 0)
+            self.assertEqual(report['session_replication_role_replica'], 0)
+            self.assertGreaterEqual(report['trigger_session_mismatches'], 2)
+            self.assertEqual(report['status'], 'attention')
+            with connection.cursor() as cursor:
+                for name in names:
+                    quoted = '"' + name.replace('"', '""') + '"'
+                    cursor.execute('ALTER TABLE synthetic_origin_fk_child ENABLE ALWAYS TRIGGER ' + quoted)
+            self.assertEqual(inspect_schema(['synthetic_origin_fk_child'])['trigger_session_mismatches'], 0)
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('INSERT INTO synthetic_origin_fk_child VALUES (12)')
+            # Re-enabling triggers does not validate previously inserted rows.
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT count(*) FROM synthetic_origin_fk_child')
+                self.assertEqual(cursor.fetchone()[0], 1)
+            transaction.set_rollback(True)
+
     def test_unvalidated_constraint_and_disabled_trigger(self):
         with connection.cursor() as cursor:
             cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT synthetic_unvalidated CHECK (id > 0) NOT VALID')

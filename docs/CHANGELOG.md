@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — product staging replay integrity
+
+**Changes:** Committed product staging locks and checks duplicate candidates before counting them or recording receipt items; unsafe replays roll back the stage and return a conflict. Synthetic PostgreSQL tests include integrity failures and concurrent row updates.
+
+**Limits:** Locks and account checks add per-duplicate work; rights and authenticity are not verified, and price staging is unchanged. See ADR 0096.
+
 ## 2026-11-24 — source-claim replay integrity
 
 **Changes:** Duplicate source-claim replays lock and re-read the existing row, checking its current payload, exact submitted fields and recorder existence; unsafe replay returns a private conflict. PostgreSQL concurrency tests cover timeout, outer lock lifetime and a mutation between lookup and locked read.

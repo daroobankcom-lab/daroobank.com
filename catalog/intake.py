@@ -122,6 +122,17 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
                     defaults={'source_name': source_name, 'source_fields': row, 'staged_by': actor,
                               'source_rights_attested': True, 'irc_normalized': normalize_search(row['irc'])},
                 )
+                if not created:
+                    try:
+                        candidate = ProductCandidate.objects.using(candidate._state.db).select_for_update().get(pk=candidate.pk)
+                    except ProductCandidate.DoesNotExist as exc:
+                        raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
+                    if (candidate.source_name != source_name or candidate.source_url != source_url
+                            or candidate.source_record_id != row['source_record_id'] or candidate.source_fields != row
+                            or candidate.payload_sha256 != digest or candidate.irc_normalized != normalize_search(row['irc'])
+                            or candidate.source_rights_attested is not True
+                            or not current_account_exists(candidate.staged_by_id, using=candidate._state.db)):
+                        raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.')
                 counts['created' if created else 'duplicates'] += 1
                 if on_staged is not None:
                     on_staged(candidate.pk, row['source_record_id'], digest, created, None)

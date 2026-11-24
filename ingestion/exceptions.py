@@ -2,4 +2,4 @@
 
 
 class StagingConflict(ValueError):
-    """A selected database concurrency error rolled back this staging boundary."""
+    """A selected staging concurrency or replay-integrity conflict; no automatic retry."""

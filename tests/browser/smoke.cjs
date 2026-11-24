@@ -1145,6 +1145,36 @@ async function run() {
     await Promise.all([page.waitForURL(/\/staff\/catalog\/identity\/ingredient\/\d+\/$/),
       page.locator('form.staff-review-form button[type=submit]').click()]);
     assert.match(await page.locator('body').innerText(), /ماده تازه ساختگی مرورگر/);
+    // Error links must point to rendered revision fields, including a formset row.
+    for (const [path, selector, value] of [
+      [`/staff/catalog/identity/ingredient/${ids.ingredient}/correction/`, '#id_change_reason', 'short'],
+      [`/staff/catalog/identity/formulation/${ids.formulation}/correction/`, '#id_parts-0-numerator', ''],
+    ]) {
+      await page.goto(base + path);
+      const form = page.locator('form.staff-review-form');
+      await form.evaluate(el => { el.noValidate = true; });
+      await form.locator('#id_synthetic_ack').check();
+      await form.locator('#id_change_reason').fill('دلیل اصلاح ساختگی برای مرورگر');
+      await form.locator(selector).fill(value);
+      const [response] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+        form.locator('button[type=submit]').click()]);
+      assert.equal(response.status(), 200);
+      assert.match(await page.title(), /^خطا در فرم/);
+      const link = page.locator(`#staff-form-errors a[href="${selector}"]`);
+      assert.equal(await link.count(), 1);
+      assert.equal(await page.locator(selector).getAttribute('aria-invalid'), 'true');
+      assert.match(await page.locator(selector).getAttribute('aria-describedby'), /_error/);
+      let reached = false;
+      for (let tab = 0; tab < 30 && !reached; tab++) {
+        await page.keyboard.press('Tab');
+        reached = await link.evaluate(el => document.activeElement === el);
+      }
+      assert(reached, `revision error link ${selector} reachable by Tab`);
+      await Promise.all([page.waitForURL(url => url.hash === selector), page.keyboard.press('Enter')]);
+      await page.waitForFunction(id => document.activeElement === document.getElementById(id), selector.slice(1));
+      await checkLayout(page, `revision error ${selector}`);
+      await auditAccessibility(page, `revision error ${selector}`);
+    }
     let child = await revision(page, `/staff/catalog/identity/ingredient/${ids.ingredient}/correction/`, '#id_name_fa', 'ماده اصلاحی ساختگی مرورگر');
     assert.match(child, /\/ingredient\/\d+\/$/);
     assert.match(await page.locator('body').innerText(), /ماده اصلاحی ساختگی مرورگر/);

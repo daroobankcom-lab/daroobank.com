@@ -286,4 +286,6 @@
 
 - [0143: more review error summaries](0143-more-review-error-summaries.md) — development-only server-rendered usability.
 
+- [0144: identity revision error navigation](0144-identity-revision-error-navigation.md) — development-only server-rendered usability.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

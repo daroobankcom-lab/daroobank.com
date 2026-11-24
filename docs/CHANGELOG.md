@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — defer internal projections on public reads
+
+**Changes:** Search and detail reads avoid selecting two unused stored projection columns; the search still uses and rechecks its projection. Synthetic tests cover selected HTML, JSON and SQL paths.
+
+**Limits:** The database still searches the text, and direct service callers accessing deferred fields make additional, potentially later-state queries. This is not a capacity guarantee; see ADR 0123.
+
 ## 2026-11-24 — publication/date database constraint
 
 **Changes:** The catalog migration adds a check that a presentation marked published has a non-null verification date. Synthetic tests cover direct write rejection, legacy migration failure without rewrites and one DDL lock timeout.

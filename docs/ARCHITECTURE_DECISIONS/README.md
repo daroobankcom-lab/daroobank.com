@@ -244,4 +244,6 @@
 
 - [0122: publication verification-date constraint](0122-publication-verification-date-constraint.md) — development migration, 24 November 2026.
 
+- [0123: defer public search projections](0123-defer-public-search-projection.md) — development read optimization, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

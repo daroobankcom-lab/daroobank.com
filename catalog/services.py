@@ -112,7 +112,9 @@ def search_product_page(query, cursor=''):
         anchor = _decode_cursor(cursor, normalized, candidates)
         candidates = candidates.filter(Q(name_fa__gt=anchor.name_fa) | Q(name_fa=anchor.name_fa, pk__gt=anchor.pk))
     # One extra row is fetched only to know whether any subsequent candidate exists.
-    batch = list(candidates.order_by('name_fa', 'pk')[:MAX_SEARCH_CANDIDATES + 1])
+    # The stored projection is needed by SQL for matching, not by the public
+    # serializer. Avoid transferring potentially oversized bypass-written text.
+    batch = list(candidates.defer('search_text', 'irc_normalized').order_by('name_fa', 'pk')[:MAX_SEARCH_CANDIDATES + 1])
     results = []
     scanned = 0
     for product in batch[:MAX_SEARCH_CANDIDATES]:
@@ -139,7 +141,7 @@ def search_products(query):
 def get_public_presentation(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Presentation not found')
-    product = public_candidates().filter(pk=pk).first()
+    product = public_candidates().filter(pk=pk).defer('search_text', 'irc_normalized').first()
     if product is None or not is_public_presentation(product):
         raise Http404('Presentation not found')
     return product

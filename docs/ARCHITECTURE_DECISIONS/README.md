@@ -242,4 +242,6 @@
 
 - [0121: development content-security policy](0121-development-content-security-policy.md) — baseline only, 24 November 2026.
 
+- [0122: publication verification-date constraint](0122-publication-verification-date-constraint.md) — development migration, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -16,6 +16,7 @@ from .projection_repair import (MAX_PK, MAX_SEARCH_LENGTH, SALT, ProjectionRepai
                                 apply_projection, preview_projection)
 from .quality import inspect_batch
 from .services import search_product_page
+from .test_constraint_helpers import omit_publication_date_constraint_for_test
 from pricing.importer import suggest_product
 
 
@@ -82,6 +83,8 @@ class ProjectionRepairTests(TestCase):
         self.assertEqual(self.product.irc_normalized, '')
 
     def test_stale_after_source_projection_or_publication_change(self):
+        # Exercise a missing/bypassed database constraint as well as valid changes.
+        omit_publication_date_constraint_for_test()
         for changes in [dict(name_fa='نام تغییر یافته'), dict(source_url='https://example.org/changed'),
                         dict(search_text='another projection'), dict(published=False), dict(verified_at=None)]:
             with self.subTest(changes=changes):

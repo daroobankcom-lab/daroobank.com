@@ -1,5 +1,6 @@
 """Historical presentation projection upgrade on a disposable test database only."""
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from threading import Event
 from unittest.mock import patch
 
@@ -34,6 +35,7 @@ class PresentationProjectionMigrationTests(TransactionTestCase):
                 strength='1 mg', dosage_form='tablet', package_description='box',
                 irc=raw, source_name='Synthetic', source_url='https://example.org',
                 search_text=f'legacy projection {number}', published=bool(number % 2),
+                verified_at=datetime(2026, 1, 1, tzinfo=timezone.utc) if number % 2 else None,
             )
             self.expected[item.pk] = (Product.objects.values().get(pk=item.pk), normalized)
 

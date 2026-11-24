@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from .models import ProductPresentation
 from .services import MAX_SEARCH_CANDIDATES
+from .test_constraint_helpers import omit_publication_date_constraint_for_test
 
 
 class PresentationDetailTests(TestCase):
@@ -64,6 +65,8 @@ class PresentationDetailTests(TestCase):
         self.assertNotContains(self.client.get(reverse('sitemap')), '/products/')
 
     def test_unpublished_or_metadata_removed_disappears_immediately(self):
+        # Keep the read-side defense test for a missing/bypassed DB constraint.
+        omit_publication_date_constraint_for_test()
         html_url, api_url = self.urls(self.product.pk)
         for change in [dict(published=False), dict(verified_at=None), dict(source_name=''), dict(source_name='   '),
                        dict(source_url='http://example.org'), dict(source_url='https://'),

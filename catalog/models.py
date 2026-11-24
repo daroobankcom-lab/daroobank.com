@@ -25,6 +25,12 @@ class ProductPresentation(models.Model):
     published = models.BooleanField(default=False)
     search_text = models.TextField(editable=False, default='')
 
+    class Meta:
+        constraints = [models.CheckConstraint(
+            condition=models.Q(published=False) | models.Q(verified_at__isnull=False),
+            name='catalog_published_requires_verified',
+        )]
+
     def clean(self):
         super().clean()
         if self.published and not self.verified_at:

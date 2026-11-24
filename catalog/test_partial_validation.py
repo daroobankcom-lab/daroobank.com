@@ -8,6 +8,7 @@ from django.db.models.signals import pre_save
 from django.test import TestCase
 
 from .models import ProductPresentation
+from .test_constraint_helpers import omit_publication_date_constraint_for_test
 
 
 class PresentationPartialValidationTests(TestCase):
@@ -34,6 +35,9 @@ class PresentationPartialValidationTests(TestCase):
         self.assertEqual(ProductPresentation.objects.count(), before)
 
     def test_publication_date_prospective_truth_table(self):
+        # Exercise defensive validation even for historical/corrupt states that
+        # a present, validated DB constraint normally prevents.
+        omit_publication_date_constraint_for_test()
         date = datetime(2026, 1, 1, tzinfo=timezone.utc)
         for current_published, current_dated, local_published, local_dated, field in product(
                 (False, True), (False, True), (False, True), (False, True), ('published', 'verified_at')):

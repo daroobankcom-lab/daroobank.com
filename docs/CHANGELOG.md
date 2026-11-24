@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — publication/date database constraint
+
+**Changes:** The catalog migration adds a check that a presentation marked published has a non-null verification date. Synthetic tests cover direct write rejection, legacy migration failure without rewrites and one DDL lock timeout.
+
+**Limits:** Existing invalid rows make migration fail; no date or publication is automatically repaired. The date is not verification evidence or clinical approval; deployment and recovery require separate review. See ADR 0122.
+
 ## 2026-11-24 — baseline content-security policy
 
 **Changes:** Django responses receive a same-origin CSP baseline; synthetic Chromium checks selected blocked inline/off-origin behaviors and existing workflows. It intentionally leaves preview framing to existing environment-specific controls.

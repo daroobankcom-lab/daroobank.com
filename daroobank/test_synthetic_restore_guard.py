@@ -73,8 +73,8 @@ class RestoreDrillGuardTests(SimpleTestCase):
     def test_restore_settings_make_new_scoped_names(self):
         original = base_settings.DATABASES['default'].get('TEST')
         with patch.object(sys, 'argv', ['manage.py', 'test']):
-            first = runpy.run_module('daroobank.restore_test_settings')
-            second = runpy.run_module('daroobank.restore_test_settings')
+            first = load_test_settings('daroobank.restore_test_settings')
+            second = load_test_settings('daroobank.restore_test_settings')
         self.assertTrue(first['DAROOBANK_RESTORE_ISOLATED'])
         name1 = first['DATABASES']['default']['TEST']['NAME']
         name2 = second['DATABASES']['default']['TEST']['NAME']

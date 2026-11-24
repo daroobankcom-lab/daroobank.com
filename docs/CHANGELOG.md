@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL legacy serial-default clue
+
+**Changes:** Selected legacy serial defaults are compared to a canonical `nextval` expression for their owned sequence, rejecting selected wrong defaults and a shadowed custom function.
+
+**Limits:** Equivalent noncanonical expressions can be flagged; function safety and sequence state are not proven. See ADR 0094.
+
 ## 2026-11-24 — PostgreSQL auto-field generation clues
 
 **Changes:** The read-only inspector checks selected model and recorder auto fields for an owned sequence and supported identity or legacy-default clues; synthetic DDL covers missing/always identity, missing ownership and missing default.

@@ -335,8 +335,14 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                         AND a.attnum > 0 AND NOT a.attisdropped
                     LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
                     WHERE c.oid = e.table_oid
-                      AND (a.attidentity = 'd' OR (a.attidentity = '' AND d.oid IS NOT NULL))
-                      AND pg_catalog.pg_get_serial_sequence(pg_catalog.format('%%I.%%I', n.nspname, c.relname), a.attname) IS NOT NULL))
+                      AND pg_catalog.pg_get_serial_sequence(pg_catalog.format('%%I.%%I', n.nspname, c.relname), a.attname) IS NOT NULL
+                      AND (a.attidentity = 'd' OR (a.attidentity = '' AND d.oid IS NOT NULL
+                           AND pg_catalog.pg_get_expr(d.adbin, d.adrelid) = pg_catalog.format(
+                               'nextval(%%L::regclass)',
+                               pg_catalog.pg_get_serial_sequence(pg_catalog.format('%%I.%%I', n.nspname, c.relname), a.attname)::regclass)
+                           AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend dep
+                               WHERE dep.classid = 'pg_catalog.pg_attrdef'::regclass AND dep.objid = d.oid
+                                 AND dep.refclassid = 'pg_catalog.pg_proc'::regclass)))))
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}

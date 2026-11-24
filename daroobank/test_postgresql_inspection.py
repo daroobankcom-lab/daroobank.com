@@ -453,6 +453,22 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'no_selected_issues')
             transaction.set_rollback(True)
 
+    def test_legacy_serial_with_quoted_sequence_name_is_accepted(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id DROP IDENTITY')
+                quoted_name = '"' + 'synthetic odd\'" sequence'.replace('"', '""') + '"'
+                cursor.execute('CREATE SEQUENCE ' + quoted_name + ' OWNED BY sources_sourceclaim.id')
+                literal = "'" + quoted_name.replace("'", "''") + "'"
+                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id SET DEFAULT nextval(' + literal + '::regclass)')
+                cursor.execute('SET LOCAL search_path TO pg_catalog, public')
+            output = io.StringIO()
+            call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['missing_auto_generation'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
     def test_serial_requires_an_owned_sequence_and_a_default(self):
         for owned, default in ((False, True), (True, False)):
             with self.subTest(owned=owned, default=default), transaction.atomic():
@@ -469,17 +485,50 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                 self.assertEqual(report['status'], 'attention')
                 transaction.set_rollback(True)
 
-    def test_serial_default_expression_is_not_fully_checked(self):
+    def test_serial_default_must_reference_owned_sequence(self):
+        for expression in ('42', "nextval('synthetic_other')"):
+            with self.subTest(expression=expression), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id DROP IDENTITY')
+                    cursor.execute('CREATE SEQUENCE synthetic_serial OWNED BY sources_sourceclaim.id')
+                    cursor.execute('CREATE SEQUENCE synthetic_other')
+                    cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id SET DEFAULT ' + expression)
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report['missing_auto_generation'], 1)
+                self.assertEqual(report['status'], 'attention')
+                transaction.set_rollback(True)
+
+    def test_shadowed_nextval_function_is_not_an_accepted_serial_default(self):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id DROP IDENTITY')
                 cursor.execute('CREATE SEQUENCE synthetic_serial OWNED BY sources_sourceclaim.id')
-                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id SET DEFAULT 42')
+                cursor.execute("CREATE FUNCTION public.nextval(regclass) RETURNS bigint LANGUAGE sql AS 'SELECT 42::bigint'")
+                cursor.execute('SET LOCAL search_path TO public, pg_catalog')
+                cursor.execute("ALTER TABLE sources_sourceclaim ALTER COLUMN id SET DEFAULT public.nextval('synthetic_serial'::regclass)")
             output = io.StringIO()
-            call_command('inspect_postgresql_schema', stdout=output)
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
             report = json.loads(output.getvalue())
-            self.assertEqual(report['missing_auto_generation'], 0)
-            self.assertEqual(report['status'], 'no_selected_issues')
+            self.assertEqual(report['missing_auto_generation'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_equivalent_but_noncanonical_serial_default_is_flagged(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id DROP IDENTITY')
+                cursor.execute('CREATE SEQUENCE synthetic_serial OWNED BY sources_sourceclaim.id')
+                cursor.execute("ALTER TABLE sources_sourceclaim ALTER COLUMN id SET DEFAULT nextval('synthetic_serial') + 0")
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['missing_auto_generation'], 1)
+            self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
     def test_migration_recorder_primary_key_constraint_is_required(self):

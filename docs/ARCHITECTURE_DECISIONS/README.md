@@ -135,6 +135,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0100: manifest header consistency](0100-manifest-header-consistency.md) — development-only implementation, 24 November 2026.
 
+- [0101: PostgreSQL trigger session clues](0101-postgresql-trigger-session-clues.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

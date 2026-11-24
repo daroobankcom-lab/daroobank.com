@@ -342,7 +342,11 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                                pg_catalog.pg_get_serial_sequence(pg_catalog.format('%%I.%%I', n.nspname, c.relname), a.attname)::regclass)
                            AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend dep
                                WHERE dep.classid = 'pg_catalog.pg_attrdef'::regclass AND dep.objid = d.oid
-                                 AND dep.refclassid = 'pg_catalog.pg_proc'::regclass)))))
+                                 AND dep.refclassid = 'pg_catalog.pg_proc'::regclass))))),
+                (SELECT COUNT(*) FROM pg_catalog.pg_trigger g JOIN tables t ON t.oid = g.tgrelid
+                    WHERE (g.tgenabled = 'R' AND pg_catalog.current_setting('session_replication_role') <> 'replica')
+                       OR (g.tgenabled = 'O' AND pg_catalog.current_setting('session_replication_role') = 'replica')),
+                (pg_catalog.current_setting('session_replication_role') = 'replica')::integer
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
@@ -365,13 +369,15 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             'column_nullability_mismatches', 'unsupported_column_types', 'skipped_auto_m2m_pk_types',
             'skipped_migration_pk_types', 'column_type_mismatches',
             'expected_field_indexes', 'missing_field_indexes', 'expected_named_indexes', 'unsupported_named_indexes',
-            'missing_named_indexes', 'expected_auto_fields', 'unsupported_auto_fields', 'missing_auto_generation')
+            'missing_named_indexes', 'expected_auto_fields', 'unsupported_auto_fields', 'missing_auto_generation',
+            'trigger_session_mismatches', 'session_replication_role_replica')
     result = dict(zip(keys, values))
     # This is a model-metadata coverage count, not a separate database query.
     result['unsupported_unique_constraints'] = len(unsupported_uniques)
     result['status'] = ('attention' if any(result[key] for key in (
         'unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes',
-        'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
+        'disabled_triggers', 'trigger_session_mismatches', 'session_replication_role_replica',
+        'missing_foreign_keys', 'nondeferred_foreign_keys',
         'nondefault_action_foreign_keys', 'missing_unique_keys', 'unsupported_unique_constraints', 'missing_check_constraints', 'missing_columns',
         'column_nullability_mismatches', 'unsupported_column_types', 'column_type_mismatches',
         'missing_field_indexes', 'unsupported_named_indexes', 'missing_named_indexes', 'unsupported_auto_fields',

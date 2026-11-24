@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL trigger session clues
+
+**Changes:** The single-statement development schema inspector flags replica session mode and selected trigger enabled modes that do not fire in that session, in addition to disabled triggers. Synthetic tests demonstrate an origin-mode replica-only trigger and a replica-mode foreign-key bypass.
+
+**Limits:** A trigger mode mismatch may be intentional and the result covers only the inspecting session and selected tables; no repair or production certification is implied. See ADR 0101.
+
 ## 2026-11-24 — manifest header consistency
 
 **Changes:** Validate selected version-1 receipt header totals, domain limits and suggestion counts before aggregating manifest rows; invalid headers stop row inspection, while legacy receipts stay legacy.

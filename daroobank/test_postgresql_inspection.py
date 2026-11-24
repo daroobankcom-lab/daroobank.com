@@ -4,7 +4,7 @@ import json
 from unittest.mock import patch
 
 from django.core.management import CommandError, call_command
-from django.db import DatabaseError, connection, transaction
+from django.db import DatabaseError, IntegrityError, connection, transaction
 from django.db.models import AutoField, Deferrable, F, Q, UniqueConstraint
 from django.test import TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -39,6 +39,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertEqual(report['expected_named_indexes'], len(expected_named_indexes()))
         self.assertGreater(report['expected_named_indexes'], 0)
         for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
+                    'trigger_session_mismatches', 'session_replication_role_replica',
                     'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys',
                     'unsupported_unique_constraints', 'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches',
                     'column_type_mismatches', 'unsupported_column_types', 'missing_field_indexes',
@@ -804,6 +805,75 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         finally:
             with connection.cursor() as cursor:
                 cursor.execute('DROP TABLE synthetic_unscoped')
+
+    def test_replica_only_trigger_is_inactive_for_origin_session(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('CREATE TABLE synthetic_trigger_probe (id integer)')
+                cursor.execute('CREATE FUNCTION synthetic_trigger_probe_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$')
+                cursor.execute('CREATE TRIGGER synthetic_trigger_probe_row BEFORE INSERT ON synthetic_trigger_probe FOR EACH ROW EXECUTE FUNCTION synthetic_trigger_probe_fn()')
+                cursor.execute('ALTER TABLE synthetic_trigger_probe ENABLE REPLICA TRIGGER synthetic_trigger_probe_row')
+                cursor.execute('INSERT INTO synthetic_trigger_probe VALUES (1)')
+                self.assertEqual(cursor.rowcount, 1)  # replica-only trigger did not fire
+            report = inspect_schema(['synthetic_trigger_probe'])
+            self.assertEqual(report['disabled_triggers'], 0)
+            self.assertEqual(report['trigger_session_mismatches'], 1)
+            self.assertEqual(report['session_replication_role_replica'], 0)
+            self.assertEqual(report['status'], 'attention')
+            self.assertNotIn('synthetic_trigger_probe', json.dumps(report))
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE synthetic_trigger_probe ENABLE ALWAYS TRIGGER synthetic_trigger_probe_row')
+                cursor.execute('INSERT INTO synthetic_trigger_probe VALUES (2)')
+                self.assertEqual(cursor.rowcount, 0)
+            self.assertEqual(inspect_schema(['synthetic_trigger_probe'])['trigger_session_mismatches'], 0)
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE synthetic_trigger_probe DISABLE TRIGGER synthetic_trigger_probe_row')
+            report = inspect_schema(['synthetic_trigger_probe'])
+            self.assertEqual((report['disabled_triggers'], report['trigger_session_mismatches']), (1, 0))
+            with connection.cursor() as cursor:
+                cursor.execute('CREATE TRIGGER synthetic_managed_replica BEFORE INSERT ON sources_sourceclaim FOR EACH ROW EXECUTE FUNCTION synthetic_trigger_probe_fn()')
+                cursor.execute('ALTER TABLE sources_sourceclaim ENABLE REPLICA TRIGGER synthetic_managed_replica')
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            self.assertEqual(json.loads(output.getvalue())['trigger_session_mismatches'], 1)
+            self.assertNotIn('synthetic_managed_replica', output.getvalue())
+            self.assertNotIn('sources_sourceclaim', output.getvalue())
+            transaction.set_rollback(True)
+
+    def test_replica_session_skips_origin_fk_triggers_and_is_reported(self):
+        # Changing this GUC is privileged; only run the actual bypass probe when
+        # the disposable test role has PostgreSQL's SET privilege.
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_catalog.has_parameter_privilege(current_user, 'session_replication_role', 'SET')")
+            if not cursor.fetchone()[0]:
+                self.skipTest('Synthetic role cannot change session_replication_role')
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('CREATE TABLE synthetic_replica_parent (id integer PRIMARY KEY)')
+                cursor.execute('CREATE TABLE synthetic_replica_child (parent_id integer REFERENCES synthetic_replica_parent(id))')
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('INSERT INTO synthetic_replica_child VALUES (42)')
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL session_replication_role = 'replica'")
+                cursor.execute('INSERT INTO synthetic_replica_child VALUES (42)')
+                self.assertEqual(cursor.rowcount, 1)
+            report = inspect_schema(['synthetic_replica_parent', 'synthetic_replica_child'])
+            self.assertEqual(report['session_replication_role_replica'], 1)
+            self.assertGreaterEqual(report['trigger_session_mismatches'], 2)
+            self.assertEqual(report['status'], 'attention')
+            self.assertNotIn('synthetic_replica_child', json.dumps(report))
+            self.assertEqual(inspect_schema([])['session_replication_role_replica'], 1)
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            self.assertEqual(json.loads(output.getvalue())['session_replication_role_replica'], 1)
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL session_replication_role = 'local'")
+            report = inspect_schema(['synthetic_replica_parent', 'synthetic_replica_child'])
+            self.assertEqual((report['session_replication_role_replica'], report['trigger_session_mismatches']), (0, 0))
+            transaction.set_rollback(True)
 
     def test_unvalidated_constraint_and_disabled_trigger(self):
         with connection.cursor() as cursor:

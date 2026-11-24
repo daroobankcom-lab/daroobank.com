@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — synthetic CSV sample downloads
+
+**Changes:** The two staff upload pages link to their fixed repository-provided synthetic CSV examples, with the same permissions as upload and private download headers.
+
+**Limits:** The files contain invented figures and are public repository examples, not verified source data; arbitrary spreadsheets and real-source permissions are not validated by this convenience. See ADR 0136.
+
 ## 2026-11-24 — selected staff form error summaries
 
 **Changes:** Selected source, clinical, identity-create and upload forms show a linked error summary and an error-prefixed title after failed validation, including component-formset errors.

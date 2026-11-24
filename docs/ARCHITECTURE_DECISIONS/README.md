@@ -270,4 +270,6 @@
 
 - [0135: selected staff form error summaries](0135-selected-staff-form-error-summary.md) — development-only accessibility improvement, 24 November 2026.
 
+- [0136: synthetic CSV downloads](0136-synthetic-csv-downloads.md) — development-only staff workflow, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

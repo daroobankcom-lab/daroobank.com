@@ -8,6 +8,7 @@ from django.views.decorators.http import require_http_methods, require_POST, req
 
 from daroobank.account_checks import current_accounts
 from daroobank.review_history import recent_reviews_with_reviewers
+from daroobank.sample_downloads import synthetic_sample_response
 from sources.services import related_claims
 from ingestion.exceptions import StagingConflict
 from ingestion.receipts import related_receipts, stage_product_with_receipt
@@ -47,6 +48,13 @@ def candidates(request):
         'can_quality': request.user.has_perm('catalog.view_productpresentation'),
         'can_identity': request.user.has_perm('catalog.view_identityworkspace'),
     })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def sample_download(request):
+    require_staff(request.user, VIEW, ADD)
+    return synthetic_sample_response('product')
 
 
 @login_required(login_url='staff_login')

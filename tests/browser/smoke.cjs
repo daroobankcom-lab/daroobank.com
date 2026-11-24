@@ -869,9 +869,17 @@ async function run() {
       if (width === 390) await auditAccessibility(pricePage, 'price queue');
       response = await pricePage.goto(base + '/staff/prices/import/');
       assert.equal(response.status(), 200);
-      assert.match(await pricePage.locator('.staff-panel-note').innerText(), /اولین نتیجه تطبیق/);
+      assert.match(await pricePage.locator('.staff-panel-note').first().innerText(), /اولین نتیجه تطبیق/);
       await checkLayout(pricePage, `price preview form ${width}`);
-      if (width === 390) await auditAccessibility(pricePage, 'price preview form');
+      if (width === 390) {
+        await auditAccessibility(pricePage, 'price preview form');
+        const [sample] = await Promise.all([
+          pricePage.waitForEvent('download'),
+          pricePage.getByRole('link', {name: 'دریافت فایل نمونه ساختگی قیمت (CSV) ←'}).click(),
+        ]);
+        assert.equal(sample.suggestedFilename(), 'price_candidates.synthetic.csv');
+        assert.match(fs.readFileSync(await sample.path(), 'utf8'), /^source_record_id,irc,manufacturer,/);
+      }
       await pricePage.locator('#id_source_name').fill('منبع ساختگی مرورگر');
       await pricePage.locator('#id_source_url').fill('https://example.org/browser-price');
       const csv = 'source_record_id,irc,manufacturer,strength,dosage_form,package_description,amount,currency,category,unit,effective_date,source_published_date\n' +
@@ -996,6 +1004,13 @@ async function run() {
     const authorContext = await contextFor(browser, 390, errors);
     const page = await authorContext.newPage();
     await login(page, author);
+    await page.goto(base + '/staff/products/import/');
+    const [productSample] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('link', {name: 'دریافت فایل نمونه ساختگی فرآورده (CSV) ←'}).click(),
+    ]);
+    assert.equal(productSample.suggestedFilename(), 'product_candidates.synthetic.csv');
+    assert.match(fs.readFileSync(await productSample.path(), 'utf8'), /^source_record_id,name_fa,name_en,/);
     // A valid session must still be unable to submit a POST without a CSRF token.
     const rejected = await page.evaluate(async () => (await fetch('/staff/catalog/identity/new/ingredient/', {
       method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'name_fa=csrf-canary',

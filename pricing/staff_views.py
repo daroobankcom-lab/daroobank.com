@@ -12,6 +12,7 @@ from django.views.decorators.http import require_http_methods, require_POST, req
 
 from daroobank.account_checks import current_accounts
 from daroobank.review_history import recent_reviews_with_reviewers
+from daroobank.sample_downloads import synthetic_sample_response
 from sources.services import related_claims
 from ingestion.exceptions import StagingConflict
 from ingestion.receipts import related_receipts, stage_price_with_receipt
@@ -132,6 +133,13 @@ def price_candidates(request):
         'can_sources': request.user.has_perm('sources.view_sourceclaim'),
         'can_clinical': request.user.has_perm('clinical.view_clinicaldraft'),
     })
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def sample_download(request):
+    _require_permission(request.user, 'pricing.add_pricecandidate')
+    return synthetic_sample_response('price')
 
 
 @login_required(login_url='staff_login')

@@ -131,6 +131,9 @@ def detail_response(request, claim, *, form=None, status=200):
     claim.display_recorder = current_accounts([claim.recorded_by_id], using=claim._state.db).get(claim.recorded_by_id)
     current_status = date_label(claim)
     for item in reviews:
+        if item.content_oversized:
+            item.technical_status, item.claim_comparison = 'oversized', 'unknown'
+            continue
         item.technical_status, item.claim_comparison = classify_review(item, claim, current_status != 'invalid')
         if current_status == 'invalid':
             item.technical_status = 'unavailable'

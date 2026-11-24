@@ -704,6 +704,9 @@ async function run() {
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
       const productHistory = await page.locator('main').innerText();
       assert.match(productHistory, /رکورد بازبینی یا تصویر آن ناسازگار است/);
+      assert.match(productHistory, /بازبینی بیش از حد نمایش/);
+      assert(!productHistory.includes('browser-oversized-snapshot-canary'));
+      assert(!productHistory.includes('browser-oversized-reason-canary'));
       assert.match(productHistory, /این مقایسه تأیید اصالت یا هویت نیست/);
       assert(!productHistory.includes('browser-product-history-hidden-canary'));
       assert(!productHistory.includes('browser-product-history-reason-canary'));
@@ -975,6 +978,9 @@ async function run() {
       assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
       const priceHistory = await pricePage.locator('main').innerText();
       assert.match(priceHistory, /رکورد بازبینی یا تصویر آن ناسازگار است/);
+      assert.match(priceHistory, /بازبینی بیش از حد نمایش/);
+      assert(!priceHistory.includes('browser-oversized-snapshot-canary'));
+      assert(!priceHistory.includes('browser-oversized-reason-canary'));
       assert.match(priceHistory, /این مقایسه تأیید اصالت یا قیمت نیست/);
       assert(!priceHistory.includes('browser-history-hidden-canary'));
       assert(!priceHistory.includes('browser-history-reason-canary'));

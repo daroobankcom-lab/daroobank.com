@@ -294,4 +294,6 @@
 
 - [0147: bounded candidate review scan content](0147-bounded-candidate-review-scan-content.md) — development-only defensive inspection.
 
+- [0148: bounded recent review content](0148-bounded-recent-review-content.md) — development-only defensive display.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

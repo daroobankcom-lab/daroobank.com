@@ -99,6 +99,9 @@ def detail_response(request, candidate, *, form=None, status=200):
     candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
     comparison = product_comparison_context(candidate)
     for review in reviews:
+        if review.content_oversized:
+            review.technical_status, review.candidate_comparison = 'oversized', 'unknown'
+            continue
         review.technical_status, review.candidate_comparison = classify_review(
             review, candidate, comparison['available'] and candidate.display_stager is not None)
     can_review = (comparison['available'] and request.user.has_perm(REVIEW) and candidate.staged_by_id != request.user.pk

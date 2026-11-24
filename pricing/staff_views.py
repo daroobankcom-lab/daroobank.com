@@ -85,6 +85,9 @@ def _detail_response(request, candidate, *, form=None, status=200):
     reviews = recent_reviews_with_reviewers(candidate.reviews.all())
     candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
     for review in reviews:
+        if review.content_oversized:
+            review.technical_status, review.candidate_comparison = 'oversized', 'unknown'
+            continue
         review.technical_status, review.candidate_comparison = classify_review(
             review, candidate, current_status != 'invalid' and candidate.display_stager is not None)
     can_review = bool(current_status != 'invalid' and request.user.has_perm('pricing.review_pricecandidate')

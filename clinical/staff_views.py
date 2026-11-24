@@ -127,7 +127,9 @@ def detail_response(request, draft, *, form=None, status=200):
         form = ReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0, 'expected_hash': draft.payload_sha256,
                                    'expected_evidence_hash': evidence['fingerprint']})
     for review in reviews:
-        if review.display_reviewer is None:
+        if review.content_oversized:
+            review.technical_status, review.draft_comparison = 'oversized', 'unknown'
+        elif review.display_reviewer is None:
             review.technical_status, review.draft_comparison = 'missing_reviewer', 'unknown'
         elif valid:
             review.technical_status, review.draft_comparison = classify_review(review, draft, True)

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded recent-review content
+
+**Changes:** Four private detail pages bound selected review snapshot and reason transfers, suppress oversized content and retain the newest review's concurrency token.
+
+**Limits:** Database processing, other fields and pages remain unbounded; source and clinical review scans do not inherit this display protection. See ADR 0148.
+
 ## 2026-11-24 — bounded candidate-review scan content
 
 **Changes:** Private product and price review scans bound selected candidate JSON, review snapshot and reason transfers; oversized reviews are explicitly uninspected and filterable.

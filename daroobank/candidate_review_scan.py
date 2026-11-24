@@ -12,12 +12,11 @@ from pricing.models import PriceCandidate, PriceCandidateReview
 from pricing.review_inspection import classify_review as classify_price
 
 from .account_checks import current_account_ids
+from .review_content_bounds import MAX_REVIEW_JSON_TEXT_LENGTH, MAX_REVIEW_REASON_LENGTH
 
 BATCH_SIZE = 50
 # Bounds characters in the database's JSON textual representation, not DB work.
 MAX_CANDIDATE_JSON_TEXT_LENGTH = 65_536
-MAX_REVIEW_JSON_TEXT_LENGTH = 65_536
-MAX_REVIEW_REASON_LENGTH = 1_000
 CATEGORIES = ('consistent', 'invalid_record', 'oversized')
 _DOMAINS = {
     'product': (ProductCandidate, ProductCandidateReview, valid_product, classify_product, 'catalog.view_productcandidate'),

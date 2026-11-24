@@ -411,15 +411,37 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
-    def test_named_index_null_order_is_not_checked(self):
+    def test_named_index_descending_null_order_mismatch_is_reported(self):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute('DROP INDEX receipt_kind_id_idx')
                 cursor.execute('CREATE INDEX receipt_kind_id_idx ON ingestion_importreceipt (kind, id DESC NULLS LAST)')
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
                 expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
+            self.assertEqual(report['missing_named_indexes'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_named_index_operator_class_is_not_checked(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('DROP INDEX receipt_kind_id_idx')
+                cursor.execute('CREATE INDEX receipt_kind_id_idx ON ingestion_importreceipt (kind varchar_pattern_ops, id DESC)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
             self.assertEqual(report['missing_named_indexes'], 0)
             self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
+    def test_named_index_ascending_null_order_mismatch_is_reported(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('DROP INDEX receipt_kind_id_idx')
+                cursor.execute('CREATE INDEX receipt_kind_id_idx ON ingestion_importreceipt (kind ASC NULLS FIRST, id DESC)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
+            self.assertEqual(report['missing_named_indexes'], 1)
+            self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
     def test_unsupported_named_index_does_not_report_clean(self):

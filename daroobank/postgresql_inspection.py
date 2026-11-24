@@ -250,6 +250,10 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                       AND (SELECT pg_catalog.array_agg((o.option & 1) = 1 ORDER BY o.ordinal)
                            FROM pg_catalog.unnest(i.indoption::smallint[]) WITH ORDINALITY AS o(option, ordinal)
                            WHERE o.ordinal <= i.indnkeyatts)
+                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(e.descending)::boolean)
+                      AND (SELECT pg_catalog.array_agg((o.option & 2) = 2 ORDER BY o.ordinal)
+                           FROM pg_catalog.unnest(i.indoption::smallint[]) WITH ORDINALITY AS o(option, ordinal)
+                           WHERE o.ordinal <= i.indnkeyatts)
                           = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(e.descending)::boolean)))
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),

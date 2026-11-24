@@ -1,6 +1,6 @@
 # ADR 0081: selected PostgreSQL index direction clues
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0080](0080-postgresql-index-presence.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0080](0080-postgresql-index-presence.md). [ADR 0082](0082-postgresql-index-null-order.md) adds default null-order checks, superseding that limitation below.
 
 ## Decision
 

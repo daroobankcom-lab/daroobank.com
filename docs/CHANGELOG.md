@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL named-index null-order clues
+
+**Changes:** The catalog inspector checks supported named index keys for the PostgreSQL default null order corresponding to each model-declared direction; synthetic DDL tests cover both ascending and descending mismatches.
+
+**Limits:** Operator class, collation, performance and full definitions remain unchecked, and equivalent alternatives can be flagged. See ADR 0082.
+
 ## 2026-11-24 — PostgreSQL named-index direction clues
 
 **Changes:** The read-only inspector compares each supported named index key's ascending or descending direction with the model declaration. Rolled-back PostgreSQL tests exercise mismatches on both keys of a two-key index.

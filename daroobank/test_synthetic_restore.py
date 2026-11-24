@@ -71,19 +71,45 @@ class SyntheticRestoreDrill(TransactionTestCase):
             return subprocess.run(command, cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90, check=False)
 
-        def target_has_package_table():
+        def target_params():
             params = {'dbname': target, 'host': config['HOST'], 'port': config['PORT'], 'user': config['USER'],
                       'password': config.get('PASSWORD') or '', 'connect_timeout': 5}
-            if sslmode: params['sslmode'] = sslmode
-            with psycopg.connect(**params) as db:
-                with db.cursor() as cursor:
-                    cursor.execute("SELECT to_regclass('public.catalog_identitypackagedraft') IS NOT NULL")
-                    return cursor.fetchone()[0]
+            if sslmode:
+                params['sslmode'] = sslmode
+            return params
+
+        def target_has_package_table():
+            with psycopg.connect(**target_params()) as db, db.cursor() as cursor:
+                cursor.execute("SELECT to_regclass('public.catalog_identitypackagedraft') IS NOT NULL")
+                return cursor.fetchone()[0]
+
+        def target_relation_counts():
+            # Aggregate-only selected public relations, not a complete schema comparison.
+            with psycopg.connect(**target_params()) as db, db.cursor() as cursor:
+                cursor.execute('''SELECT c.relkind, COUNT(*) FROM pg_catalog.pg_class c
+                    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f', 'i', 'I')
+                    GROUP BY c.relkind ORDER BY c.relkind''')
+                return tuple(cursor.fetchall())
 
         try:
             with connection.cursor() as cursor:
                 cursor.execute(f'CREATE DATABASE {connection.ops.quote_name(target)}')
             created = True
+            baseline_relations = target_relation_counts()
+            # Negative control: the aggregate check must notice an extra relation.
+            with psycopg.connect(**target_params()) as db, db.cursor() as cursor:
+                cursor.execute('CREATE TABLE synthetic_restore_relation_probe (id bigint)')
+            canary_relations = target_relation_counts()
+            self.assertNotEqual(canary_relations, baseline_relations)
+            with psycopg.connect(**target_params()) as db, db.cursor() as cursor:
+                cursor.execute('DROP TABLE synthetic_restore_relation_probe')
+                cursor.execute('CREATE TABLE synthetic_restore_other_probe (id bigint)')
+            # Equal counts can hide object replacement; this is not schema equivalence.
+            self.assertEqual(target_relation_counts(), canary_relations)
+            with psycopg.connect(**target_params()) as db, db.cursor() as cursor:
+                cursor.execute('DROP TABLE synthetic_restore_other_probe')
+            self.assertEqual(target_relation_counts(), baseline_relations)
             with tempfile.TemporaryDirectory(prefix='daroobank-synthetic-restore-') as directory:
                 self.assertEqual(stat.S_IMODE(os.stat(directory).st_mode), 0o700)
                 archive = Path(directory) / 'synthetic.dump'
@@ -107,10 +133,12 @@ class SyntheticRestoreDrill(TransactionTestCase):
                                 '--dbname', target, str(broken)])
                 self.assertNotEqual(restored.returncode, 0, 'Truncated archive was unexpectedly accepted')
                 self.assertFalse(target_has_package_table(), 'Failed restore left a package table')
+                self.assertEqual(target_relation_counts(), baseline_relations, 'Failed restore changed selected relation counts')
                 restored = run(['pg_restore', '--no-password', '--exit-on-error', '--single-transaction', '--no-owner', '--no-acl',
                                 '--dbname', target, str(archive)])
                 self.assertEqual(restored.returncode, 0, 'Synthetic restore failed')
                 self.assertTrue(target_has_package_table())
+                self.assertNotEqual(target_relation_counts(), baseline_relations)
 
                 restored_env = {**child, 'POSTGRES_DB': target, 'PGDATABASE': target,
                                 'SYNTHETIC_PACKAGE_ID': str(package.pk), 'SYNTHETIC_REVIEW_ID': str(event.pk),

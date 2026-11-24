@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — selected failed-restore relation counts
+
+**Changes:** The synthetic restore drill compares selected target `public` relation-kind counts before and after a failed truncated restore; target-only canaries test detection and the equal-count replacement blind spot.
+
+**Limits:** Equal counts do not establish schema equivalence, and objects outside the selected relation kinds are not covered. See ADR 0098.
+
 ## 2026-11-24 — price staging replay integrity
 
 **Changes:** Committed price staging locks and checks duplicate candidates and derived price fields before recording them, with rollback on conflict. Actorless CLI candidates remain replayable and the original suggestion remains unchanged.

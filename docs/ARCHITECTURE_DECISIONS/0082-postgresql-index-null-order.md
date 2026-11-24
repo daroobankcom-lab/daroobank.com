@@ -1,6 +1,6 @@
 # ADR 0082: selected PostgreSQL index null-order clues
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0081](0081-postgresql-index-directions.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0081](0081-postgresql-index-directions.md). [ADR 0083](0083-postgresql-index-operator-class.md) adds default operator-class clues, superseding that limitation below.
 
 ## Decision
 

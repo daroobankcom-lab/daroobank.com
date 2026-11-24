@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL named-index operator-class clues
+
+**Changes:** The inspector flags supported named B-tree indexes whose key operator classes are not marked default; synthetic DDL tests include a nondefault pattern operator class.
+
+**Limits:** This is not an exact operator-class comparison. Collation and complete definitions remain unchecked, and useful alternatives can be flagged. See ADR 0083.
+
 ## 2026-11-24 — PostgreSQL named-index null-order clues
 
 **Changes:** The catalog inspector checks supported named index keys for the PostgreSQL default null order corresponding to each model-declared direction; synthetic DDL tests cover both ascending and descending mismatches.

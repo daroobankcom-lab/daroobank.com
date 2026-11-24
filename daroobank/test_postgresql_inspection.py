@@ -422,11 +422,27 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
-    def test_named_index_operator_class_is_not_checked(self):
+    def test_named_index_nondefault_operator_class_is_reported(self):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute('DROP INDEX receipt_kind_id_idx')
                 cursor.execute('CREATE INDEX receipt_kind_id_idx ON ingestion_importreceipt (kind varchar_pattern_ops, id DESC)')
+            report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
+            self.assertEqual(report['missing_named_indexes'], 1)
+            self.assertEqual(report['status'], 'attention')
+            transaction.set_rollback(True)
+
+    def test_named_index_collation_is_not_checked(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('DROP INDEX receipt_kind_id_idx')
+                cursor.execute('CREATE INDEX receipt_kind_id_idx ON ingestion_importreceipt (kind COLLATE "C", id DESC)')
+                cursor.execute('''SELECT i.indcollation[0] <> a.attcollation
+                                  FROM pg_catalog.pg_index i
+                                  JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attname = 'kind'
+                                  WHERE i.indexrelid = 'receipt_kind_id_idx'::regclass''')
+                self.assertTrue(cursor.fetchone()[0])
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
                 expected_check_constraints(), expected_columns(), expected_field_indexes(), expected_named_indexes())
             self.assertEqual(report['missing_named_indexes'], 0)

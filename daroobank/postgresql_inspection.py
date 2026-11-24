@@ -242,6 +242,10 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                     WHERE i.indrelid = e.table_oid AND idx.relname = e.index_name AND am.amname = 'btree'
                       AND i.indisvalid AND i.indisready AND i.indislive AND i.indpred IS NULL AND i.indexprs IS NULL
                       AND i.indnkeyatts = pg_catalog.jsonb_array_length(e.columns)
+                      AND (SELECT pg_catalog.count(*) = i.indnkeyatts AND pg_catalog.bool_and(opc.opcdefault)
+                           FROM pg_catalog.unnest(i.indclass::oid[]) WITH ORDINALITY AS c(opclass_oid, ordinal)
+                           JOIN pg_catalog.pg_opclass opc ON opc.oid = c.opclass_oid
+                           WHERE c.ordinal <= i.indnkeyatts)
                       AND (SELECT pg_catalog.array_agg(a.attname::text ORDER BY k.ordinal)
                            FROM pg_catalog.unnest(i.indkey::smallint[]) WITH ORDINALITY AS k(attnum, ordinal)
                            JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum

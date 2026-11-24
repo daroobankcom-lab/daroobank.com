@@ -302,7 +302,7 @@ CI run 45171291395 failed the forced-colors home skip-link visibility assertion;
 
 ## Publication/date database invariant
 
-PostgreSQL tests cover selected bypass writes, the three valid flag/date combinations, legacy-data preservation and an invalid legacy migration rollback, plus a two-connection DDL lock timeout. Three older corruption tests temporarily drop the check inside synthetic test transactions; selected guards and rollback are tested. Setup-failure cleanup attempts graph restoration after inserting an invalid fixture. These tests are not a production migration, data repair or clinical-verification plan; see [ADR 0122](ARCHITECTURE_DECISIONS/0122-publication-verification-date-constraint.md).
+PostgreSQL tests cover selected bypass writes, the three valid flag/date combinations, legacy-data preservation, an invalid legacy migration rollback and an injected failure after DDL, plus two selected two-connection DDL lock timeouts. Three older corruption tests temporarily drop the check inside synthetic test transactions; selected guards and rollback are tested. Setup-failure cleanup attempts graph restoration after inserting an invalid fixture. These tests are not a production migration, data repair or clinical-verification plan; see [ADR 0122](ARCHITECTURE_DECISIONS/0122-publication-verification-date-constraint.md).
 
 ## Baseline content-security policy
 

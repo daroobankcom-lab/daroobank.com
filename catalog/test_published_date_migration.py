@@ -3,6 +3,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from threading import Event
+from unittest.mock import patch
 
 from django.db import IntegrityError, OperationalError, close_old_connections, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
@@ -75,6 +76,51 @@ class PublishedDateMigrationTests(TransactionTestCase):
         Product = self.upgrade()
         after = Product.objects.values().get(pk=item.pk)
         self.assertEqual(after, {**before, 'published': False})
+
+    def test_failure_after_constraint_addition_rolls_back_ddl_and_record(self):
+        item = self.fixture(published=False, verified_at=None)
+        before = self.Product.objects.values().get(pk=item.pk)
+        executor = MigrationExecutor(connection)
+        operation = executor.loader.graph.nodes[self.after[0]].operations[0]
+        original = operation.database_forwards
+
+        def fail_after_add(*args, **kwargs):
+            original(*args, **kwargs)
+            with connection.cursor() as cursor:
+                constraints = connection.introspection.get_constraints(cursor, 'catalog_productpresentation')
+            self.assertIn('catalog_published_requires_verified', constraints)
+            raise RuntimeError('synthetic failure after constraint addition')
+
+        with patch.object(operation, 'database_forwards', side_effect=fail_after_add):
+            with self.assertRaisesMessage(RuntimeError, 'synthetic failure after constraint addition'):
+                executor.migrate(self.after)
+        self.assertNotIn(self.after[0], MigrationRecorder(connection).applied_migrations())
+        self.assertEqual(self.Product.objects.values().get(pk=item.pk), before)
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, 'catalog_productpresentation')
+        self.assertNotIn('catalog_published_requires_verified', constraints)
+        self.upgrade()
+
+    def test_constraint_lock_persists_until_outer_transaction_commits(self):
+        def read_with_timeout():
+            close_old_connections()
+            try:
+                with self.assertRaises(OperationalError) as error, transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET LOCAL lock_timeout = '300ms'")
+                        cursor.execute('SELECT count(*) FROM catalog_productpresentation')
+                return getattr(error.exception.__cause__, 'sqlstate', None)
+            finally:
+                connection.close()
+
+        with transaction.atomic():
+            self.upgrade()
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                self.assertEqual(pool.submit(read_with_timeout).result(timeout=10), '55P03')
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT count(*) FROM catalog_productpresentation')
+            self.assertEqual(cursor.fetchone()[0], 0)
+        self.assertIn(self.after[0], MigrationRecorder(connection).applied_migrations())
 
     def test_existing_reader_can_block_constraint_migration(self):
         ready, release = Event(), Event()

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL selected unique-key null semantics
+
+**Changes:** The inspector flags `NULLS NOT DISTINCT` substitutes for selected model unique keys expecting PostgreSQL's default semantics; a synthetic PostgreSQL 16 DDL test exercises the discrepancy.
+
+**Limits:** Explicit model null-semantics declarations and full uniqueness equivalence are not covered; other PostgreSQL versions are not tested. See ADR 0085.
+
 ## 2026-11-24 — PostgreSQL named-index collation and included-column clues
 
 **Changes:** Supported simple named indexes are checked for index-versus-column collation mismatch and additional included columns; synthetic DDL tests cover both.

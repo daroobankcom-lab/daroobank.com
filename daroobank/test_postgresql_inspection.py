@@ -193,14 +193,14 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
-    def test_unique_null_semantics_are_deliberately_not_compared(self):
+    def test_unique_nulls_not_distinct_is_conservatively_reported(self):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
                 cursor.execute('CREATE UNIQUE INDEX synthetic_null_semantics ON sources_sourceclaim (source_url, payload_sha256) NULLS NOT DISTINCT')
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
-            self.assertEqual(report['missing_unique_keys'], 0)
-            self.assertEqual(report['status'], 'no_selected_issues')
+            self.assertEqual(report['missing_unique_keys'], 1)
+            self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
     def test_missing_primary_key_is_reported(self):

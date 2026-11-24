@@ -1,6 +1,6 @@
 # ADR 0066: source claim creation conflict boundary
 
-Status: development-only, 23 November 2026. Extends the unverified source-claim ledger and complements the review writer boundary in [ADR 0053](0053-triage-write-conflict-boundary.md).
+Status: development-only, 23 November 2026. Extends the unverified source-claim ledger and complements the review writer boundary in [ADR 0053](0053-triage-write-conflict-boundary.md). [ADR 0095](0095-source-claim-replay-integrity.md) adds replay row locking and consistency checks.
 
 ## Decision
 

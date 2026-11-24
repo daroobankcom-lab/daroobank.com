@@ -98,8 +98,19 @@ def record_claim(*, actor, data):
     validate_data(data)
     digest = fingerprint(data)
     with write_conflict_boundary(ClaimConflict):
-        return SourceClaim.objects.get_or_create(source_url=data['source_url'], payload_sha256=digest,
-                                                  defaults={**data, 'recorded_by': actor})
+        claim, created = SourceClaim.objects.get_or_create(source_url=data['source_url'], payload_sha256=digest,
+                                                             defaults={**data, 'recorded_by': actor})
+        if not created:
+            # Re-read under the same row lock used by review, rather than trusting
+            # a pre-lock replay object or only its stored digest.
+            try:
+                claim = SourceClaim.objects.using(claim._state.db).select_for_update().get(pk=claim.pk)
+            except SourceClaim.DoesNotExist as exc:
+                raise ClaimConflict('ادعای قبلی در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
+            if (not valid_claim(claim) or claim_data(claim) != data
+                    or not current_account_exists(claim.recorded_by_id, using=claim._state.db)):
+                raise ClaimConflict('ادعای قبلی در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.')
+        return claim, created
 
 
 def _lock_latest_review(claim):

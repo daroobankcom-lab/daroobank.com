@@ -1,5 +1,6 @@
 """Synthetic source claim write conflicts; no source authorization or automatic retry."""
 from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -60,6 +61,56 @@ class ClaimWriteConflictTests(TestCase):
         self.assertTrue(created)
         self.assertEqual(claim.recorded_by_id, self.actor.pk)
 
+    def test_replay_rejects_corrupted_existing_claim_and_preserves_it(self):
+        from .services import ClaimConflict
+        claim, created = record_claim(actor=self.actor, data=DATA)
+        self.assertTrue(created)
+        SourceClaim.objects.filter(pk=claim.pk).update(owner='محتوای دستکاری‌شده ساختگی')
+        with self.assertRaises(ClaimConflict):
+            record_claim(actor=self.actor, data=DATA)
+        claim.refresh_from_db()
+        self.assertEqual(claim.owner, 'محتوای دستکاری‌شده ساختگی')
+        self.assertEqual(claim.recorded_by_id, self.actor.pk)
+        self.assertEqual(SourceClaim.objects.count(), 1)
+
+    def test_replay_compares_values_even_if_digest_validation_is_bypassed(self):
+        from .services import ClaimConflict
+        claim, _ = record_claim(actor=self.actor, data=DATA)
+        SourceClaim.objects.filter(pk=claim.pk).update(owner='مالک دیگر ساختگی')
+        with patch('sources.services.valid_claim', return_value=True):
+            with self.assertRaises(ClaimConflict):
+                record_claim(actor=self.actor, data=DATA)
+        self.assertEqual(SourceClaim.objects.count(), 1)
+
+    def test_replay_rejects_a_missing_recording_account(self):
+        from .services import ClaimConflict
+        claim, _ = record_claim(actor=self.actor, data=DATA)
+        with patch('sources.services.current_account_exists', return_value=False):
+            with self.assertRaises(ClaimConflict):
+                record_claim(actor=self.actor, data=DATA)
+        self.assertEqual(SourceClaim.objects.get().pk, claim.pk)
+
+    def test_replay_rejects_a_row_deleted_after_initial_lookup(self):
+        from .services import ClaimConflict
+        claim, _ = record_claim(actor=self.actor, data=DATA)
+        SourceClaim.objects.filter(pk=claim.pk).delete()
+        with patch('sources.services.SourceClaim.objects.get_or_create', return_value=(claim, False)):
+            with self.assertRaises(ClaimConflict):
+                record_claim(actor=self.actor, data=DATA)
+        self.assertFalse(SourceClaim.objects.exists())
+
+    def test_http_replay_of_corrupted_claim_is_private_conflict(self):
+        claim, _ = record_claim(actor=self.actor, data=DATA)
+        SourceClaim.objects.filter(pk=claim.pk).update(owner='محتوای محرمانه دستکاری‌شده')
+        self.client.force_login(self.actor)
+        payload = {**DATA, 'claims_collection': 'on', 'starts_on': '', 'expires_on': '', 'attestation': 'on'}
+        response = self.client.post(reverse('staff_source_create'), payload)
+        self.assertEqual(response.status_code, 409)
+        self.assertNotContains(response, 'محتوای محرمانه دستکاری‌شده', status_code=409)
+        self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
+        self.assertEqual(SourceClaim.objects.count(), 1)
+
     def test_unselected_database_failure_is_not_masked(self):
         with patch('sources.services.SourceClaim.objects.get_or_create', side_effect=lambda *a, **k: fail_with('23505')):
             with self.assertRaises(OperationalError):
@@ -85,11 +136,11 @@ class ClaimWriteRealLockTests(TransactionTestCase):
         self.actor = source_actor('claim-lock-actor')
         self.other = source_actor('claim-lock-other')
 
-    def worker(self, func):
+    def worker(self, func, lock_timeout='300ms'):
         close_old_connections()
         try:
             with connection.cursor() as cursor:
-                cursor.execute("SET lock_timeout = '300ms'")
+                cursor.execute("SELECT set_config('lock_timeout', %s, false)", [lock_timeout])
                 cursor.execute("SET statement_timeout = '8s'")
             return func()
         finally:
@@ -111,6 +162,59 @@ class ClaimWriteRealLockTests(TransactionTestCase):
         self.assertEqual(SourceClaim.objects.count(), 1)
         self.assertEqual(SourceClaim.objects.get().recorded_by_id, self.actor.pk)
         self.assertEqual(SourceClaim.objects.get().pk, original.pk)
+
+    def test_replay_rereads_after_concurrent_uncommitted_mutation(self):
+        from .services import ClaimConflict
+        original, _ = record_claim(actor=self.actor, data=DATA)
+        observed = Event()
+        get_or_create = SourceClaim.objects.get_or_create
+
+        def lookup_then_signal(*args, **kwargs):
+            result = get_or_create(*args, **kwargs)
+            observed.set()
+            return result
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with patch('sources.services.SourceClaim.objects.get_or_create', side_effect=lookup_then_signal):
+                with transaction.atomic():
+                    SourceClaim.objects.filter(pk=original.pk).update(owner='مالک تغییر یافته ساختگی')
+                    future = executor.submit(self.worker, lambda: record_claim(actor=self.other, data=DATA), '4s')
+                    self.assertTrue(observed.wait(3), 'Replay did not complete its pre-lock lookup')
+                with self.assertRaises(ClaimConflict):
+                    future.result(timeout=10)
+        original.refresh_from_db()
+        self.assertEqual(original.owner, 'مالک تغییر یافته ساختگی')
+        self.assertEqual(SourceClaim.objects.count(), 1)
+
+    def test_replay_row_lock_lasts_until_outer_transaction_ends(self):
+        original, _ = record_claim(actor=self.actor, data=DATA)
+        with transaction.atomic():
+            replay, created = record_claim(actor=self.other, data=DATA)
+            self.assertFalse(created)
+            self.assertEqual(replay.pk, original.pk)
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                with self.assertRaises(OperationalError) as caught:
+                    executor.submit(self.worker, lambda: SourceClaim.objects.filter(pk=original.pk).update(
+                        owner='به‌روزرسانی هم‌زمان ساختگی')).result(timeout=10)
+                self.assertEqual(caught.exception.__cause__.sqlstate, '55P03')
+        self.assertEqual(SourceClaim.objects.get(pk=original.pk).owner, DATA['owner'])
+
+    def test_replay_waits_on_existing_claim_lock_and_times_out_safely(self):
+        from .services import ClaimConflict
+        original, created = record_claim(actor=self.actor, data=DATA)
+        self.assertTrue(created)
+        with transaction.atomic():
+            SourceClaim.objects.select_for_update().get(pk=original.pk)
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                with self.assertRaises(ClaimConflict) as caught:
+                    executor.submit(self.worker, lambda: record_claim(actor=self.other, data=DATA)).result(timeout=10)
+                self.assertIsInstance(caught.exception.__cause__, OperationalError)
+                self.assertEqual(caught.exception.__cause__.__cause__.sqlstate, '55P03')
+        replay, created = record_claim(actor=self.other, data=DATA)
+        self.assertFalse(created)
+        self.assertEqual(replay.pk, original.pk)
+        self.assertEqual(replay.recorded_by_id, self.actor.pk)
+        self.assertEqual(SourceClaim.objects.count(), 1)
 
     def test_unique_insert_wait_timeout_is_translated_and_replay_preserves_first_recorder(self):
         from .services import ClaimConflict

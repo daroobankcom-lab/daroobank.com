@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — source-claim replay integrity
+
+**Changes:** Duplicate source-claim replays lock and re-read the existing row, checking its current payload, exact submitted fields and recorder existence; unsafe replay returns a private conflict. PostgreSQL concurrency tests cover timeout, outer lock lifetime and a mutation between lookup and locked read.
+
+**Limits:** Recorder identity and rights are not proven, later writes remain possible, and outer-transaction failures are outside the local boundary. See ADR 0095.
+
 ## 2026-11-24 — PostgreSQL legacy serial-default clue
 
 **Changes:** Selected legacy serial defaults are compared to a canonical `nextval` expression for their owned sequence, rejecting selected wrong defaults and a shadowed custom function.

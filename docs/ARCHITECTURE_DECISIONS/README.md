@@ -312,4 +312,6 @@
 
 - [0156: bounded comparison candidates](0156-bounded-comparison-candidates.md) — development-only defensive inspection.
 
+- [0157: bounded candidate queue JSON](0157-bounded-candidate-queue-json.md) — development-only defensive display.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

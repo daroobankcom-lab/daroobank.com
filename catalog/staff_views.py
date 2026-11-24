@@ -7,6 +7,7 @@ from django.http import Http404, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from daroobank.account_checks import current_accounts
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from daroobank.candidate_review_scan_views import scan_response
 from daroobank.review_history import recent_reviews_with_reviewers
 from daroobank.sample_downloads import synthetic_sample_response
@@ -38,9 +39,10 @@ def candidates(request):
         rows = rows.filter(latest_decision__isnull=True)
     elif status:
         rows = rows.filter(latest_decision=status)
-    page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    page = Paginator(bounded_candidates(rows), 20).get_page(request.GET.get('page', 1))
     for candidate in page.object_list:
-        candidate.display_consistent = valid_candidate(candidate)
+        materialize_candidate(candidate)
+        candidate.display_consistent = not candidate.content_oversized and valid_candidate(candidate)
     return render(request, 'staff/products.html', {
         'page_title': 'نامزدهای فرآورده | داروبانک', 'description': 'صف داخلی نامزدهای فرآورده.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status,

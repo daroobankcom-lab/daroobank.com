@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from daroobank.account_checks import current_accounts
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from daroobank.candidate_review_scan_views import scan_response
 from daroobank.review_history import recent_reviews_with_reviewers
 from daroobank.sample_downloads import synthetic_sample_response
@@ -129,9 +130,10 @@ def price_candidates(request):
         rows = rows.filter(latest_decision__isnull=True)
     elif review_status:
         rows = rows.filter(latest_decision=review_status)
-    page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    page = Paginator(bounded_candidates(rows), 20).get_page(request.GET.get('page', 1))
     for item in page.object_list:
-        item.display_consistent = valid_candidate(item)
+        materialize_candidate(item)
+        item.display_consistent = not item.content_oversized and valid_candidate(item)
         item.display_fields = _display_source_fields(item.source_fields) if item.display_consistent else {}
     return render(request, 'staff/prices.html', {
         'page_title': 'نامزدهای قیمت | داروبانک', 'description': 'بخش داخلی بررسی داده‌های قیمت.',

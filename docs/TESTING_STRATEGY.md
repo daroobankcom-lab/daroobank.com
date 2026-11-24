@@ -316,6 +316,10 @@ Direct service tests reject selected truthy and falsey non-boolean `commit` valu
 
 Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. `daroobank/test_staff_raw_text_controls.py` checks selected source, clinical and identity forms and selected HTTP writes; an unchanged empty extra component row is skipped rather than validated (ADR 0133). `daroobank/test_staff_empty_posts.py` checks required errors and no selected writes for six empty staff POSTs with CSRF enforcement (ADR 0134). `daroobank/test_sample_downloads.py` checks the two fixed synthetic downloads, permissions and preview without writes; the browser smoke exercises both downloads (ADR 0136). Selected form summaries and their handling of field, hidden, general and formset errors are checked in these HTTP tests; the Chromium smoke checks a summary link by keyboard on one invalid identity form (ADR 0135). Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
+## Bounded candidate queues
+
+`daroobank/test_candidate_queue_bounded_json.py` exercises both synthetic queues, uninspected oversized rows, malformed JSON, SQL selection, filters and pagination. Opt-in Chromium checks the notices at four widths. Direct detail requests and database work are outside this bound. See [ADR 0157](ARCHITECTURE_DECISIONS/0157-bounded-candidate-queue-json.md).
+
 ## Bounded related candidate comparisons
 
 `daroobank/test_comparison_bounded_candidates.py` exercises synthetic product and price related records, exact JSON thresholds, malformed null, SQL selection and lookahead; comparison regression tests and opt-in Chromium remain relevant. The current candidate and database work remain outside the bound. See [ADR 0156](ARCHITECTURE_DECISIONS/0156-bounded-comparison-candidates.md).

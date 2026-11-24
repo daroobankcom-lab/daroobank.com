@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded candidate queues
+
+**Changes:** Staff product and price queues bound selected candidate JSON transfers and mark oversized content uninspected without changing pagination or counts.
+
+**Limits:** Direct detail requests and database work are outside this bound. See ADR 0157.
+
 ## 2026-11-24 — bounded related candidate comparisons
 
 **Changes:** Selected product and price comparison queries avoid transferring oversized related candidate JSON; uninspected comparisons do not yield details or price arithmetic.

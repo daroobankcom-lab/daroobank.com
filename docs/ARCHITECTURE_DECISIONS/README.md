@@ -298,4 +298,6 @@
 
 - [0149: bounded source and clinical review-scan content](0149-bounded-source-clinical-review-scan-content.md) — development-only defensive inspection.
 
+- [0150: bounded review-scan parent fields](0150-bounded-review-scan-parent-fields.md) — development-only defensive inspection.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

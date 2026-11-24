@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded review-scan parent fields
+
+**Changes:** Selected current source and clinical TextFields are bounded during review scans; invalid product/price scan requests check candidate existence without loading candidate JSON.
+
+**Limits:** Other pages and database work remain unbounded. See ADR 0150.
+
 ## 2026-11-24 — bounded source and clinical review-scan content
 
 **Changes:** Private source and clinical review scans bound selected snapshot and reason transfers, mark oversized rows as uninspected and retain scoped batch continuation.

@@ -1,6 +1,6 @@
 """Private server-rendered product and price review scan endpoints."""
 from django.http import Http404
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 
 from catalog.intake import MAX_PK, require_staff
 from catalog.models import ProductCandidate
@@ -31,7 +31,8 @@ def scan_response(request, pk, domain):
               'noindex': True, 'private_staff': True, 'candidate_id': pk, 'detail_route': detail_route,
               'scan_route': scan_route, 'domain_title': title}
     if after is None or category not in ('', *CATEGORIES):
-        get_object_or_404(model, pk=pk)
+        if not model.objects.filter(pk=pk).exists():
+            raise Http404('Candidate not found')
         return render(request, 'staff/candidate_review_inspection_error.html', common, status=400)
     try:
         report = inspect_reviews(actor=request.user, domain=domain, candidate_id=pk, after=after, category=category)

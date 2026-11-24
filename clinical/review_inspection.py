@@ -2,6 +2,8 @@
 from datetime import date
 from types import SimpleNamespace
 
+from django.db.models.functions import Substr
+
 from .evidence import reviewed_evidence
 from .models import ClinicalDraft, ClinicalDraftReview
 from .services import FIELDS, VIEW, require_staff, snapshot, valid_draft, valid_payload
@@ -77,9 +79,22 @@ def inspect_reviews(*, actor, draft_id, after=0, category=''):
             or not isinstance(category, str) or category not in ('', *CATEGORIES)):
         raise InvalidReviewInspection
     # No inner author/reviewer join: missing actors must not hide history rows.
-    draft = ClinicalDraft.objects.select_related('parent').filter(pk=draft_id).first()
+    # Prefixes include one character over each validation limit; apply them to
+    # both joined records so validation cannot trigger unbounded deferred reads.
+    draft = (ClinicalDraft.objects.select_related('parent').filter(pk=draft_id)
+        .defer('statement', 'change_reason', 'parent__statement', 'parent__change_reason')
+        .annotate(_statement_prefix=Substr('statement', 1, 4001),
+                  _reason_prefix=Substr('change_reason', 1, 1001),
+                  _parent_statement_prefix=Substr('parent__statement', 1, 4001),
+                  _parent_reason_prefix=Substr('parent__change_reason', 1, 1001)).first())
     if draft is None:
         raise ReviewInspectionNotFound
+    draft.statement = draft._statement_prefix
+    draft.change_reason = draft._reason_prefix
+    parent = draft._state.fields_cache.get('parent')
+    if parent is not None:
+        parent.statement = draft._parent_statement_prefix
+        parent.change_reason = draft._parent_reason_prefix
     current_valid = valid_draft(draft)
     reviews = list(bounded_review_fields(ClinicalDraftReview.objects.filter(draft_id=draft_id, pk__gt=after)).order_by('pk')[:BATCH_SIZE + 1])
     batch = reviews[:BATCH_SIZE]

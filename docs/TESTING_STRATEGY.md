@@ -298,7 +298,7 @@ CI run 45171291395 failed the forced-colors home skip-link visibility assertion;
 
 ## Intake control-character boundaries
 
-Product and price CSV tests reject selected raw controls before trimming, including in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
+Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
 ## PostgreSQL public-read role probe
 

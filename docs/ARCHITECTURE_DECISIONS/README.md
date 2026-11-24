@@ -222,4 +222,6 @@
 
 - [0111: legacy receipt and clinical migrations](0111-legacy-receipt-clinical-migrations.md) — development-only tests, 24 November 2026.
 
+- [0112: presentation projection migration test](0112-presentation-projection-migration-test.md) — development-only test, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

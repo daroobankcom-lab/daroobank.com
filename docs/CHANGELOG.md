@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — projection length boundary coverage
+
+**Changes:** Added synthetic tests for normalization expanding a short IRC to the exact or over-limit 80-character derived column, including full/partial rejection and explicit correction of a bypassed row. Corrected the API privacy documentation to include known-path early redirects.
+
+**Limits:** This tests existing model validation, not arbitrary bulk/SQL writes or every Unicode normalization case. Redirect headers do not redact queries or control upstream proxies.
+
 ## 2026-11-24 — partial presentation validation
 
 **Changes:** Nonempty partial presentation saves validate the prospective combination of locked stored fields and explicitly updated values, closing stale-state publication/date mismatches; synthetic two-connection and unit tests cover selected cases.

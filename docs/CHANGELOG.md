@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — reject raw controls in identity numeric inputs
+
+**Changes:** Selected identity IDs and quantities now report field errors instead of silently stripping control characters from raw form submissions.
+
+**Limits:** This is a form-level check, not comprehensive validation of every input or direct service call. See ADR 0168.
+
 ## 2026-11-24 — omit discarded projection from partial save
 
 **Changes:** The locked read used for partial presentation saves no longer transfers the old search projection before rebuilding it from the current prospective row.

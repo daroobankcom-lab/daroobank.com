@@ -1378,6 +1378,23 @@ async function run() {
       await checkLayout(page, `revision error ${selector}`);
       await auditAccessibility(page, `revision error ${selector}`);
     }
+    // Exercise a crafted raw numeric value; number inputs normally sanitize it
+    // in the browser, but an HTTP client can still send boundary controls.
+    await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
+    const rawNumericForm = page.locator('form.staff-review-form');
+    await rawNumericForm.evaluate(el => { el.noValidate = true; });
+    await rawNumericForm.locator('#id_synthetic_ack').check();
+    await rawNumericForm.locator('#id_change_reason').fill('دلیل اصلاح ساختگی برای مرورگر');
+    await rawNumericForm.locator('#id_parts-0-numerator').evaluate(el => { el.type = 'text'; el.value = '\t1'; });
+    const [rawNumericResponse] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      rawNumericForm.locator('button[type=submit]').click()]);
+    assert.equal(rawNumericResponse.status(), 200);
+    assert.match(rawNumericResponse.headers()['cache-control'], /no-store/);
+    assert.match(await page.locator('main').innerText(), /نویسه کنترلی نامعتبر است/);
+    assert.equal(await page.locator('#staff-form-errors a[href="#id_parts-0-numerator"]').count(), 1);
+    assert.equal(await page.locator('#id_parts-0-numerator').getAttribute('aria-invalid'), 'true');
+    await checkLayout(page, 'raw numeric revision error');
+    await auditAccessibility(page, 'raw numeric revision error');
     let child = await revision(page, `/staff/catalog/identity/ingredient/${ids.ingredient}/correction/`, '#id_name_fa', 'ماده اصلاحی ساختگی مرورگر');
     assert.match(child, /\/ingredient\/\d+\/$/);
     assert.match(await page.locator('body').innerText(), /ماده اصلاحی ساختگی مرورگر/);

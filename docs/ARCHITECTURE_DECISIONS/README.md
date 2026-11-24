@@ -334,4 +334,6 @@
 
 - [0167: omit old projection from partial save](0167-omit-old-projection-from-partial-save.md) — development-only defensive locked read.
 
+- [0168: identity numeric raw controls](0168-identity-numeric-raw-controls.md) — development-only input validation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

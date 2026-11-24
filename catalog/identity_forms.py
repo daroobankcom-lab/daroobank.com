@@ -27,7 +27,7 @@ class FormulationForm(AssertionForm):
 
 
 class ComponentForm(RawControlsMixin, forms.Form):
-    raw_control_fields = ('numerator_unit', 'denominator_unit')
+    raw_control_fields = ('ingredient_id', 'numerator', 'numerator_unit', 'denominator', 'denominator_unit')
     ingredient_id = forms.IntegerField(label='شناسه ماده', min_value=1, max_value=9223372036854775807)
     numerator = forms.DecimalField(label='مقدار صورت', max_digits=12, decimal_places=4, min_value=Decimal('0.0001'))
     numerator_unit = forms.CharField(label='واحد صورت', max_length=50)
@@ -57,7 +57,7 @@ ComponentFormSet = formset_factory(ComponentForm, formset=BaseComponentFormSet, 
 
 
 class ProductForm(AssertionForm):
-    raw_control_fields = AssertionForm.raw_control_fields + ('name', 'brand', 'manufacturer')
+    raw_control_fields = AssertionForm.raw_control_fields + ('formulation_id', 'name', 'brand', 'manufacturer')
     formulation_id = forms.IntegerField(label='شناسه فرمولاسیون', min_value=1, max_value=9223372036854775807)
     name = forms.CharField(label='نام فرآورده ساختگی', max_length=200)
     brand = forms.CharField(label='نام تجاری ادعایی (اختیاری)', max_length=200, required=False)
@@ -65,7 +65,7 @@ class ProductForm(AssertionForm):
 
 
 class PackageForm(AssertionForm):
-    raw_control_fields = AssertionForm.raw_control_fields + ('description', 'quantity_unit', 'irc')
+    raw_control_fields = AssertionForm.raw_control_fields + ('product_id', 'description', 'quantity', 'quantity_unit', 'irc')
     product_id = forms.IntegerField(label='شناسه فرآورده', min_value=1, max_value=9223372036854775807)
     description = forms.CharField(label='شرح بسته ساختگی', max_length=200)
     quantity = forms.DecimalField(label='مقدار بسته', max_digits=12, decimal_places=4, min_value=Decimal('0.0001'))
@@ -84,7 +84,7 @@ class IdentityReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form
 
 
 class PackageRevisionForm(PackageForm):
-    raw_control_fields = PackageForm.raw_control_fields + ('expected_graph_hash', 'expected_review')
+    raw_control_fields = tuple(field for field in PackageForm.raw_control_fields if field != 'product_id') + ('expected_graph_hash', 'expected_review')
     raw_multiline_control_fields = ('change_reason',)
     # Corrections remain tied to the same product; changing the product needs a separate assertion.
     product_id = None
@@ -111,7 +111,7 @@ class FormulationRevisionForm(FormulationForm):
 
 
 class ProductRevisionForm(ProductForm):
-    raw_control_fields = ProductForm.raw_control_fields + ('expected_graph_hash',)
+    raw_control_fields = tuple(field for field in ProductForm.raw_control_fields if field != 'formulation_id') + ('expected_graph_hash',)
     raw_multiline_control_fields = ('change_reason',)
     formulation_id = None
     change_reason = forms.CharField(label='دلیل اصلاح ادعایی', min_length=12, max_length=1000,

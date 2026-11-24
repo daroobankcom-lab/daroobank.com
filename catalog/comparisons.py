@@ -40,8 +40,9 @@ def differences(left, right, keys):
 def product_comparison_context(candidate):
     context = {'available': False, 'has_irc': False, 'revisions': [], 'candidate_matches': [],
                'public_matches': [], 'revisions_limited': False, 'candidate_matches_limited': False,
-               'public_matches_limited': False, 'candidate_skipped': 0, 'candidate_oversized': 0, 'public_skipped': 0}
-    if not valid_candidate(candidate):
+               'public_matches_limited': False, 'candidate_skipped': 0, 'candidate_oversized': 0, 'public_skipped': 0,
+               'current_oversized': getattr(candidate, 'content_oversized', False)}
+    if context['current_oversized'] or not valid_candidate(candidate):
         return context
     context['available'] = True
     fields = candidate.source_fields

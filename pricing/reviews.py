@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_review_reason
 
@@ -91,13 +92,16 @@ def record_preliminary_review(*, candidate_id, actor, decision, reason, expected
     if decision == PriceCandidateReview.ACCEPT_SUGGESTION and not re.fullmatch(r'[0-9a-f]{64}', expected_product_hash):
         raise ReviewConflict('شناسه تطبیق معتبر نیست.')
     with write_conflict_boundary(ReviewConflict):
-        candidate = PriceCandidate.objects.select_for_update().get(pk=candidate_id)
+        candidate = bounded_candidates(PriceCandidate.objects.select_for_update()).get(pk=candidate_id)
+        materialize_candidate(candidate)
         if not candidate.staged_by_id or not candidate.source_rights_attested:
             raise ReviewConflict('این رکورد فاقد ثبت‌کننده یا اظهار مجوز است و در این مسیر قابل بررسی نیست.')
         if candidate.staged_by_id == actor.pk:
             raise PermissionDenied
         if not current_account_exists(candidate.staged_by_id, using=candidate._state.db):
             raise ReviewConflict('حساب ثبت‌کننده در دسترس نیست؛ بررسی متوقف شد.')
+        if candidate.content_oversized:
+            raise ReviewConflict('داده نامزد بیش از حد بررسی است؛ بازبینی متوقف شد.')
         ensure_candidate_integrity(candidate)
         latest = _lock_latest_review(candidate)
         if (latest.pk if latest else 0) != expected_review:

@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'OVERSIZED_RECEIPT', 'CLAIM', 'CANDIDATE', 'BAD_CANDIDATE', 'BAD_PRICE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'OVERSIZED_RECEIPT', 'CLAIM', 'CANDIDATE', 'OVERSIZED_CANDIDATE', 'OVERSIZED_PRICE', 'BAD_CANDIDATE', 'BAD_PRICE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -708,6 +708,13 @@ async function run() {
       assert.equal(await page.locator('form.staff-review-form').count(), 0);
       await checkLayout(page, `invalid product detail ${width}`);
       if (width === 390) await auditAccessibility(page, 'invalid product detail');
+      response = await page.goto(base + `/staff/products/${ids.oversized_candidate}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-product-comparison-canary'));
+      assert.equal(await page.locator('form[action$="/review/"]').count(), 0);
+      await checkLayout(page, `oversized current product ${width}`);
+      if (width === 390) await auditAccessibility(page, 'oversized current product');
       await page.goto(base + `/staff/products/${ids.candidate}/`);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی فرآورده ساختگی برای مرورگر'}).innerText(), /بازبینی فرآورده ساختگی برای مرورگر/);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
@@ -1016,6 +1023,13 @@ async function run() {
       assert.equal(await pricePage.locator('form.staff-review-form').count(), 0);
       await checkLayout(pricePage, `invalid price detail ${width}`);
       if (width === 390) await auditAccessibility(pricePage, 'invalid price detail');
+      response = await pricePage.goto(base + `/staff/prices/${ids.oversized_price}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ سازگاری بررسی نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-price-comparison-canary'));
+      assert.equal(await pricePage.locator('form[action$="/review/"]').count(), 0);
+      await checkLayout(pricePage, `oversized current price ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'oversized current price');
       response = await pricePage.goto(base + `/staff/prices/${ids.price}/`);
       assert.equal(response.status(), 200);
       assert.equal(await pricePage.getByText('این بازبینی تضمین یکتایی نیست', {exact: false}).count(), 1);

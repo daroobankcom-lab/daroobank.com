@@ -93,7 +93,9 @@ def upload(request):
 def get_candidate(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Candidate not found')
-    return get_object_or_404(ProductCandidate.objects.all(), pk=pk)
+    candidate = get_object_or_404(bounded_candidates(ProductCandidate.objects.all()), pk=pk)
+    materialize_candidate(candidate)
+    return candidate
 
 
 def detail_response(request, candidate, *, form=None, status=200):
@@ -146,7 +148,7 @@ def review(request, pk):
         review_product(candidate_id=pk, actor=request.user, **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
-        candidate.refresh_from_db()
+        candidate = get_candidate(pk)
         return detail_response(request, candidate, form=form, status=409)
     except ProductCandidate.DoesNotExist:
         return HttpResponseBadRequest('Candidate no longer exists.')

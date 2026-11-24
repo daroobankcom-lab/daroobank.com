@@ -92,7 +92,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         browser_candidate = ProductCandidate.objects.get(source_record_id='browser-product')
         stage_products(io.BytesIO(make_csv([{**product_row, 'strength': '2 mg'}])), 'منبع ساختگی مرورگر',
                        'https://example.org/browser-product', actor=author, commit=True, rights_attested=True)
-        ProductCandidate.objects.filter(source_record_id='browser-product').exclude(pk=browser_candidate.pk).update(
+        oversized_product_candidate = ProductCandidate.objects.exclude(pk=browser_candidate.pk).get(source_record_id='browser-product')
+        ProductCandidate.objects.filter(pk=oversized_product_candidate.pk).update(
             source_fields={'browser-product-comparison-canary': 'آ' * 100_000})
         valid_product_review = review_product(actor=reviewer, candidate_id=browser_candidate.pk, decision='defer',
                        reason='بازبینی فرآورده ساختگی برای مرورگر', expected_review=0,
@@ -164,7 +165,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         browser_price = PriceCandidate.objects.get(source_record_id='browser-detail')
         stage_csv(io.BytesIO(csv_bytes([{**price_row, 'amount': '200'}])), 'منبع ساختگی مرورگر',
                   'https://example.org/browser-detail', staged_by=price_stager, commit=True, rights_attested=True)
-        PriceCandidate.objects.filter(source_record_id='browser-detail').exclude(pk=browser_price.pk).update(
+        oversized_price_candidate = PriceCandidate.objects.exclude(pk=browser_price.pk).get(source_record_id='browser-detail')
+        PriceCandidate.objects.filter(pk=oversized_price_candidate.pk).update(
             source_fields={'browser-price-comparison-canary': 'آ' * 100_000})
         valid_price_review = record_preliminary_review(actor=reviewer, candidate_id=browser_price.pk, decision='defer',
                                   reason='بازبینی قیمت ساختگی برای مرورگر', expected_review=0,
@@ -195,7 +197,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                    BROWSER_OVERSIZED_PACKAGE=str(oversized_package.pk), BROWSER_OVERSIZED_INGREDIENT=str(oversized_ingredient.pk),
                    BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
                    BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_OVERSIZED_RECEIPT=str(oversized_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk),
-                   BROWSER_CANDIDATE=str(browser_candidate.pk), BROWSER_BAD_CANDIDATE=str(bad_product.pk),
+                   BROWSER_CANDIDATE=str(browser_candidate.pk), BROWSER_OVERSIZED_CANDIDATE=str(oversized_product_candidate.pk),
+                   BROWSER_OVERSIZED_PRICE=str(oversized_price_candidate.pk), BROWSER_BAD_CANDIDATE=str(bad_product.pk),
                    BROWSER_BAD_PRICE=str(bad_price.pk))
         try:
             result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,

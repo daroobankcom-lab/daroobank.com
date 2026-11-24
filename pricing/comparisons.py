@@ -22,8 +22,9 @@ def valid_candidate(candidate):
 
 
 def price_revision_context(candidate):
-    context = {'available': False, 'revisions': [], 'limited': False}
-    if not valid_candidate(candidate):
+    context = {'available': False, 'revisions': [], 'limited': False,
+               'current_oversized': getattr(candidate, 'content_oversized', False)}
+    if context['current_oversized'] or not valid_candidate(candidate):
         return context
     context['available'] = True
     revisions = list(bounded_candidates(PriceCandidate.objects.filter(source_url=candidate.source_url,

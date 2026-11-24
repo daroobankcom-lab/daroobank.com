@@ -29,7 +29,7 @@ from .reviews import ReviewConflict, ensure_candidate_integrity, product_fingerp
 
 STATUS_LABELS = {
     'suggested': 'پیشنهاد تطبیق', 'ambiguous': 'تطبیق مبهم یا بیش از سقف بررسی',
-    'unmatched': 'بدون تطبیق', 'invalid': 'اطلاعات نامعتبر',
+    'unmatched': 'بدون تطبیق', 'invalid': 'اطلاعات نامعتبر', 'oversized': 'بررسی‌نشده به دلیل اندازه',
 }
 CATEGORY_LABELS = {
     'official_consumer': 'مصرف‌کننده اعلام‌شده', 'retail': 'خرده‌فروشی',
@@ -71,6 +71,8 @@ def _display_source_fields(fields):
 
 
 def _current_suggestion(candidate):
+    if getattr(candidate, 'content_oversized', False):
+        return 'oversized', None
     try:
         ensure_candidate_integrity(candidate)
     except ReviewConflict:
@@ -90,8 +92,8 @@ def _detail_response(request, candidate, *, form=None, status=200):
             review.technical_status, review.candidate_comparison = 'oversized', 'unknown'
             continue
         review.technical_status, review.candidate_comparison = classify_review(
-            review, candidate, current_status != 'invalid' and candidate.display_stager is not None)
-    can_review = bool(current_status != 'invalid' and request.user.has_perm('pricing.review_pricecandidate')
+            review, candidate, current_status not in ('invalid', 'oversized') and candidate.display_stager is not None)
+    can_review = bool(current_status not in ('invalid', 'oversized') and request.user.has_perm('pricing.review_pricecandidate')
                       and candidate.display_stager is not None and candidate.source_rights_attested
                       and candidate.staged_by_id != request.user.pk)
     if form is None and can_review:
@@ -104,6 +106,7 @@ def _detail_response(request, candidate, *, form=None, status=200):
         'page_title': 'جزئیات نامزد قیمت | داروبانک', 'description': 'جزئیات داده قیمت برای بررسی داخلی.',
         'noindex': True, 'private_staff': True, 'candidate': candidate, 'source_fields': _display_source_fields(candidate.source_fields), 'current_product': current_product,
         'current_label': STATUS_LABELS[current_status], 'payload_invalid': current_status == 'invalid',
+        'payload_unavailable': current_status in ('invalid', 'oversized'),
         'snapshot_label': STATUS_LABELS.get(candidate.match_status, STATUS_LABELS['invalid']),
         'category_label': CATEGORY_LABELS.get(candidate.price_category, 'نامشخص'),
         'unit_label': UNIT_LABELS.get(candidate.unit, 'نامشخص'), 'reviews': reviews,
@@ -184,7 +187,9 @@ def price_upload(request):
 def _get_candidate(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Candidate not found')
-    return get_object_or_404(PriceCandidate, pk=pk)
+    candidate = get_object_or_404(bounded_candidates(PriceCandidate.objects.all()), pk=pk)
+    materialize_candidate(candidate)
+    return candidate
 
 
 @login_required(login_url='staff_login')
@@ -213,7 +218,7 @@ def price_review(request, pk):
         record_preliminary_review(candidate_id=pk, actor=request.user, **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
-        candidate.refresh_from_db()
+        candidate = _get_candidate(pk)
         return _detail_response(request, candidate, form=form, status=409)
     except PriceCandidate.DoesNotExist:
         return HttpResponseBadRequest('Candidate no longer exists.')

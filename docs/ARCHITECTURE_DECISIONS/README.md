@@ -314,4 +314,6 @@
 
 - [0157: bounded candidate queue JSON](0157-bounded-candidate-queue-json.md) — development-only defensive display.
 
+- [0158: bounded current candidate review](0158-bounded-current-candidate-review.md) — development-only defensive display and writer lock read.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

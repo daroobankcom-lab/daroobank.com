@@ -12,6 +12,7 @@ from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
 from daroobank.bounded_read import read_bounded_bytes
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import has_control_or_surrogate, valid_private_source_url, valid_review_reason
 from ingestion.exceptions import StagingConflict
@@ -164,12 +165,15 @@ def review_product(*, candidate_id, actor, decision, reason, expected_review, ex
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
     with write_conflict_boundary(ReviewConflict):
-        candidate = ProductCandidate.objects.select_for_update().get(pk=candidate_id)
+        candidate = bounded_candidates(ProductCandidate.objects.select_for_update()).get(pk=candidate_id)
+        materialize_candidate(candidate)
         if candidate.staged_by_id == actor.pk:
             raise PermissionDenied
         if (not candidate.staged_by_id or not candidate.source_rights_attested
                 or not current_account_exists(candidate.staged_by_id, using=candidate._state.db)):
             raise ReviewConflict('اظهار مجوز یا ثبت‌کننده در دسترس نیست.')
+        if candidate.content_oversized:
+            raise ReviewConflict('داده نامزد بیش از حد بررسی است؛ بازبینی متوقف شد.')
         try:
             valid_source(candidate.source_name, candidate.source_url)
             valid_fields(candidate.source_fields)

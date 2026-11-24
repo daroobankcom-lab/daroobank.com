@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded current candidate review
+
+**Changes:** Product and price details and preliminary-review writer lock reads bound selected current-candidate JSON; oversized candidates are uninspected and review creation fails closed.
+
+**Limits:** Other fields, database work, other writers and endpoints remain outside the bound. See ADR 0158.
+
 ## 2026-11-24 — bounded candidate queues
 
 **Changes:** Staff product and price queues bound selected candidate JSON transfers and mark oversized content uninspected without changing pagination or counts.

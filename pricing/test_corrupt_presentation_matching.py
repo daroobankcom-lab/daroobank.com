@@ -75,7 +75,7 @@ class CorruptPresentationMatchingTests(TestCase):
         bad = SimpleNamespace(irc='001', manufacturer=None, strength='5 mg',
                               dosage_form='قرص', package_description='10 عدد', name_fa='نام ساختگی')
         with patch('pricing.importer.ProductPresentation.objects.filter') as query:
-            query.return_value.order_by.return_value.__getitem__.return_value = [bad]
+            query.return_value.defer.return_value.order_by.return_value.__getitem__.return_value = [bad]
             self.assertIsNone(_load_irc_index('001'))
 
     def test_stale_irc_projection_is_still_skipped_not_repaired(self):

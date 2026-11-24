@@ -182,7 +182,9 @@ def match_fields_valid(row):
 
 def _load_irc_index(irc, *, lock=False):
     """Index at most 100 candidates for one IRC; None means over the cap."""
-    possibilities = ProductPresentation.objects.filter(irc_normalized=irc).order_by('pk')
+    # Matching uses current identity fields, never the stored search text. Do
+    # not transfer a bypass-written projection for candidates or the sentinel.
+    possibilities = ProductPresentation.objects.filter(irc_normalized=irc).defer('search_text').order_by('pk')
     if lock:
         possibilities = possibilities.select_for_update()
     possibilities = list(possibilities[:MAX_MATCH_CANDIDATES + 1])

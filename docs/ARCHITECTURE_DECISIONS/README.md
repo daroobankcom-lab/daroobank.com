@@ -330,4 +330,6 @@
 
 - [0165: canonical new clinical revision reason](0165-canonical-new-clinical-revision-reason.md) — development-only write behavior.
 
+- [0166: defer search projection in matching](0166-defer-search-projection-in-matching.md) — development-only defensive reads.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — omit unused matching projections
+
+**Changes:** Product comparison and price matching no longer transfer the unused stored search text, including on their lookahead and selected locked reads.
+
+**Limits:** A later access to a deferred field can still fetch it; database work, other fields and other paths are not bounded. See ADR 0166.
+
 ## 2026-11-24 — canonical new clinical revision reasons
 
 **Changes:** The direct clinical revision service validates the original reason, then strips outer whitespace before storing and hashing new revisions; internal whitespace is retained. Existing reasons and fingerprints are not rewritten.

@@ -71,8 +71,9 @@ def product_comparison_context(candidate):
                 'changes': differences(fields, other.source_fields, IDENTITY_FIELDS)})
         else:
             context['candidate_skipped'] += 1
+    # The stored search projection is not part of these display comparisons.
     products = list(public_candidates().filter(irc_normalized=candidate.irc_normalized)
-                    .order_by('pk')[:MAX_COMPARISONS + 1])
+                    .defer('search_text').order_by('pk')[:MAX_COMPARISONS + 1])
     context['public_matches_limited'] = len(products) > MAX_COMPARISONS
     for product in products[:MAX_COMPARISONS]:
         if is_public_presentation(product) and normalize_search(product.irc) == candidate.irc_normalized:

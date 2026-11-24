@@ -238,4 +238,6 @@
 
 - [0119: explicit intake commit mode](0119-explicit-intake-commit-mode.md) — development-only validation, 24 November 2026.
 
+- [0120: synthetic search-index experiment](0120-synthetic-search-index-experiment.md) — opt-in experiment, 24 November 2026; no index migration.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

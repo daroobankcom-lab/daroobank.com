@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — synthetic search index experiment
+
+**Changes:** Added an opt-in 100,000-record synthetic PostgreSQL experiment comparing existing search and temporary trigram and ordering indexes, with selected warm search queries, result checks and rollback-only updates.
+
+**Limits:** No index is added to application migrations. Selected timings do not establish representative concurrency, deployment safety or production performance. See ADR 0120.
+
 ## 2026-11-24 — explicit intake commit mode
 
 **Changes:** Product and price intake services require an actual boolean for `commit`, before reading a file or writing. Synthetic tests cover selected non-boolean values, callbacks, preview and attested staging.

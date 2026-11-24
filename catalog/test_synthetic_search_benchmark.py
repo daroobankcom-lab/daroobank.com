@@ -1,16 +1,18 @@
 """Opt-in synthetic search experiment, not a release or production benchmark."""
 import json
 import math
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 import os
 import statistics
 import time
 from unittest import skipUnless
 from uuid import uuid4
 
-from django.db import connection, transaction
+from django.db import close_old_connections, connection, connections, transaction
 from django.db.models import F, Value
 from django.db.models.functions import Concat
-from django.test import TransactionTestCase, override_settings
+from django.test import Client, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -21,6 +23,8 @@ from .services import public_candidates
 ROWS = 100_000
 SAMPLES = 30
 WRITE_SAMPLES = 5
+CONCURRENT_WORKERS = 4
+CONCURRENT_REQUESTS_PER_WORKER = 8
 QUERIES = {'common': 'ساختگی', 'rare': '۰۹۹۹۹۹', 'absent': 'بیسابقه', 'short': 'ن', 'literal_percent': '%'}
 
 
@@ -114,6 +118,38 @@ class SyntheticSearchBenchmark(TransactionTestCase):
                                   'plan': summarize_plan(plan)}
             return results
 
+        def exercise_concurrent_common(expected_ids):
+            # Four independent clients/connections in one process, no network.
+            # The fixed barrier starts workers together, not every individual request.
+            barrier = Barrier(CONCURRENT_WORKERS, timeout=15)
+            endpoint = reverse('search_api')
+
+            def worker():
+                close_old_connections()
+                client = Client()
+                samples = []
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET statement_timeout = '15s'")
+                    barrier.wait()
+                    for _ in range(CONCURRENT_REQUESTS_PER_WORKER):
+                        start = time.perf_counter()
+                        response = client.get(endpoint, {'q': QUERIES['common']})
+                        samples.append((time.perf_counter() - start) * 1000)
+                        if response.status_code != 200 or [r['id'] for r in response.json()['data']] != expected_ids:
+                            raise AssertionError('Concurrent synthetic search result changed')
+                    return samples
+                finally:
+                    connections.close_all()
+
+            start = time.perf_counter()
+            with ThreadPoolExecutor(max_workers=CONCURRENT_WORKERS) as pool:
+                futures = [pool.submit(worker) for _ in range(CONCURRENT_WORKERS)]
+                samples = [sample for future in futures for sample in future.result(timeout=60)]
+            wall_ms = round((time.perf_counter() - start) * 1000, 3)
+            return {'workers': CONCURRENT_WORKERS, 'requests': len(samples), 'wall_ms': wall_ms,
+                    **percentiles(samples)}
+
         # Rollback-only updates compare a tiny selected write workload. They do
         # not measure durable commits, full write traffic or index maintenance.
         ids_to_update = list(ProductPresentation.objects.order_by('pk').values_list('pk', flat=True)[:1000])
@@ -134,6 +170,7 @@ class SyntheticSearchBenchmark(TransactionTestCase):
             return percentiles(samples)
 
         baseline = exercise()
+        baseline_concurrent = exercise_concurrent_common(baseline['common']['ids'])
         baseline_update = exercise_rolled_back_updates()
         index_name = 'synthetic_search_trgm_' + uuid4().hex
         index = connection.ops.quote_name(index_name)
@@ -146,6 +183,7 @@ class SyntheticSearchBenchmark(TransactionTestCase):
             cursor.execute('SELECT pg_relation_size(%s::regclass)', [index_name])
             index_bytes = cursor.fetchone()[0]
         indexed = exercise()
+        indexed_concurrent = exercise_concurrent_common(baseline['common']['ids'])
         indexed_update = exercise_rolled_back_updates()
 
         # A partial ordering index is a separate built-in B-tree candidate, not
@@ -161,12 +199,14 @@ class SyntheticSearchBenchmark(TransactionTestCase):
             cursor.execute('SELECT pg_relation_size(%s::regclass)', [order_name])
             order_bytes = cursor.fetchone()[0]
         both = exercise()
+        both_concurrent = exercise_concurrent_common(baseline['common']['ids'])
         both_update = exercise_rolled_back_updates()
         # Remove only the exact GIN index this test created, in the test DB.
         with connection.cursor() as cursor:
             cursor.execute(f'DROP INDEX {index}')
             cursor.execute(f'ANALYZE {table}')
         order_only = exercise()
+        order_concurrent = exercise_concurrent_common(baseline['common']['ids'])
         order_update = exercise_rolled_back_updates()
         phases = {'baseline': baseline, 'experimental_trigram': indexed,
                   'both_indexes': both, 'ordering_index_only': order_only}
@@ -183,6 +223,8 @@ class SyntheticSearchBenchmark(TransactionTestCase):
             'postgresql_version': server_version, 'database_collation': collation,
             'trigram_index_build_seconds': index_seconds, 'trigram_index_bytes': index_bytes,
             'ordering_index_build_seconds': order_seconds, 'ordering_index_bytes': order_bytes,
+            'concurrent_common': {'baseline': baseline_concurrent, 'experimental_trigram': indexed_concurrent,
+                                  'both_indexes': both_concurrent, 'ordering_index_only': order_concurrent},
             'rolled_back_updates': {'rows_per_transaction': 1000, 'samples_per_phase': WRITE_SAMPLES,
                                     'baseline': baseline_update, 'experimental_trigram': indexed_update,
                                     'both_indexes': both_update, 'ordering_index_only': order_update},

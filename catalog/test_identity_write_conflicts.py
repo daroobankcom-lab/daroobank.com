@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from queue import Queue
 from threading import Event
+from time import monotonic
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -16,7 +17,6 @@ from .identity import (IdentityConflict, create_formulation, create_package, cre
 from .models import (FormulationDraft, IdentityPackageDraft, IdentityPackageReview, IdentityPackageRevision,
                      IdentityProductDraft, IngredientDraft, IngredientRevision, FormulationRevision, ProductRevision)
 from .test_identity import ALL, FORM, INGREDIENT, PACKAGE, PRODUCT, build, user
-from .identity_test_utils import assert_blocked_by_backend
 
 REASON = 'دلیل ساختگی برای بررسی و اصلاح بسته'
 
@@ -200,35 +200,42 @@ class IdentityWriteConflictTests(TransactionTestCase):
 
     def test_actual_postgresql_deadlock_is_reported_as_conflict(self):
         """Arrange the service wait first so its backend detects this selected cycle."""
-        from .identity import _lock_latest_package_review
         latest = review_package(actor=self.actor, package_id=self.package.pk, decision='defer', reason=REASON,
             expected_review=0, expected_graph_hash=self.hashes['package'])
-        row_locked, service_waiting, start_cycle = Event(), Event(), Event()
-        manual_pid, service_pid = Queue(), Queue()
+        row_locked, cancel = Event(), Event()
+        service_pid = Queue()
         def manual_worker():
             close_old_connections()
             try:
                 with transaction.atomic():
                     with connection.cursor() as cursor:
-                        cursor.execute("SET LOCAL lock_timeout = '5s'")
-                        cursor.execute("SET LOCAL statement_timeout = '8s'")
+                        cursor.execute("SET LOCAL lock_timeout = '20s'")
+                        cursor.execute("SET LOCAL statement_timeout = '25s'")
                         cursor.execute('SELECT pg_backend_pid()')
-                        manual_pid.put(cursor.fetchone()[0])
+                        own_pid = cursor.fetchone()[0]
                     IdentityPackageReview.objects.select_for_update().get(pk=latest.pk)
                     row_locked.set()
-                    if not start_cycle.wait(6): raise TimeoutError('Cycle not started')
+                    worker_pid = service_pid.get(timeout=15)
+                    deadline = monotonic() + 15
+                    # The lock holder observes the real wait itself, then starts
+                    # the reverse lock immediately, avoiding a main-thread handoff.
+                    with connection.cursor() as cursor:
+                        while not cancel.is_set() and monotonic() < deadline:
+                            cursor.execute('SELECT %s = ANY(pg_blocking_pids(%s))', [own_pid, worker_pid])
+                            if cursor.fetchone()[0]:
+                                break
+                            cancel.wait(0.01)
+                        else:
+                            raise TimeoutError('Service did not wait on the synthetic review row')
                     IdentityPackageDraft.objects.select_for_update().get(pk=self.package.pk)
             finally:
                 connection.close()
-        def signal(package):
-            service_waiting.set()
-            return _lock_latest_package_review(package)
         def service_worker():
             close_old_connections()
             try:
                 with connection.cursor() as cursor:
-                    cursor.execute("SET lock_timeout = '5s'")
-                    cursor.execute("SET statement_timeout = '8s'")
+                    cursor.execute("SET lock_timeout = '20s'")
+                    cursor.execute("SET statement_timeout = '25s'")
                     cursor.execute('SELECT pg_backend_pid()')
                     service_pid.put(cursor.fetchone()[0])
                 actor = get_user_model().objects.get(pk=self.actor.pk)
@@ -236,23 +243,19 @@ class IdentityWriteConflictTests(TransactionTestCase):
                     expected_review=latest.pk, expected_graph_hash=self.hashes['package'])
             finally:
                 connection.close()
-        with patch('catalog.identity._lock_latest_package_review', side_effect=signal):
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                manual = pool.submit(manual_worker)
-                try:
-                    self.assertTrue(row_locked.wait(5))
-                    service = pool.submit(service_worker)
-                    self.assertTrue(service_waiting.wait(5))
-                    assert_blocked_by_backend(self, service_pid.get(timeout=5), manual_pid.get(timeout=5))
-                    start_cycle.set()
-                    with self.assertRaises(IdentityConflict) as raised:
-                        service.result(timeout=10)
-                    db_error = raised.exception.__cause__
-                    driver_error = db_error.__cause__
-                    self.assertEqual(getattr(driver_error, 'sqlstate', None) or getattr(driver_error, 'pgcode', None), '40P01')
-                    manual.result(timeout=10)
-                finally:
-                    start_cycle.set()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            manual = pool.submit(manual_worker)
+            try:
+                self.assertTrue(row_locked.wait(15))
+                service = pool.submit(service_worker)
+                with self.assertRaises(IdentityConflict) as raised:
+                    service.result(timeout=30)
+                db_error = raised.exception.__cause__
+                driver_error = db_error.__cause__
+                self.assertEqual(getattr(driver_error, 'sqlstate', None) or getattr(driver_error, 'pgcode', None), '40P01')
+                manual.result(timeout=30)
+            finally:
+                cancel.set()
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
 
     def test_actual_serialization_failure_is_reported_inside_writer_boundary(self):

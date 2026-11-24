@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — synthetic identity deadlock test coordination
+
+**Changes:** The selected identity deadlock probe now coordinates from the actual lock holder and uses longer bounded waits while still requiring SQLSTATE `40P01`.
+
+**Limits:** A prior full-suite run failed with a lock timeout; the exact scheduling cause was not established, and this is not a proof of determinism. See ADR 0132.
+
 ## 2026-11-24 — unknown source and clinical status labels
 
 **Changes:** Selected source and clinical queues and related-source hints distinguish unknown non-null reviews from no review.

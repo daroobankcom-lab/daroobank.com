@@ -220,4 +220,6 @@
 
 - [0110: PostgreSQL session-access clues](0110-postgresql-session-access-clues.md) — development-only implementation, 24 November 2026.
 
+- [0111: legacy receipt and clinical migrations](0111-legacy-receipt-clinical-migrations.md) — development-only tests, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

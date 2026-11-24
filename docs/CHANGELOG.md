@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — selected legacy-data migration tests
+
+**Changes:** PostgreSQL migration tests verify selected old receipt summaries and clinical draft/review fixtures survive existing additive migrations without invented manifest or reference rows; selected new constraints reject invalid values.
+
+**Limits:** This is synthetic sampled evidence, not a production migration or rollback plan. See ADR 0111.
+
 ## 2026-11-24 — PostgreSQL session-access clues
 
 **Changes:** Added a development-only, one-statement aggregate inspection of selected current-role attributes, table-level privileges, RLS flags and server-observed transport. Synthetic restricted-role and RLS-bypass tests cover selected limits.

@@ -11,6 +11,7 @@ from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
 from daroobank.review_history import recent_reviews_with_reviewers
 from sources.services import related_claims
+from .draft_reads import bounded_draft_text, draft_text_uninspected, materialize_draft_text
 from .inspection import CATEGORIES, MAX_PK, inspect_drafts
 from .lineage import InvalidLineageCursor, LineageNotFound, inspect_lineage
 from .review_inspection import CATEGORIES as REVIEW_CATEGORIES, ReviewInspectionNotFound, classify_review, inspect_reviews
@@ -38,10 +39,12 @@ def drafts(request):
     if status == 'pending': rows = rows.filter(latest_decision__isnull=True)
     elif status: rows = rows.filter(latest_decision=status)
     if audience: rows = rows.filter(audience=audience)
-    page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    page = Paginator(bounded_draft_text(rows), 20).get_page(request.GET.get('page', 1))
     authors = current_account_ids([item.author_id for item in page.object_list], using=rows.db)
     for item in page.object_list:
-        item.is_valid = item.author_id in authors and valid_draft(item)
+        materialize_draft_text(item)
+        item.text_uninspected = draft_text_uninspected(item)
+        item.is_valid = not item.text_uninspected and item.author_id in authors and valid_draft(item)
     return render(request, 'staff/clinical_drafts.html', {
         'page_title': 'پیش‌نویس‌های علمی | داروبانک', 'description': 'صف داخلی گزاره‌های ساختگی.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'audience': audience,

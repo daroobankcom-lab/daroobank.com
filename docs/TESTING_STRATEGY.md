@@ -316,6 +316,10 @@ Direct service tests reject selected truthy and falsey non-boolean `commit` valu
 
 Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. `daroobank/test_staff_raw_text_controls.py` checks selected source, clinical and identity forms and selected HTTP writes; an unchanged empty extra component row is skipped rather than validated (ADR 0133). `daroobank/test_staff_empty_posts.py` checks required errors and no selected writes for six empty staff POSTs with CSRF enforcement (ADR 0134). `daroobank/test_sample_downloads.py` checks the two fixed synthetic downloads, permissions and preview without writes; the browser smoke exercises both downloads (ADR 0136). Selected form summaries and their handling of field, hidden, general and formset errors are checked in these HTTP tests; the Chromium smoke checks a summary link by keyboard on one invalid identity form (ADR 0135). Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
+## Bounded clinical draft scans
+
+`clinical/test_bounded_draft_scan.py` checks current and immediate-parent text, transfer thresholds, legitimately long whitespace reasons, SQL shape, filtering and lookahead. Opt-in Chromium checks four widths. Direct detail reads, database work and other paths remain outside this bound. See [ADR 0162](ARCHITECTURE_DECISIONS/0162-bounded-clinical-scan-text.md).
+
 ## Bounded locked source evidence notes
 
 `sources/test_bounded_claim_writes.py` checks synthetic writer read shape, self-review policy, conflicts and no partial validation; selected replay and review race suites test oversized interleavings. Chromium checks one replay-conflict screen. See [ADR 0161](ARCHITECTURE_DECISIONS/0161-bounded-locked-source-claim-note.md).

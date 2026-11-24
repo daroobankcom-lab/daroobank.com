@@ -322,4 +322,6 @@
 
 - [0161: bounded locked source claim note](0161-bounded-locked-source-claim-note.md) — development-only defensive writer reads.
 
+- [0162: bounded clinical scan text](0162-bounded-clinical-scan-text.md) — development-only defensive inspection.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

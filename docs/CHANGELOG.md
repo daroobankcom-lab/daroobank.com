@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded clinical scan text
+
+**Changes:** Clinical queue and technical scan bound selected draft and parent text, reporting oversized values as uninspected rather than necessarily inconsistent.
+
+**Limits:** Direct detail reads, database work and other paths remain outside this bound. See ADR 0162.
+
 ## 2026-11-24 — bounded locked source evidence notes
 
 **Changes:** Source replay and review writers avoid transferring oversized evidence notes and reject them under their existing row locks.

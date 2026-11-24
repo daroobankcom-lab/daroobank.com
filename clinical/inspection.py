@@ -1,13 +1,14 @@
 """Bounded technical clues for synthetic drafts, not evidence verification."""
 from daroobank.account_checks import current_account_ids
 
+from .draft_reads import bounded_draft_text, draft_text_uninspected, materialize_draft_text
 from .evidence import MAX_INSPECTION_DRAFTS, inspection_evidence_statuses
 from .models import ClinicalDraft
 from .services import valid_draft
 
 BATCH_SIZE = MAX_INSPECTION_DRAFTS
 MAX_PK = 9_223_372_036_854_775_807
-CATEGORIES = ('available', 'draft_invalid', 'author_missing', 'evidence_invalid', 'evidence_over_limit')
+CATEGORIES = ('available', 'draft_invalid', 'author_missing', 'evidence_invalid', 'evidence_over_limit', 'oversized')
 
 
 class InvalidInspection(ValueError):
@@ -19,9 +20,12 @@ def inspect_drafts(*, after=0, category=''):
     if (type(after) is not int or not 0 <= after <= MAX_PK
             or not isinstance(category, str) or category not in ('', *CATEGORIES)):
         raise InvalidInspection
-    drafts = list(ClinicalDraft.objects.select_related('parent').filter(pk__gt=after).order_by('pk')[:BATCH_SIZE + 1])
+    drafts = list(bounded_draft_text(ClinicalDraft.objects.select_related('parent')
+                  .filter(pk__gt=after).order_by('pk'))[:BATCH_SIZE + 1])
     batch = drafts[:BATCH_SIZE]
-    valid = [draft for draft in batch if valid_draft(draft)]
+    for draft in batch:
+        materialize_draft_text(draft)
+    valid = [draft for draft in batch if not draft_text_uninspected(draft) and valid_draft(draft)]
     # Existence is a separate current observation, not identity or qualification.
     # Invalid drafts take precedence; no related rows are scanned for them.
     authors = current_account_ids([draft.author_id for draft in valid], using=valid[0]._state.db) if valid else set()
@@ -30,7 +34,9 @@ def inspect_drafts(*, after=0, category=''):
     statuses = inspection_evidence_statuses(with_author) if with_author else {}
     rows = []
     for draft in batch:
-        if draft.pk not in valid_ids:
+        if draft_text_uninspected(draft):
+            status = 'oversized'
+        elif draft.pk not in valid_ids:
             status = 'draft_invalid'
         elif draft.author_id not in authors:
             status = 'author_missing'

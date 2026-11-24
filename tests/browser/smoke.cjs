@@ -795,6 +795,9 @@ async function run() {
         await removeTestStyles(backgroundMutation);
       }
       await page.goto(base + '/staff/clinical/');
+      assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
+      await checkLayout(page, `clinical oversized queue ${width}`);
       await page.getByRole('link', {name: 'بازرسی فنی محدود پیش‌نویس‌ها ←'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/clinical/inspection/');
       assert.match(await page.locator('main .staff-alert').innerText(), /وجود فعلی حساب نویسنده همین نسخه/);
@@ -812,7 +815,7 @@ async function run() {
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '.staff-filter button', `clinical scan submit ${width}`, '.staff-section');
       await Promise.all([page.waitForURL('**/staff/clinical/inspection/?after=0&category=available'), page.keyboard.press('Enter')]);
-      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 22/);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 23/);
       assert.equal(await page.getByRole('link', {name: 'جزئیات پیش‌نویس'}).count(), 22);
       assert(!(await page.locator('main').innerText()).includes('عنوان خصوصی مرورگر'));
       await checkLayout(page, `clinical scan ${width}`);
@@ -820,6 +823,11 @@ async function run() {
         await auditAccessibility(page, 'clinical scan');
         await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical scan status');
       }
+      await page.locator('#category').selectOption('oversized');
+      await Promise.all([page.waitForURL('**/staff/clinical/inspection/?after=0&category=oversized'), page.locator('.staff-filter button').click()]);
+      assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
+      await checkLayout(page, `clinical oversized scan ${width}`);
       await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
       const clinicalDetail = page.locator('main');
       assert.match(await clinicalDetail.innerText(), /اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند/);

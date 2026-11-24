@@ -86,6 +86,8 @@ def fingerprint(data, parent_id, parent_hash, change_reason):
 
 
 def valid_payload(draft):
+    if getattr(draft, 'bounded_text_oversized', False):
+        return False
     try:
         data = draft_data(draft)
         validate_data(data)

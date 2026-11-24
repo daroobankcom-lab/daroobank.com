@@ -20,7 +20,7 @@ from catalog.models import IngredientDraft, IngredientRevision, IdentityPackageR
 from catalog.quality import MAX_INSPECTED_SEARCH_LENGTH
 from catalog.test_identity import ALL, INGREDIENT, PACKAGE, build, user
 from clinical.services import create_draft, draft_data, review_draft
-from clinical.models import ClinicalDraftReview
+from clinical.models import ClinicalDraft, ClinicalDraftReview
 from clinical.evidence import evidence_state
 from ingestion.models import ImportReceipt
 from ingestion.receipts import stage_price_with_receipt
@@ -62,6 +62,9 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
             clinical_leaf = create_draft(actor=author, data={**draft_data(clinical_leaf), 'title': f'نسخه خصوصی مرورگر {i}'},
                 parent_id=clinical_leaf.pk, expected_parent_hash=clinical_leaf.payload_sha256,
                 change_reason='اصلاح ساختگی برای آزمون مرورگر')
+        oversized_draft = create_draft(actor=author, data=draft_data(clinical_leaf))
+        ClinicalDraft.objects.filter(pk=oversized_draft.pk).update(
+            statement='آ' * 100_000 + 'browser-draft-statement-canary')
         browser_claim, _ = record_claim(actor=author, data={
             'source_name': 'منبع ساختگی مرورگر', 'source_url': 'https://example.org/fixture',
             'owner': 'مالک فرضی', 'evidence_url': 'https://example.org/evidence', 'evidence_note': '',

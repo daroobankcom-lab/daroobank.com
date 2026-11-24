@@ -95,6 +95,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0080: PostgreSQL model-index presence](0080-postgresql-index-presence.md) — development-only implementation, 24 November 2026.
 
+- [0081: PostgreSQL named-index directions](0081-postgresql-index-directions.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

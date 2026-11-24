@@ -1,6 +1,6 @@
 # ADR 0080: PostgreSQL model-index presence clues
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0070](0070-postgresql-catalog-clues.md). [ADR 0081](0081-postgresql-index-directions.md) adds named-index sort direction checks, superseding that limitation below.
 
 ## Decision
 

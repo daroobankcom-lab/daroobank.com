@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL named-index direction clues
+
+**Changes:** The read-only inspector compares each supported named index key's ascending or descending direction with the model declaration. Rolled-back PostgreSQL tests exercise mismatches on both keys of a two-key index.
+
+**Limits:** Direction is only a conservative clue, not a plan or performance guarantee; null ordering, collation, operator class and full definitions remain unchecked. See ADR 0081.
+
 ## 2026-11-24 — PostgreSQL model-index presence clues
 
 **Changes:** The catalog inspector checks selected field-index coverage and named model B-tree indexes against the current metadata, reporting unsupported named definitions as attention. Rolled-back PostgreSQL tests cover missing, partial, hash, reordered and alternate indexes.

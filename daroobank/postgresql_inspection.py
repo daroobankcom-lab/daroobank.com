@@ -125,7 +125,8 @@ def expected_named_indexes():
             supported = (type(index) is Index and bool(index.fields) and not index.expressions
                          and index.condition is None and not index.include and not index.opclasses)
             columns = tuple(meta.get_field(name.lstrip('-')).column for name in index.fields) if supported else ()
-            result.add((meta.db_table, index.name, columns, bool(supported)))
+            descending = tuple(name.startswith('-') for name in index.fields) if supported else ()
+            result.add((meta.db_table, index.name, columns, descending, bool(supported)))
     return sorted(result)
 
 
@@ -171,8 +172,8 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS i(table_name text, column_name text)
             ), expected_named AS (
-                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, index_name, columns, supported
-                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS i(table_name text, index_name text, columns jsonb, supported boolean)
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, index_name, columns, descending, supported
+                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS i(table_name text, index_name text, columns jsonb, descending jsonb, supported boolean)
             )
             SELECT
                 (SELECT COUNT(*) FROM names),
@@ -245,7 +246,11 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                            FROM pg_catalog.unnest(i.indkey::smallint[]) WITH ORDINALITY AS k(attnum, ordinal)
                            JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
                            WHERE k.ordinal <= i.indnkeyatts)
-                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(e.columns))))
+                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(e.columns))
+                      AND (SELECT pg_catalog.array_agg((o.option & 1) = 1 ORDER BY o.ordinal)
+                           FROM pg_catalog.unnest(i.indoption::smallint[]) WITH ORDINALITY AS o(option, ordinal)
+                           WHERE o.ordinal <= i.indnkeyatts)
+                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(e.descending)::boolean)))
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
@@ -255,8 +260,9 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                            'expected_type': data_type, 'skip_type': skip_type}
                           for table, name, not_null, data_type, skip_type in columns]),
               json.dumps([{'table_name': table, 'column_name': name} for table, name in field_indexes]),
-              json.dumps([{'table_name': table, 'index_name': name, 'columns': keys, 'supported': supported}
-                          for table, name, keys, supported in named_indexes])])
+              json.dumps([{'table_name': table, 'index_name': name, 'columns': keys,
+                           'descending': descending, 'supported': supported}
+                          for table, name, keys, descending, supported in named_indexes])])
         values = cursor.fetchone()
     keys = ('expected_tables', 'unresolved_tables', 'non_table_relations', 'unvalidated_constraints',
             'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',

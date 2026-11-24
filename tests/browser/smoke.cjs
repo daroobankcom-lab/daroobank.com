@@ -1022,7 +1022,14 @@ async function run() {
     const summary = page.locator('#staff-form-errors');
     const summaryLink = summary.locator('a[href="#id_source_name"]');
     assert.equal(await summaryLink.count(), 1);
-    await summaryLink.focus();
+    let summaryReached = false;
+    for (let tab = 0; tab < 30 && !summaryReached; tab++) {
+      await page.keyboard.press('Tab');
+      summaryReached = await summaryLink.evaluate(el => document.activeElement === el);
+    }
+    assert(summaryReached, 'error summary link reachable by Tab');
+    await checkKeyboardFocus(page, '#staff-form-errors a[href="#id_source_name"]', 'error summary link', '#staff-form-errors');
+    await checkTextContrast(page, '#staff-form-errors a[href="#id_source_name"]', '#staff-form-errors', 'error summary link');
     await page.keyboard.press('Enter');
     assert.equal(await sourceField.evaluate(el => document.activeElement === el), true, 'error summary link focus');
     await checkLayout(page, 'invalid identity form 390');

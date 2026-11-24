@@ -1,8 +1,11 @@
 # Architecture decision records
 
 - [0001: initial modular monolith and technology selection](0001-initial-stack.md) — proposed, 22 November 2026.
+
 - [0002: offline ingestion-window inspection](0002-offline-ingestion-window.md) — development-only implementation, 22 November 2026.
+
 - [0003: development-only web intake receipts](0003-web-intake-receipts.md) — partially superseded by 0004, 22 November 2026.
+
 - [0004: development intake row-outcome manifest](0004-intake-row-manifest.md) — development-only implementation, 22 November 2026.
 
 - [0005: private clinical statement drafts](0005-clinical-draft-triage.md) — development-only implementation, 22 November 2026.
@@ -19,7 +22,69 @@
 
 - [0011: indexed IRC inspection across batches](0011-indexed-irc-inspection.md) — development implementation, 22 November 2026.
 
-Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.
+- [0012: Private synthetic catalog identity assertions](0012-synthetic-identity-drafts.md) — development-only, 22 November 2026.
+
+- [0013: Private package correction branches](0013-synthetic-package-revisions.md) — development-only, 22 November 2026.
+
+- [0014: Private ingredient, formulation and product correction branches](0014-synthetic-component-revisions.md) — development-only, 22 November 2026.
+
+- [0015: Bounded inspection of synthetic correction ancestry](0015-synthetic-lineage-inspection.md) — development-only, 22 November 2026.
+
+- [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
+
+- [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.
+
+- [0018: synthetic clinical draft parent-path inspection](0018-clinical-draft-lineage.md) — development-only implementation, 22 November 2026.
+
+- [0019: synthetic clinical review snapshot inspection](0019-clinical-review-inspection.md) — development-only implementation, 22 November 2026.
+
+- [0020: request-local price staging match observations](0020-price-staging-match-cache.md) — development-only implementation, 22 November 2026.
+
+- [0021: bounded request-local price IRC candidate indexes](0021-price-irc-candidate-cache.md) — development-only implementation, 22 November 2026.
+
+- [0022: price-review concurrency boundaries](0022-price-review-concurrency.md) — development-only tests and input hardening, 22 November 2026.
+
+- [0023: serialize partial presentation projection writes](0023-presentation-partial-save-projections.md) — development implementation, 22 November 2026.
+
+- [0024: explicit one-row synthetic projection repair](0024-synthetic-projection-repair.md) — development-only local command, 22 November 2026.
+
+- [0025: bounded receipt-row consistency inspection](0025-manifest-consistency-inspection.md) — development-only, read-only inspection, 22 November 2026.
+
+- [0026: receipt candidate validation reuse and product triage boundaries](0026-receipt-validation-reuse-and-product-review.md) — development-only, 22 November 2026.
+
+- [0027: keyboard skip navigation and browser diagnostics](0027-keyboard-skip-navigation.md) — development-only, 22 November 2026.
+
+- [0028: source and clinical triage input and concurrency boundaries](0028-source-clinical-triage-boundaries.md) — development-only, 22 November 2026.
+
+- [0029: lock existing clinical reference rows during writes](0029-clinical-reference-row-locks.md) — development-only, 22 November 2026.
+
+- [0030: lock the immediate clinical draft parent during selected writes](0030-clinical-immediate-parent-locks.md) — development-only, 22 November 2026.
+
+- [0031: distinguish clinical draft and reference comparisons in review detail](0031-clinical-detail-review-comparisons.md) — development-only, 22 November 2026.
+
+- [0032: bounded reviewer lookup for private triage histories](0032-reviewer-lookup-in-intake-history.md) — development-only, 22 November 2026.
+
+- [0033: current creator-account presence in source and clinical workflows](0033-missing-source-and-clinical-creators.md) — development-only, 22 November 2026.
+
+- [0034: current product and price stager-account presence](0034-missing-product-and-price-stagers.md) — development-only, 22 November 2026.
+
+- [0035: retaining receipts with missing actor accounts](0035-missing-receipt-actors.md) — development-only, 22 November 2026.
+
+- [0036: current identity package reviewer lookup](0036-identity-reviewer-lookup.md) — development-only, 22 November 2026.
+
+- [0037: current creator presence for identity graph writes](0037-identity-graph-creator-presence.md) — development-only, 22 November 2026.
+
+- [0038: immediate product row lock for identity package review and correction](0038-identity-package-product-lock.md) — development-only, 22 November 2026.
+
+- [0039: formulation row lock for identity package review and correction](0039-identity-package-formulation-lock.md) — development-only, 22 November 2026.
+
+- [0040: bounded identity component and ingredient row locks](0040-identity-components-and-ingredients-locks.md) — development-only, 22 November 2026.
+
+- [0041: lock the existing latest identity package review](0041-identity-latest-review-lock.md) — development-only, 23 November 2026.
+
+- [0042: translate selected identity writer concurrency errors](0042-identity-write-concurrency-errors.md) — development-only, 23 November 2026.
+
+- [0043: isolated synthetic PostgreSQL restore drill](0043-synthetic-postgresql-restore-drill.md) — development-only, 23 November 2026.
 
 - [0044: slashless privacy boundaries](0044-slashless-privacy-boundaries.md) — development implementation, 23 November 2026.
 
@@ -147,22 +212,4 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0106: check expression reuse](0106-check-expression-reuse.md) — development-only implementation, 24 November 2026.
 
-- [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
-
-- [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.
-
-- [0018: synthetic clinical draft parent-path inspection](0018-clinical-draft-lineage.md) — development-only implementation, 22 November 2026.
-
-- [0019: synthetic clinical review snapshot inspection](0019-clinical-review-inspection.md) — development-only implementation, 22 November 2026.
-
-- [0020: request-local price staging match observations](0020-price-staging-match-cache.md) — development-only implementation, 22 November 2026.
-
-- [0021: bounded request-local price IRC candidate indexes](0021-price-irc-candidate-cache.md) — development-only implementation, 22 November 2026.
-
-- [0022: price-review concurrency boundaries](0022-price-review-concurrency.md) — development-only tests and input hardening, 22 November 2026.
-
-- [0023: serialize partial presentation projection writes](0023-presentation-partial-save-projections.md) — development implementation, 22 November 2026.
-
-- [0024: explicit one-row synthetic projection repair](0024-synthetic-projection-repair.md) — development-only local command, 22 November 2026.
-
-- [0025: bounded receipt-row consistency inspection](0025-manifest-consistency-inspection.md) — development-only, read-only inspection, 22 November 2026.
+Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

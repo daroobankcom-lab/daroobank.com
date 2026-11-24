@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — architecture decision index
+
+**Changes:** Restored 22 missing decision links and sorted the index; an offline test now checks coverage, uniqueness and order.
+
+**Limits:** The test checks index entries, not the correctness or currency of each decision.
+
 ## 2026-11-24 — selected check expression reuse
 
 **Changes:** The one-statement inspector reuses a materialized set of selected named-check expressions for its exact constant counts; a mixed-constraint test checks aggregate outcomes.

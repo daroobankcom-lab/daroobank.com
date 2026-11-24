@@ -143,6 +143,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0104: selected constant check-constraint clues](0104-postgresql-constant-check-clues.md) — development-only implementation, 24 November 2026.
 
+- [0105: selected constant-false check clues](0105-postgresql-false-check-clues.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

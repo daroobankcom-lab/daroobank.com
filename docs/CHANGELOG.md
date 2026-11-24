@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — selected constant-false check clues
+
+**Changes:** The inspector flags exact deparsed false expressions on selected named model checks; a synthetic test confirms an otherwise valid insert is rejected.
+
+**Limits:** Equivalent always-false expressions can remain undetected, and intentionally false checks can be flagged; see ADR 0105.
+
 ## 2026-11-24 — selected constant check clues
 
 **Changes:** The PostgreSQL inspector flags exact deparsed true/null expressions on selected named model checks; synthetic tests demonstrate rows that those checks allow.

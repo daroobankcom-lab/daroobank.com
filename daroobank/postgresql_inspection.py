@@ -358,7 +358,10 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                     WHERE e.supported AND (s.seqincrement <= 0 OR s.seqmin < 1 OR s.seqcycle)),
                 (SELECT COUNT(*) FROM expected_checks e JOIN pg_catalog.pg_constraint c
                     ON c.conrelid = e.table_oid AND c.conname = e.constraint_name AND c.contype = 'c'
-                    WHERE pg_catalog.pg_get_expr(c.conbin, c.conrelid) IN ('true', 'NULL::boolean'))
+                    WHERE pg_catalog.pg_get_expr(c.conbin, c.conrelid) IN ('true', 'NULL::boolean')),
+                (SELECT COUNT(*) FROM expected_checks e JOIN pg_catalog.pg_constraint c
+                    ON c.conrelid = e.table_oid AND c.conname = e.constraint_name AND c.contype = 'c'
+                    WHERE pg_catalog.pg_get_expr(c.conbin, c.conrelid) = 'false')
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
@@ -383,7 +386,7 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             'expected_field_indexes', 'missing_field_indexes', 'expected_named_indexes', 'unsupported_named_indexes',
             'missing_named_indexes', 'expected_auto_fields', 'unsupported_auto_fields', 'missing_auto_generation',
             'trigger_session_mismatches', 'session_replication_role_replica', 'nonpositive_or_cycling_auto_sequences',
-            'canonical_accept_all_named_checks')
+            'canonical_accept_all_named_checks', 'canonical_reject_all_named_checks')
     result = dict(zip(keys, values))
     # This is a model-metadata coverage count, not a separate database query.
     result['unsupported_unique_constraints'] = len(unsupported_uniques)
@@ -392,7 +395,7 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
         'disabled_triggers', 'trigger_session_mismatches', 'session_replication_role_replica',
         'missing_foreign_keys', 'nondeferred_foreign_keys',
         'nondefault_action_foreign_keys', 'missing_unique_keys', 'unsupported_unique_constraints', 'missing_check_constraints',
-        'canonical_accept_all_named_checks', 'missing_columns',
+        'canonical_accept_all_named_checks', 'canonical_reject_all_named_checks', 'missing_columns',
         'column_nullability_mismatches', 'unsupported_column_types', 'column_type_mismatches',
         'missing_field_indexes', 'unsupported_named_indexes', 'missing_named_indexes', 'unsupported_auto_fields',
         'missing_auto_generation', 'nonpositive_or_cycling_auto_sequences')) else 'no_selected_issues')

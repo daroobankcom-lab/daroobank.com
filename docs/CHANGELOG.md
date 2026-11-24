@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — raw controls at intake boundaries
+
+**Changes:** Product and price CSV parsers reject control/surrogate characters before cell trimming; price source validation and the two upload forms check raw source fields before controls can be erased. Synthetic direct and authenticated upload tests cover selected no-write paths.
+
+**Limits:** Ordinary spaces still trim, this intentionally rejects formerly accepted input, and other forms/writers and Unicode spoofing remain out of scope. See ADR 0118.
+
 ## 2026-11-24 — reject hidden characters in price amounts
 
 **Changes:** Price amount conversion rejects selected Unicode controls, format characters, marks and line separators before normalization; CSV checks the raw cell before trimming. Synthetic direct, atomic CSV, legacy integrity and Unicode-category tests cover selected cases.

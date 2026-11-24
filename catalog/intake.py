@@ -13,7 +13,7 @@ from django.db.transaction import TransactionManagementError
 from daroobank.account_checks import current_account_exists
 from daroobank.bounded_read import read_bounded_bytes
 from daroobank.write_conflict_boundary import write_conflict_boundary
-from daroobank.validation import valid_private_source_url, valid_review_reason
+from daroobank.validation import has_control_or_surrogate, valid_private_source_url, valid_review_reason
 from ingestion.exceptions import StagingConflict
 from ingestion.locks import lock_source_stage
 
@@ -82,6 +82,10 @@ def parse_product_csv(file):
                 raise IntakeError('فایل بیش از ۱۰۰۰ ردیف دارد.')
             if None in row or any(value is None for value in row.values()):
                 raise IntakeError(f'تعداد ستون‌های ردیف {line} معتبر نیست.')
+            # Do not erase controls at cell boundaries before field validation.
+            for key in FIELDS:
+                if has_control_or_surrogate(row[key]):
+                    raise IntakeError(f'ردیف {line}: مقدار ستون {key} معتبر نیست.')
             row = {key: value.strip() for key, value in row.items()}
             try:
                 valid_fields(row)

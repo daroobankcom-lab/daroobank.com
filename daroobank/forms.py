@@ -2,6 +2,21 @@
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
 
+from .validation import has_control_or_surrogate
+
+
+class SourceUploadRawControlsMixin:
+    """Reject raw source controls before CharField/URLField trim can hide them."""
+
+    def clean(self):
+        cleaned = super().clean()
+        for name in ('source_name', 'source_url'):
+            field = self.fields[name]
+            value = field.widget.value_from_datadict(self.data, self.files, self.add_prefix(name))
+            if isinstance(value, str) and has_control_or_surrogate(value):
+                self.add_error(name, 'این مقدار شامل نویسه کنترلی نامعتبر است.')
+        return cleaned
+
 
 class StaffAuthenticationForm(AuthenticationForm):
     def __init__(self, *args, **kwargs):

@@ -6,6 +6,11 @@ from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 
 
+def has_control_or_surrogate(value):
+    """Check a string before trimming can hide controls at its boundaries."""
+    return any(unicodedata.category(char) in ('Cc', 'Cs') for char in value)
+
+
 def valid_private_source_url(value):
     if (not isinstance(value, str) or not value or len(value) > 200 or value != value.strip()
             or '?' in value or '#' in value

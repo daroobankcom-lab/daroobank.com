@@ -1,11 +1,12 @@
 import re
 from django import forms
 
+from daroobank.forms import SourceUploadRawControlsMixin
 from .intake import MAX_FILE_BYTES, MAX_PK
 from .models import ProductCandidateReview
 
 
-class ProductUploadForm(forms.Form):
+class ProductUploadForm(SourceUploadRawControlsMixin, forms.Form):
     source_name = forms.CharField(label='نام منبع', max_length=200)
     source_url = forms.URLField(label='نشانی HTTPS منبع', max_length=200)
     csv_file = forms.FileField(label='فایل CSV مجاز')

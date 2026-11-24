@@ -95,6 +95,27 @@ class PriceWorkflowTests(TestCase):
         with self.assertRaises(ImportValidationError):
             stage_csv(io.BytesIO(csv_bytes([self.row])), 'نمونه', 'https://example.org', commit=True)
 
+    def test_upload_rejects_raw_source_and_csv_controls_without_receipt(self):
+        from ingestion.models import ImportReceipt
+
+        self.client.force_login(self.stager)
+        for field, value in (('source_name', '\tمنبع'), ('source_url', 'https://example.org\n')):
+            with self.subTest(field=field):
+                data = {'source_name': 'منبع', 'source_url': 'https://example.org', 'action': 'stage',
+                        'rights_attested': 'on', 'csv_file': SimpleUploadedFile('synthetic.csv', csv_bytes([self.row]))}
+                data[field] = value
+                response = self.client.post(reverse('staff_price_upload'), data)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(field, response.context['form'].errors)
+                self.assertEqual(PriceCandidate.objects.count(), 0)
+                self.assertEqual(ImportReceipt.objects.count(), 0)
+        bad = {**self.row, 'source_record_id': 'bad', 'currency': '\tTOMAN'}
+        response = self.upload(rows=[self.row, bad])
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].non_field_errors())
+        self.assertEqual(PriceCandidate.objects.count(), 0)
+        self.assertEqual(ImportReceipt.objects.count(), 0)
+
     def test_import_review_history_and_no_public_price(self):
         candidate = self.stage_one()
         self.assertEqual(candidate.staged_by, self.stager)

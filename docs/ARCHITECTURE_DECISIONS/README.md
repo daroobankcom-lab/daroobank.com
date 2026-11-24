@@ -234,4 +234,6 @@
 
 - [0117: price amount invisible characters](0117-price-amount-invisible-characters.md) — development-only validation, 24 November 2026.
 
+- [0118: intake raw control characters](0118-intake-raw-control-characters.md) — development-only validation, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import transaction
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
@@ -119,6 +120,45 @@ class ProductIntakeTests(TestCase):
         self.assertNotContains(self.client.get(reverse('search'), {'q': 'فرآورده ساختگی'}), 'Synthetic')
         self.assertEqual(self.client.get(reverse('search_api'), {'q': 'فرآورده ساختگی'}).json()['data'], [])
         self.assertNotContains(self.client.get(reverse('sitemap')), '/staff/')
+
+    def test_csv_rejects_controls_before_stripping_any_product_cell(self):
+        examples = (('source_record_id', '\tother'), ('name_fa', '\nنام'), ('name_en', '\r'),
+                    ('manufacturer', 'سازنده\t'), ('irc', '\t۰۰۱۲۳۴'))
+        for field, value in examples:
+            for commit in (False, True):
+                with self.subTest(field=field, commit=commit), transaction.atomic():
+                    rows = [self.row, {**self.row, 'source_record_id': 'second', field: value}]
+                    with self.assertRaises(IntakeError) as error:
+                        stage_products(io.BytesIO(make_csv(rows)), 'منبع', 'https://example.org',
+                                       actor=self.submitter, commit=commit, rights_attested=commit)
+                    self.assertNotIn(value, str(error.exception))
+                    self.assertEqual(ProductCandidate.objects.count(), 0)
+                    transaction.set_rollback(True)
+        valid = {**self.row, 'name_fa': ' نام\u200cساختگی ', 'source_record_id': '  example  '}
+        parsed = parse_product_csv(io.BytesIO(make_csv([valid])))[0]
+        self.assertEqual(parsed['name_fa'], 'نام\u200cساختگی')
+        self.assertEqual(parsed['source_record_id'], 'example')
+
+    def test_upload_rejects_raw_source_and_csv_controls_without_receipt(self):
+        from ingestion.models import ImportReceipt
+
+        self.client.force_login(self.submitter)
+        for field, value in (('source_name', '\tمنبع'), ('source_url', 'https://example.org\n')):
+            with self.subTest(field=field):
+                data = {'source_name': 'منبع', 'source_url': 'https://example.org', 'action': 'stage',
+                        'rights_attested': 'on', 'csv_file': SimpleUploadedFile('synthetic.csv', make_csv([self.row]))}
+                data[field] = value
+                response = self.client.post(reverse('staff_product_upload'), data)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(field, response.context['form'].errors)
+                self.assertEqual(ProductCandidate.objects.count(), 0)
+                self.assertEqual(ImportReceipt.objects.count(), 0)
+        bad = {**self.row, 'name_fa': '\tنام ساختگی'}
+        response = self.submit(data=make_csv([self.row, bad]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].non_field_errors())
+        self.assertEqual(ProductCandidate.objects.count(), 0)
+        self.assertEqual(ImportReceipt.objects.count(), 0)
 
     def test_service_requires_actor_permissions_and_boolean_attestation(self):
         for actor in [self.viewer, self.add_only, self.regular, self.reviewer]:

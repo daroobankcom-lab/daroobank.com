@@ -153,6 +153,29 @@ class PriceImportTests(TestCase):
             with self.subTest(amount=amount, currency=currency), self.assertRaises(ImportValidationError):
                 amount_to_rial(amount, currency)
 
+    def test_csv_and_source_reject_controls_before_stripping(self):
+        examples = (('source_record_id', '\tother'), ('manufacturer', '\nشرکت'),
+                    ('irc', '۰۰۱۲۳۴\r'), ('currency', '\tTOMAN'), ('unit', 'package\n'),
+                    ('effective_date', '\t2026-01-02'))
+        for field, value in examples:
+            for commit in (False, True):
+                with self.subTest(field=field, commit=commit), transaction.atomic():
+                    self.write_csv([self.row, {**self.row, 'source_record_id': 'second', field: value}])
+                    with self.assertRaises(ImportValidationError) as error:
+                        self.stage(commit=commit)
+                    self.assertNotIn(value, str(error.exception))
+                    self.assertEqual(PriceCandidate.objects.count(), 0)
+                    transaction.set_rollback(True)
+        self.write_csv([self.row])
+        for name, url in (('\tمنبع', 'https://example.org'), ('منبع', 'https://example.org\n')):
+            with self.subTest(source=True), transaction.atomic():
+                with self.assertRaises(ImportValidationError):
+                    stage_csv(self.path, name, url, commit=True, rights_attested=True)
+                self.assertEqual(PriceCandidate.objects.count(), 0)
+                transaction.set_rollback(True)
+        result = stage_csv(self.path, ' منبع ', ' https://example.org ', commit=True, rights_attested=True)
+        self.assertEqual(result['created'], 1)
+
     def test_hidden_or_control_characters_in_amount_reject_the_whole_csv(self):
         for amount in ('1\u200b2', '1\u202e2', '1\u0301', '1\u20dd', '1\ufe0f', '\t1', '\n1', '1\u2028', '\u00a81'):
             with self.subTest(amount=repr(amount)), transaction.atomic():

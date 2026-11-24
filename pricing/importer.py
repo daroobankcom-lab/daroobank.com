@@ -11,7 +11,7 @@ from pathlib import Path
 
 from daroobank.account_checks import current_account_exists
 from daroobank.bounded_read import read_bounded_bytes
-from daroobank.validation import valid_private_source_url
+from daroobank.validation import has_control_or_surrogate, valid_private_source_url
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from ingestion.exceptions import StagingConflict
 from ingestion.locks import lock_source_stage
@@ -55,6 +55,8 @@ class ImportValidationError(ValueError):
 def validate_source(name, url):
     if not isinstance(name, str) or not isinstance(url, str):
         raise ImportValidationError('Source name and HTTPS URL are required and must be at most 200 characters.')
+    if has_control_or_surrogate(name) or has_control_or_surrogate(url):
+        raise ImportValidationError('Source name or URL contains unsupported characters.')
     name, url = name.strip(), url.strip()
     if (not name or len(name) > 200 or any(unicodedata.category(c) in ('Cc', 'Cs') for c in name)):
         raise ImportValidationError('Source name is invalid or oversized.')
@@ -130,8 +132,11 @@ def parse_csv(path):
                 raise ImportValidationError('Input exceeds the 5000-row limit.')
             if None in row or any(value is None for value in row.values()):
                 raise ImportValidationError(f'Row {line}: wrong number of fields.')
-            # Inspect the raw amount before strip(), which can hide control or
-            # line-separator characters at either edge of a CSV cell.
+            # Controls must not be silently stripped from any raw CSV cell.
+            for key in FIELDS:
+                if has_control_or_surrogate(row[key]):
+                    raise ImportValidationError(f'Row {line}: invalid or oversized {key}.')
+            # Amounts additionally reject format/mark and line-separator characters.
             if _unsafe_amount_characters(row['amount']):
                 raise ImportValidationError(f'Row {line}: invalid or oversized amount.')
             row = {key: value.strip() for key, value in row.items()}

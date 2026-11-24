@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — reject controls in retained search queries
+
+**Changes:** Search rejects Unicode controls and surrogates in the retained query before cursor validation or database access, with a generic no-echo error.
+
+**Limits:** This tightens existing behavior. Edge whitespace stripped by HTTP views and content beyond the prefix are not checked; logs and Unicode spoofing remain concerns. See ADR 0124.
+
 ## 2026-11-24 — defer internal projections on public reads
 
 **Changes:** Search and detail reads avoid selecting two unused stored projection columns; the search still uses and rechecks its projection. Synthetic tests cover selected HTML, JSON and SQL paths.

@@ -24,7 +24,7 @@ CURSOR_SALT = 'catalog.search.cursor.v1'
 
 
 class InvalidSearchQuery(ValueError):
-    """The bounded search query contains characters PostgreSQL cannot store."""
+    """The bounded search query contains unsupported control or surrogate characters."""
 
 
 class InvalidSearchCursor(ValueError):
@@ -98,9 +98,10 @@ def is_public_presentation(product):
 def search_product_page(query, cursor=''):
     """Return one bounded, forward-only page; no consistent snapshot is promised."""
     bounded = (query or '')[:MAX_QUERY_LENGTH]
-    # PostgreSQL text rejects NUL; surrogate code points cannot be encoded as UTF-8.
-    # Fail before querying or encoding a cursor, without echoing the bad input.
-    if any(char == '\x00' or '\ud800' <= char <= '\udfff' for char in bounded):
+    # Reject control and surrogate characters in the retained query, before
+    # querying, cursor parsing or echoing it in HTML. Format characters such
+    # as Persian ZWNJ remain supported by lookup normalization.
+    if any(unicodedata.category(char) in ('Cc', 'Cs') for char in bounded):
         raise InvalidSearchQuery
     normalized = normalize_search(bounded)
     if not normalized:

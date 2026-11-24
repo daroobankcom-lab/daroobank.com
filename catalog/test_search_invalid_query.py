@@ -1,4 +1,5 @@
-"""Public search rejects PostgreSQL-incompatible input without leaking it."""
+"""Public search rejects selected unsafe text without echoing it in responses."""
+import unicodedata
 from django.test import TestCase
 from django.urls import reverse
 
@@ -12,6 +13,30 @@ class InvalidSearchQueryTests(TestCase):
                 search_product_page(query)
         with self.assertNumQueries(0), self.assertRaises(InvalidSearchQuery):
             search_product_page('safe\x00bad', cursor='invalid')
+
+    def test_controls_within_retained_query_are_rejected_before_database(self):
+        for char in ('\x01', '\t', '\n', '\r', '\x1b', '\x7f', '\x85'):
+            query = 'synthetic' + char + 'canary'
+            with self.subTest(char=ascii(char)), self.assertNumQueries(0), self.assertRaises(InvalidSearchQuery):
+                search_product_page(query, cursor='bad')
+            for endpoint in ('search', 'search_api'):
+                for method in (self.client.get, self.client.head):
+                    with self.subTest(char=ascii(char), endpoint=endpoint, method=method.__name__), self.assertNumQueries(0):
+                        response = method(reverse(endpoint), {'q': query, 'cursor': 'bad'})
+                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(response['Cache-Control'], 'no-store')
+                    self.assertEqual(response['Referrer-Policy'], 'no-referrer')
+                    self.assertEqual(response['X-Robots-Tag'], 'noindex, follow')
+                    self.assertNotIn(b'canary', response.content)
+                    if method == self.client.get and endpoint == 'search_api':
+                        self.assertEqual(response.json()['error']['code'], 'invalid_query')
+
+    def test_all_unicode_controls_are_rejected_in_service_prefix(self):
+        controls = [chr(code) for code in range(256) if unicodedata.category(chr(code)) == 'Cc']
+        self.assertEqual(len(controls), 65)
+        for char in controls:
+            with self.subTest(char=ascii(char)), self.assertNumQueries(0), self.assertRaises(InvalidSearchQuery):
+                search_product_page('synthetic' + char + 'marker')
 
     def test_html_and_api_return_private_no_echo_error_and_head(self):
         secret = 'untrusted-canary-827'
@@ -41,6 +66,16 @@ class InvalidSearchQueryTests(TestCase):
             ignored_tail = self.client.get(reverse(name), {'q': 'x' * MAX_QUERY_LENGTH + '\x00'})
             self.assertEqual(ignored_tail.status_code, 200)
         self.assertEqual(search_product_page('x' * MAX_QUERY_LENGTH + '\ud800'), ([], None))
+        for name in ('search', 'search_api'):
+            for char in ('\t', '\x01', '\x85'):
+                with self.subTest(name=name, char=ascii(char)):
+                    retained = 'x' * (MAX_QUERY_LENGTH - 1) + char + 'x'
+                    self.assertEqual(self.client.get(reverse(name), {'q': retained}).status_code, 400)
+                    ignored = 'x' * MAX_QUERY_LENGTH + char + 'x'
+                    self.assertEqual(self.client.get(reverse(name), {'q': ignored}).status_code, 200)
+            # HTTP views preserve the existing whitespace stripping behavior:
+            # control whitespace stripped at the edges is not in the retained query.
+            self.assertEqual(self.client.get(reverse(name), {'q': '\t synthetic \n'}).status_code, 200)
 
     def test_other_normalized_unicode_remains_searchable(self):
         # This safety check does not redefine the existing lookup normalization.

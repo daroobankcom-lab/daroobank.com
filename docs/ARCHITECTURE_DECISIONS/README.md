@@ -246,4 +246,6 @@
 
 - [0123: defer public search projections](0123-defer-public-search-projection.md) — development read optimization, 24 November 2026.
 
+- [0124: search query controls](0124-search-query-controls.md) — development input validation, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

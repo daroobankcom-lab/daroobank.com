@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — synthetic encrypted restore probe
+
+**Changes:** Added an opt-in OpenSSL CMS envelope and isolated PostgreSQL restore exercise with selected tamper, wrong-key and replacement-archive controls; CI opts in.
+
+**Limits:** Ephemeral keys and intermediate archives are plaintext locally, and encryption does not authenticate the backup creator. No production backup, key-management or off-host policy is implemented; see ADR 0116.
+
 ## 2026-11-24 — synthetic public-read role probe
 
 **Changes:** A disposable PostgreSQL test exercises anonymous presentation pages and APIs under selected restricted-role grants and verifies several denied operations.

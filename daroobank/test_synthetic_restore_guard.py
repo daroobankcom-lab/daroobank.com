@@ -12,6 +12,7 @@ from django.test import SimpleTestCase, override_settings
 
 from . import settings as base_settings
 from . import test_synthetic_restore as restore
+from . import test_synthetic_encrypted_restore as encrypted_restore
 
 
 def load_test_settings(module):
@@ -104,6 +105,28 @@ class RestoreDrillGuardTests(SimpleTestCase):
                 fixture.verify_source_sequence_probe()
             actor.user_permissions.add.assert_not_called()
             db.cursor.assert_not_called()
+
+    def test_encrypted_drill_rejects_unmarked_or_wrong_source_before_database_access(self):
+        drill = encrypted_restore.SyntheticEncryptedRestoreTests(
+            methodName='test_authenticated_envelope_then_restore_and_selected_negative_controls')
+        for marker, vendor, name in (
+            (False, 'postgresql', 'test_daroobank_restore_' + 'a' * 32),
+            (True, 'sqlite', 'test_daroobank_restore_' + 'a' * 32),
+            (True, 'postgresql', 'valuable_database'),
+            (True, 'postgresql', 'test_daroobank_restore_target_' + 'a' * 32),
+        ):
+            with self.subTest(marker=marker, vendor=vendor, name=name), \
+                 override_settings(DAROOBANK_RESTORE_ISOLATED=marker):
+                db = Mock(vendor=vendor, settings_dict={'NAME': name})
+                with patch.object(encrypted_restore, 'connection', db), \
+                     patch.object(encrypted_restore, 'user') as make_user, \
+                     patch.object(encrypted_restore, 'build_cross_domain_fixture') as fixture:
+                    with self.assertRaises(AssertionError):
+                        drill.test_authenticated_envelope_then_restore_and_selected_negative_controls()
+                db.cursor.assert_not_called()
+                db.get_autocommit.assert_not_called()
+                make_user.assert_not_called()
+                fixture.assert_not_called()
 
     @override_settings(DAROOBANK_RESTORE_ISOLATED=False)
     def test_unmarked_settings_fail_before_database_access(self):

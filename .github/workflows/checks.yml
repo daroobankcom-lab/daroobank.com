@@ -102,6 +102,12 @@ jobs:
             fi
             exit "$result"
           fi
+      - name: Run isolated synthetic encrypted restore probe
+        env:
+          DAROOBANK_ENCRYPTED_RESTORE_TESTS: '1'
+        run: |
+          openssl version
+          python manage.py test daroobank.test_synthetic_encrypted_restore daroobank.test_synthetic_restore_guard --settings=daroobank.restore_test_settings -v 1 --noinput
       - name: Audit resolved Python application dependencies
         run: |
           python -m venv "$RUNNER_TEMP/dependency-audit"

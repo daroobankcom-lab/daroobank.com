@@ -11,6 +11,7 @@ from pathlib import Path
 
 from daroobank.account_checks import current_account_exists
 from daroobank.bounded_read import read_bounded_bytes
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from daroobank.validation import has_control_or_surrogate, valid_private_source_url
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from ingestion.exceptions import StagingConflict
@@ -229,6 +230,11 @@ def suggest_product(row, *, lock=False):
     return _match_index(identity, _load_irc_index(identity[0], lock=lock))
 
 
+def _find_or_create_candidate(**kwargs):
+    # Existing rows only need an ID before the authoritative locked read.
+    return PriceCandidate.objects.only('pk').get_or_create(**kwargs)
+
+
 def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None, on_staged=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
     if type(commit) is not bool:
@@ -270,7 +276,7 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
                 continue
             payload = json.dumps({'source_name': source_name, 'fields': row}, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
             digest = hashlib.sha256(payload.encode('utf-8')).hexdigest()
-            candidate, created = PriceCandidate.objects.get_or_create(
+            candidate, created = _find_or_create_candidate(
                 source_url=source_url, source_record_id=row['source_record_id'], payload_sha256=digest,
                 defaults={
                     'source_name': source_name, 'source_fields': row,
@@ -283,10 +289,12 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
             )
             if not created:
                 try:
-                    candidate = PriceCandidate.objects.using(candidate._state.db).select_for_update().get(pk=candidate.pk)
+                    candidate = bounded_candidates(PriceCandidate.objects.using(candidate._state.db)
+                        .select_for_update()).get(pk=candidate.pk)
                 except PriceCandidate.DoesNotExist as exc:
                     raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
-                if (candidate.source_name != source_name or candidate.source_url != source_url
+                materialize_candidate(candidate)
+                if (candidate.content_oversized or candidate.source_name != source_name or candidate.source_url != source_url
                         or candidate.source_record_id != row['source_record_id'] or candidate.source_fields != row
                         or candidate.payload_sha256 != digest or candidate.original_amount != row['amount']
                         or candidate.original_currency != currency or candidate.amount_rial != amount

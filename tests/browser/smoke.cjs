@@ -978,6 +978,24 @@ async function run() {
         assert.equal(sample.suggestedFilename(), 'price_candidates.synthetic.csv');
         assert.match(fs.readFileSync(await sample.path(), 'utf8'), /^source_record_id,irc,manufacturer,/);
       }
+      if (width === 390) {
+        await pricePage.locator('#id_source_name').fill('منبع ساختگی مرورگر');
+        await pricePage.locator('#id_source_url').fill('https://example.org/browser-detail');
+        await pricePage.locator('#id_action').selectOption('stage');
+        await pricePage.locator('#id_rights_attested').check();
+        const duplicate = 'source_record_id,irc,manufacturer,strength,dosage_form,package_description,amount,currency,category,unit,effective_date,source_published_date\n' +
+          'browser-detail,001,سازنده فرضی,1 mg,قرص,10 عدد,200,RIAL,retail,package,,\n';
+        await pricePage.locator('#id_csv_file').setInputFiles({name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(duplicate)});
+        const [conflict] = await Promise.all([pricePage.waitForNavigation({waitUntil: 'load'}),
+          pricePage.locator('.staff-review-form button[type=submit]').click()]);
+        assert.equal(conflict.status(), 409);
+        assert.match(conflict.headers()['cache-control'], /no-store/);
+        assert.match(await pricePage.locator('main').innerText(), /ناسازگاری رکورد قبلی/);
+        assert(!(await pricePage.locator('main').innerText()).includes('browser-price-comparison-canary'));
+        await checkLayout(pricePage, 'oversized price staging conflict');
+        await auditAccessibility(pricePage, 'oversized price staging conflict');
+        await pricePage.goto(base + '/staff/prices/import/');
+      }
       await pricePage.locator('#id_source_name').fill('منبع ساختگی مرورگر');
       await pricePage.locator('#id_source_url').fill('https://example.org/browser-price');
       const csv = 'source_record_id,irc,manufacturer,strength,dosage_form,package_description,amount,currency,category,unit,effective_date,source_published_date\n' +
@@ -1215,6 +1233,21 @@ async function run() {
     ]);
     assert.equal(productSample.suggestedFilename(), 'product_candidates.synthetic.csv');
     assert.match(fs.readFileSync(await productSample.path(), 'utf8'), /^source_record_id,name_fa,name_en,/);
+    await page.locator('#id_source_name').fill('منبع ساختگی مرورگر');
+    await page.locator('#id_source_url').fill('https://example.org/browser-product');
+    await page.locator('#id_action').selectOption('stage');
+    await page.locator('#id_rights_attested').check();
+    const duplicateProduct = 'source_record_id,name_fa,name_en,manufacturer,strength,dosage_form,package_description,irc\n' +
+      'browser-product,فرآورده ساختگی مرورگر,,سازنده فرضی,2 mg,قرص,10 عدد,001\n';
+    await page.locator('#id_csv_file').setInputFiles({name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(duplicateProduct)});
+    const [productConflict] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      page.locator('.staff-review-form button[type=submit]').click()]);
+    assert.equal(productConflict.status(), 409);
+    assert.match(productConflict.headers()['cache-control'], /no-store/);
+    assert.match(await page.locator('main').innerText(), /ناسازگاری رکورد قبلی/);
+    assert(!(await page.locator('main').innerText()).includes('browser-product-comparison-canary'));
+    await checkLayout(page, 'oversized product staging conflict');
+    await auditAccessibility(page, 'oversized product staging conflict');
     // A valid session must still be unable to submit a POST without a CSRF token.
     const rejected = await page.evaluate(async () => (await fetch('/staff/catalog/identity/new/ingredient/', {
       method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'name_fa=csrf-canary',

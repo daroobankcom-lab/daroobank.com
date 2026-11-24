@@ -12,10 +12,12 @@ from django.db import OperationalError, close_old_connections, connection, trans
 from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 
+from catalog import intake as product_intake
 from catalog.models import ProductCandidate
 from ingestion.exceptions import StagingConflict
 from ingestion.locks import lock_source_stage
 from ingestion.models import ImportReceipt, ImportReceiptItem
+from pricing import importer as price_importer
 from pricing.models import PriceCandidate
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -88,7 +90,8 @@ class StagingConflictTests(TransactionTestCase):
             for location in ('second_candidate', 'manifest_written'):
                 for code in ('55P03', '40P01', '40001'):
                     with self.subTest(domain=domain, location=location, code=code):
-                        original = model.objects.get_or_create
+                        module = product_intake if domain == 'product' else price_importer
+                        original = module._find_or_create_candidate
                         count = [0]
                         def fail_second(*args, **kwargs):
                             count[0] += 1
@@ -99,7 +102,7 @@ class StagingConflictTests(TransactionTestCase):
                             _write_items(*args, **kwargs)
                             self.assertGreater(ImportReceiptItem.objects.count(), 0)
                             fail_with(code)
-                        target = (f'{model.__module__}.{model.__name__}.objects.get_or_create'
+                        target = (f'{module.__name__}._find_or_create_candidate'
                                   if location == 'second_candidate' else 'ingestion.receipts._write_items')
                         with patch(target, side_effect=fail_second if location == 'second_candidate' else fail_after_manifest):
                             response = self.client.post(reverse(route), {

@@ -106,6 +106,11 @@ def fingerprint(source_name, source_url, fields):
     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
 
+def _find_or_create_candidate(**kwargs):
+    # Existing rows only need an ID before the authoritative locked read.
+    return ProductCandidate.objects.only('pk').get_or_create(**kwargs)
+
+
 def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False, on_staged=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.add_productcandidate')
@@ -123,7 +128,7 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
             lock_source_stage('product', source_url)
             for row in rows:
                 digest = fingerprint(source_name, source_url, row)
-                candidate, created = ProductCandidate.objects.get_or_create(
+                candidate, created = _find_or_create_candidate(
                     source_url=source_url, source_record_id=row['source_record_id'],
                     payload_sha256=digest,
                     defaults={'source_name': source_name, 'source_fields': row, 'staged_by': actor,
@@ -131,10 +136,12 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
                 )
                 if not created:
                     try:
-                        candidate = ProductCandidate.objects.using(candidate._state.db).select_for_update().get(pk=candidate.pk)
+                        candidate = bounded_candidates(ProductCandidate.objects.using(candidate._state.db)
+                            .select_for_update()).get(pk=candidate.pk)
                     except ProductCandidate.DoesNotExist as exc:
                         raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
-                    if (candidate.source_name != source_name or candidate.source_url != source_url
+                    materialize_candidate(candidate)
+                    if (candidate.content_oversized or candidate.source_name != source_name or candidate.source_url != source_url
                             or candidate.source_record_id != row['source_record_id'] or candidate.source_fields != row
                             or candidate.payload_sha256 != digest or candidate.irc_normalized != normalize_search(row['irc'])
                             or candidate.source_rights_attested is not True

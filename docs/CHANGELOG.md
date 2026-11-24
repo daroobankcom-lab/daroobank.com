@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded staging replay JSON
+
+**Changes:** Product and price staging pre-lookups select only existing IDs and duplicate rereads bound candidate JSON under the existing lock; oversized replay conflicts roll back.
+
+**Limits:** This is not a database-work bound or authenticity check. See ADR 0159.
+
 ## 2026-11-24 — bounded current candidate review
 
 **Changes:** Product and price details and preliminary-review writer lock reads bound selected current-candidate JSON; oversized candidates are uninspected and review creation fails closed.

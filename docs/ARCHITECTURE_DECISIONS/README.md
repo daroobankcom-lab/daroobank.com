@@ -316,4 +316,6 @@
 
 - [0158: bounded current candidate review](0158-bounded-current-candidate-review.md) — development-only defensive display and writer lock read.
 
+- [0159: bounded staging replay JSON](0159-bounded-staging-replay-json.md) — development-only defensive staging reads.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

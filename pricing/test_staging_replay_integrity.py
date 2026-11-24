@@ -110,7 +110,7 @@ class PriceReplayIntegrityTests(TestCase):
         stage_direct([ROW], self.author)
         original = PriceCandidate.objects.get()
         PriceCandidate.objects.filter(pk=original.pk).delete()
-        with patch('pricing.importer.PriceCandidate.objects.get_or_create', return_value=(original, False)):
+        with patch('pricing.importer._find_or_create_candidate', return_value=(original, False)):
             with self.assertRaises(StagingConflict):
                 stage_direct([ROW], self.other)
         self.assertFalse(PriceCandidate.objects.exists())
@@ -182,8 +182,30 @@ class PriceReplayLockTests(TransactionTestCase):
                 self.assertEqual(caught.exception.__cause__.sqlstate, '55P03')
         self.assertEqual(PriceCandidate.objects.get().amount_rial, 100)
 
+    def test_locked_reread_rejects_oversized_json_committed_after_lookup(self):
+        from pricing.importer import _find_or_create_candidate
+        seen = Event()
+
+        def lookup_then_signal(*args, **kwargs):
+            result = _find_or_create_candidate(*args, **kwargs)
+            seen.set()
+            return result
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with patch('pricing.importer._find_or_create_candidate', side_effect=lookup_then_signal):
+                with transaction.atomic():
+                    PriceCandidate.objects.filter(pk=self.original.pk).update(source_fields={'race-canary': 'آ' * 100_000})
+                    future = executor.submit(self.worker, lambda: stage([ROW], self.other), '4s')
+                    self.assertTrue(seen.wait(3), 'Replay did not complete its pre-lock lookup')
+                with self.assertRaises(StagingConflict):
+                    future.result(timeout=10)
+        self.assertEqual(len(PriceCandidate.objects.get(pk=self.original.pk).source_fields['race-canary']), 100_000)
+        self.assertEqual(ImportReceipt.objects.count(), 1)
+        self.assertEqual(ImportReceiptItem.objects.count(), 1)
+
     def test_locked_reread_observes_concurrent_mutation_after_lookup(self):
-        lookup = PriceCandidate.objects.get_or_create
+        from pricing.importer import _find_or_create_candidate
+        lookup = _find_or_create_candidate
         seen = Event()
 
         def lookup_then_signal(*args, **kwargs):
@@ -192,7 +214,7 @@ class PriceReplayLockTests(TransactionTestCase):
             return result
 
         with ThreadPoolExecutor(max_workers=1) as executor:
-            with patch('pricing.importer.PriceCandidate.objects.get_or_create', side_effect=lookup_then_signal):
+            with patch('pricing.importer._find_or_create_candidate', side_effect=lookup_then_signal):
                 with transaction.atomic():
                     PriceCandidate.objects.filter(pk=self.original.pk).update(amount_rial=101)
                     future = executor.submit(self.worker, lambda: stage([ROW], self.other), '4s')

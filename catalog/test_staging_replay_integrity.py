@@ -95,7 +95,7 @@ class ProductReplayIntegrityTests(TestCase):
         stage_products(io.BytesIO(make_csv([ROW])), NAME, URL, actor=self.author, commit=True, rights_attested=True)
         original = ProductCandidate.objects.get()
         ProductCandidate.objects.filter(pk=original.pk).delete()
-        with patch('catalog.intake.ProductCandidate.objects.get_or_create', return_value=(original, False)):
+        with patch('catalog.intake._find_or_create_candidate', return_value=(original, False)):
             with self.assertRaises(StagingConflict):
                 stage_products(io.BytesIO(make_csv([ROW])), NAME, URL, actor=self.other, commit=True, rights_attested=True)
         self.assertFalse(ProductCandidate.objects.exists())
@@ -154,8 +154,30 @@ class ProductReplayLockTests(TransactionTestCase):
                 self.assertEqual(caught.exception.__cause__.sqlstate, '55P03')
         self.assertEqual(ProductCandidate.objects.get().irc_normalized, '001')
 
+    def test_locked_reread_rejects_oversized_json_committed_after_lookup(self):
+        from catalog.intake import _find_or_create_candidate
+        seen = Event()
+
+        def lookup_then_signal(*args, **kwargs):
+            result = _find_or_create_candidate(*args, **kwargs)
+            seen.set()
+            return result
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with patch('catalog.intake._find_or_create_candidate', side_effect=lookup_then_signal):
+                with transaction.atomic():
+                    ProductCandidate.objects.filter(pk=self.original.pk).update(source_fields={'race-canary': 'آ' * 100_000})
+                    future = executor.submit(self.worker, lambda: stage([ROW], self.other), '4s')
+                    self.assertTrue(seen.wait(3), 'Replay did not complete its pre-lock lookup')
+                with self.assertRaises(StagingConflict):
+                    future.result(timeout=10)
+        self.assertEqual(len(ProductCandidate.objects.get(pk=self.original.pk).source_fields['race-canary']), 100_000)
+        self.assertEqual(ImportReceipt.objects.count(), 1)
+        self.assertEqual(ImportReceiptItem.objects.count(), 1)
+
     def test_locked_reread_observes_concurrent_mutation_after_lookup(self):
-        lookup = ProductCandidate.objects.get_or_create
+        from catalog.intake import _find_or_create_candidate
+        lookup = _find_or_create_candidate
         seen = Event()
 
         def lookup_then_signal(*args, **kwargs):
@@ -164,7 +186,7 @@ class ProductReplayLockTests(TransactionTestCase):
             return result
 
         with ThreadPoolExecutor(max_workers=1) as executor:
-            with patch('catalog.intake.ProductCandidate.objects.get_or_create', side_effect=lookup_then_signal):
+            with patch('catalog.intake._find_or_create_candidate', side_effect=lookup_then_signal):
                 with transaction.atomic():
                     ProductCandidate.objects.filter(pk=self.original.pk).update(irc_normalized='wrong')
                     future = executor.submit(self.worker, lambda: stage([ROW], self.other), '4s')

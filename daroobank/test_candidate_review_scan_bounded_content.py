@@ -9,6 +9,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from . import test_candidate_review_inspection as fixtures
+from .review_content_bounds import MAX_REVIEW_JSON_TEXT_LENGTH, MAX_REVIEW_REASON_LENGTH
 
 
 @override_settings(STAFF_PORTAL_ENABLED=True)
@@ -32,8 +33,8 @@ class CandidateReviewScanBoundedContentTests(TestCase):
                 self.assertEqual(len(batch), 1)
                 self.assertEqual(batch[0].get_deferred_fields(), {'reason', 'review_snapshot'})
                 self.assertIsNone(batch[0]._bounded_json)
-                self.assertEqual(batch[0]._bounded_reason, 'ر' * (scan.MAX_REVIEW_REASON_LENGTH + 1))
-                self.assertGreater(batch[0]._json_length, scan.MAX_REVIEW_JSON_TEXT_LENGTH)
+                self.assertEqual(batch[0]._bounded_reason, 'ر' * (MAX_REVIEW_REASON_LENGTH + 1))
+                self.assertGreater(batch[0]._json_length, MAX_REVIEW_JSON_TEXT_LENGTH)
                 self.viewer.has_perm(f'{"catalog.view_productcandidate" if domain == "product" else "pricing.view_pricecandidate"}')
                 with patch.dict(scan._DOMAINS, {domain: (*scan._DOMAINS[domain][:3],
                                 lambda *_: self.fail('Oversized row must not be classified from truncated data'),
@@ -61,18 +62,18 @@ class CandidateReviewScanBoundedContentTests(TestCase):
         for domain, candidate, event, model, _, _ in self.cases():
             with self.subTest(domain=domain):
                 original = event.review_snapshot
-                for length in (scan.MAX_REVIEW_REASON_LENGTH, scan.MAX_REVIEW_REASON_LENGTH + 1):
+                for length in (MAX_REVIEW_REASON_LENGTH, MAX_REVIEW_REASON_LENGTH + 1):
                     model.objects.filter(pk=event.pk).update(review_snapshot=original, reason='ر' * length)
                     row = scan.inspect_reviews(actor=self.viewer, domain=domain, candidate_id=candidate.pk)['rows'][0]
-                    self.assertEqual(row['status'], 'consistent' if length == scan.MAX_REVIEW_REASON_LENGTH else 'oversized')
+                    self.assertEqual(row['status'], 'consistent' if length == MAX_REVIEW_REASON_LENGTH else 'oversized')
                 overhead = len('{"canary": ""}')
-                for length in (scan.MAX_REVIEW_JSON_TEXT_LENGTH, scan.MAX_REVIEW_JSON_TEXT_LENGTH + 1):
+                for length in (MAX_REVIEW_JSON_TEXT_LENGTH, MAX_REVIEW_JSON_TEXT_LENGTH + 1):
                     model.objects.filter(pk=event.pk).update(reason=event.reason,
                         review_snapshot={'canary': 'آ' * (length - overhead)})
                     actual = model.objects.annotate(n=Length(Cast('review_snapshot', TextField()))).get(pk=event.pk).n
                     self.assertEqual(actual, length)
                     row = scan.inspect_reviews(actor=self.viewer, domain=domain, candidate_id=candidate.pk)['rows'][0]
-                    self.assertEqual(row['status'], 'invalid_record' if length == scan.MAX_REVIEW_JSON_TEXT_LENGTH else 'oversized')
+                    self.assertEqual(row['status'], 'invalid_record' if length == MAX_REVIEW_JSON_TEXT_LENGTH else 'oversized')
 
     def test_oversized_current_candidate_is_unknown_without_unbounded_json_transfer(self):
         from . import candidate_review_scan as scan
@@ -145,7 +146,7 @@ class CandidateReviewScanBoundedContentTests(TestCase):
                 self.assertEqual(len(batch), 51)
                 self.assertEqual(batch[-1].pk, sentinel.pk)
                 self.assertIsNone(batch[-1]._bounded_json)
-                self.assertEqual(len(batch[-1]._bounded_reason), scan.MAX_REVIEW_REASON_LENGTH + 1)
+                self.assertEqual(len(batch[-1]._bounded_reason), MAX_REVIEW_REASON_LENGTH + 1)
                 first = scan.inspect_reviews(actor=self.viewer, domain=domain, candidate_id=candidate.pk, category='oversized')
                 self.assertEqual(first['rows'], [])
                 self.assertEqual(first['scanned'], 50)
@@ -158,10 +159,10 @@ class CandidateReviewScanBoundedContentTests(TestCase):
         from . import candidate_review_scan as scan
         for domain, candidate, event, model, _, _ in self.cases():
             with self.subTest(domain=domain):
-                model.objects.filter(pk=event.pk).update(reason='ر' * (scan.MAX_REVIEW_REASON_LENGTH + 1))
+                model.objects.filter(pk=event.pk).update(reason='ر' * (MAX_REVIEW_REASON_LENGTH + 1))
                 for _ in range(49):
                     model.objects.create(candidate=candidate, reviewer=self.reviewer, decision=event.decision,
-                        reason='ر' * (scan.MAX_REVIEW_REASON_LENGTH + 1),
+                        reason='ر' * (MAX_REVIEW_REASON_LENGTH + 1),
                         candidate_payload_sha256=event.candidate_payload_sha256, review_snapshot=event.review_snapshot)
                 last = model.objects.create(candidate=candidate, reviewer=self.reviewer, decision=event.decision,
                     reason=event.reason, candidate_payload_sha256=event.candidate_payload_sha256,

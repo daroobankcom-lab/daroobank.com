@@ -1,7 +1,7 @@
 """Bounded synthetic candidate review clues; never authentication or audit."""
 from django.core.exceptions import PermissionDenied
 from django.db.models import Case, F, JSONField, TextField, Value, When
-from django.db.models.functions import Cast, Length, Substr
+from django.db.models.functions import Cast, Length
 
 from catalog.comparisons import valid_candidate as valid_product
 from catalog.intake import MAX_PK, require_staff
@@ -12,7 +12,7 @@ from pricing.models import PriceCandidate, PriceCandidateReview
 from pricing.review_inspection import classify_review as classify_price
 
 from .account_checks import current_account_ids
-from .review_content_bounds import MAX_REVIEW_JSON_TEXT_LENGTH, MAX_REVIEW_REASON_LENGTH
+from .review_content_bounds import bounded_review_fields, materialize_review_fields
 
 BATCH_SIZE = 50
 # Bounds characters in the database's JSON textual representation, not DB work.
@@ -34,13 +34,7 @@ class ReviewScanNotFound(ValueError):
 
 def _review_batch(model, candidate_id, after):
     """Return bounded fields from one SELECT; deferred originals must not be accessed."""
-    return list(model.objects.filter(candidate_id=candidate_id, pk__gt=after)
-        .defer('review_snapshot', 'reason')
-        .annotate(_json_length=Length(Cast('review_snapshot', TextField())))
-        .annotate(_bounded_json=Case(
-            When(_json_length__lte=MAX_REVIEW_JSON_TEXT_LENGTH, then=F('review_snapshot')),
-            default=Value(None), output_field=JSONField()),
-            _bounded_reason=Substr('reason', 1, MAX_REVIEW_REASON_LENGTH + 1))
+    return list(bounded_review_fields(model.objects.filter(candidate_id=candidate_id, pk__gt=after))
         .order_by('pk')[:BATCH_SIZE + 1])
 
 
@@ -76,13 +70,11 @@ def inspect_reviews(*, actor, domain, candidate_id, after=0, category=''):
     batch = reviews[:BATCH_SIZE]
     rows = []
     for review in batch:
+        materialize_review_fields(review)
         # Never classify from a partial record; keep it as an explicit unknown.
-        if ((review._json_length is not None and review._json_length > MAX_REVIEW_JSON_TEXT_LENGTH)
-                or (isinstance(review._bounded_reason, str) and len(review._bounded_reason) > MAX_REVIEW_REASON_LENGTH)):
+        if review.content_oversized:
             status, comparison = 'oversized', 'unknown'
         else:
-            review.review_snapshot = review._bounded_json
-            review.reason = review._bounded_reason
             status, comparison = classify(review, candidate, current_valid)
         if not category or category == status:
             rows.append({'id': review.pk, 'status': status, 'comparison': comparison})

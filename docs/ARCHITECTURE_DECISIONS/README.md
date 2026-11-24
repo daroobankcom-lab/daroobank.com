@@ -296,4 +296,6 @@
 
 - [0148: bounded recent review content](0148-bounded-recent-review-content.md) — development-only defensive display.
 
+- [0149: bounded source and clinical review-scan content](0149-bounded-source-clinical-review-scan-content.md) — development-only defensive inspection.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

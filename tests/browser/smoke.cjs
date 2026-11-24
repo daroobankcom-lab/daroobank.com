@@ -665,8 +665,10 @@ async function run() {
       await page.goto(base + `/staff/sources/${ids.claim}/`);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی منبع ساختگی برای مرورگر'}).innerText(), /بازبینی منبع ساختگی برای مرورگر/);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
-      assert.match(await page.locator('.staff-review-item').innerText(), /اثر انگشت و شناسه ثبت‌کننده با وضعیت فعلی برابرند؛ این راستی‌آزمایی نیست/);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی منبع ساختگی برای مرورگر'}).innerText(), /اثر انگشت و شناسه ثبت‌کننده با وضعیت فعلی برابرند؛ این راستی‌آزمایی نیست/);
       assert.match(await page.locator('.staff-review-block .staff-panel-note').innerText(), /خوانش‌های جداگانه‌اند، زمان تغییر را ثابت نمی‌کنند/);
+      assert.match(await page.locator('main').innerText(), /بازبینی بیش از حد نمایش/);
+      assert(!(await page.locator('main').innerText()).includes('browser-source-oversized-reason-canary'));
       await checkLayout(page, `source review history ${width}`);
       if (width === 390) await auditAccessibility(page, 'source review history');
       await page.getByRole('link', {name: 'بازرسی فنی تاریخچه بازبینی‌ها ←'}).click();
@@ -685,12 +687,17 @@ async function run() {
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '.staff-filter button', `source review scan submit ${width}`, '.staff-section');
       await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=consistent'), page.keyboard.press('Enter')]);
-      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 2/);
       assert.equal(await page.locator('.staff-candidate').count(), 1);
       assert(!(await page.locator('main').innerText()).includes('بازبینی منبع ساختگی برای مرورگر'));
       assert(!(await page.locator('main').innerText()).includes('https://example.org/fixture'));
       await checkLayout(page, `source review scan ${width}`);
       if (width === 390) await auditAccessibility(page, 'source review scan');
+      await page.locator('#category').selectOption('oversized');
+      await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=oversized'), page.locator('.staff-filter button').click()]);
+      assert.equal(await page.locator('.staff-candidate').count(), 1);
+      assert.match(await page.locator('main').innerText(), /بیش از حد بازرسی؛ محتوا بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-source-oversized-snapshot-canary'));
       response = await page.goto(base + `/staff/products/${ids.bad_candidate}/`);
       assert.equal(response.status(), 200);
       assert.match(response.headers()['cache-control'], /no-store/);
@@ -800,6 +807,8 @@ async function run() {
       assert.match(await clinicalDetail.innerText(), /اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند/);
       assert.match(await clinicalDetail.innerText(), /شناسه ارجاع‌های ثبت‌شده با فهرست فعلی برابر است/);
       assert.match(await clinicalDetail.innerText(), /خوانش‌های جداگانه‌اند، زمان تغییر را ثابت نمی‌کنند/);
+      assert.match(await clinicalDetail.innerText(), /بازبینی بیش از حد نمایش/);
+      assert(!(await clinicalDetail.innerText()).includes('browser-clinical-oversized-reason-canary'));
       await checkLayout(page, `clinical review detail ${width}`);
       if (width === 390) await auditAccessibility(page, 'clinical review detail');
       await page.getByRole('link', {name: 'بازرسی فنی تاریخچه بازبینی‌ها ←'}).click();
@@ -817,7 +826,7 @@ async function run() {
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '.staff-filter button', `review scan submit ${width}`, '.staff-section');
       await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=consistent'), page.keyboard.press('Enter')]);
-      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 2/);
       assert.equal(await page.locator('.staff-candidate').count(), 1);
       assert(!(await page.locator('main').innerText()).includes('دلیل خصوصی ساختگی بازبینی مرورگر'));
       await checkLayout(page, `clinical review scan ${width}`);
@@ -825,6 +834,11 @@ async function run() {
         await auditAccessibility(page, 'clinical review scan');
         await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical review scan status');
       }
+      await page.locator('#category').selectOption('oversized');
+      await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=oversized'), page.locator('.staff-filter button').click()]);
+      assert.equal(await page.locator('.staff-candidate').count(), 1);
+      assert.match(await page.locator('main').innerText(), /بیش از حد بازرسی؛ محتوا بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-clinical-oversized-snapshot-canary'));
       await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
       await page.getByRole('link', {name: 'بازرسی مسیر نسخه‌های پیشین ←'}).click();
       const clinicalLineage = `/staff/clinical/${ids.clinical_leaf}/lineage/`;

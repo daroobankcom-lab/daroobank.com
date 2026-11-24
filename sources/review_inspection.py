@@ -3,11 +3,12 @@ import re
 from datetime import date
 
 from daroobank.validation import valid_review_reason
+from daroobank.review_content_bounds import bounded_review_fields, materialize_review_fields
 from .models import SourceClaim, SourceClaimReview
 from .services import FIELDS, MAX_PK, VIEW, ClaimError, fingerprint, require_staff, snapshot, valid_claim, validate_data
 
 BATCH_SIZE = 50
-CATEGORIES = ('consistent', 'invalid_record')
+CATEGORIES = ('consistent', 'invalid_record', 'oversized')
 _HASH = re.compile(r'^[0-9a-f]{64}$')
 
 
@@ -69,11 +70,15 @@ def inspect_reviews(*, actor, claim_id, after=0, category=''):
         raise ReviewInspectionNotFound
     current_valid = valid_claim(claim)
     # Avoid an inner reviewer join: missing accounts do not hide review rows.
-    reviews = list(SourceClaimReview.objects.filter(claim_id=claim_id, pk__gt=after).order_by('pk')[:BATCH_SIZE + 1])
+    reviews = list(bounded_review_fields(SourceClaimReview.objects.filter(claim_id=claim_id, pk__gt=after)).order_by('pk')[:BATCH_SIZE + 1])
     batch = reviews[:BATCH_SIZE]
     rows = []
     for review in batch:
-        status, comparison = classify_review(review, claim, current_valid)
+        materialize_review_fields(review)
+        if review.content_oversized:
+            status, comparison = 'oversized', 'unknown'
+        else:
+            status, comparison = classify_review(review, claim, current_valid)
         if not category or category == status:
             rows.append({'id': review.pk, 'status': status, 'comparison': comparison})
     return {'claim_id': claim_id, 'after': after, 'category': category, 'scanned': len(batch), 'rows': rows,

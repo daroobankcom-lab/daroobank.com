@@ -80,6 +80,10 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         review_claim(actor=reviewer, claim_id=browser_claim.pk, decision='defer',
                      reason='بازبینی منبع ساختگی برای مرورگر', expected_review=0,
                      expected_hash=browser_claim.payload_sha256)
+        SourceClaimReview.objects.create(claim=browser_claim, reviewer=reviewer, decision='defer',
+            reason='ر' * 100_000 + 'browser-source-oversized-reason-canary',
+            claim_payload_sha256=browser_claim.payload_sha256,
+            review_snapshot={'oversized': 'آ' * 100_000 + 'browser-source-oversized-snapshot-canary'})
         product_row = {'source_record_id': 'browser-product', 'name_fa': 'فرآورده ساختگی مرورگر',
                        'name_en': '', 'manufacturer': 'سازنده فرضی', 'strength': '1 mg',
                        'dosage_form': 'قرص', 'package_description': '10 عدد', 'irc': '001'}
@@ -110,6 +114,10 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                      reason='دلیل خصوصی ساختگی بازبینی مرورگر', expected_review=0,
                      expected_hash=clinical_leaf.payload_sha256,
                      expected_evidence_hash=evidence_state(clinical_leaf)['fingerprint'])
+        ClinicalDraftReview.objects.create(draft=clinical_leaf, reviewer=reviewer, decision='defer',
+            reason='ر' * 100_000 + 'browser-clinical-oversized-reason-canary',
+            draft_payload_sha256=clinical_leaf.payload_sha256,
+            review_snapshot={'oversized': 'آ' * 100_000 + 'browser-clinical-oversized-snapshot-canary'})
         price_stager = user('browser-price-stager')
         price_stager.user_permissions.add(*Permission.objects.filter(content_type__app_label='pricing',
                                          codename__in=['view_pricecandidate', 'add_pricecandidate']))
@@ -178,8 +186,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IngredientDraft.objects.filter(name_fa='csrf-canary').count(), 0)
         self.assertEqual(IngredientDraft.objects.filter(name_fa='ماده تازه ساختگی مرورگر').count(), 1)
         self.assertEqual(IdentityPackageReview.objects.count(), 1)
-        self.assertEqual(ClinicalDraftReview.objects.count(), 1)
-        self.assertEqual(SourceClaimReview.objects.count(), 1)
+        self.assertEqual(ClinicalDraftReview.objects.count(), 2)
+        self.assertEqual(SourceClaimReview.objects.count(), 2)
         self.assertEqual(PriceCandidate.objects.count(), 2)
         self.assertEqual(ImportReceipt.objects.count(), 1)
         self.assertEqual(browser_receipt.items.count(), 2)

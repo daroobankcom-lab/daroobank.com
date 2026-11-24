@@ -6,10 +6,11 @@ from .evidence import reviewed_evidence
 from .models import ClinicalDraft, ClinicalDraftReview
 from .services import FIELDS, VIEW, require_staff, snapshot, valid_draft, valid_payload
 from daroobank.validation import valid_review_reason
+from daroobank.review_content_bounds import bounded_review_fields, materialize_review_fields
 
 BATCH_SIZE = 50
 MAX_PK = 9_223_372_036_854_775_807
-CATEGORIES = ('consistent', 'legacy', 'invalid_record', 'invalid_evidence')
+CATEGORIES = ('consistent', 'legacy', 'invalid_record', 'invalid_evidence', 'oversized')
 BASE_KEYS = set(FIELDS) | {'parent_id', 'parent_payload_sha256', 'change_reason', 'author_id'}
 EVIDENCE_KEYS = {'evidence_version', 'evidence_fingerprint', 'evidence_snapshot'}
 
@@ -80,11 +81,15 @@ def inspect_reviews(*, actor, draft_id, after=0, category=''):
     if draft is None:
         raise ReviewInspectionNotFound
     current_valid = valid_draft(draft)
-    reviews = list(ClinicalDraftReview.objects.filter(draft_id=draft_id, pk__gt=after).order_by('pk')[:BATCH_SIZE + 1])
+    reviews = list(bounded_review_fields(ClinicalDraftReview.objects.filter(draft_id=draft_id, pk__gt=after)).order_by('pk')[:BATCH_SIZE + 1])
     batch = reviews[:BATCH_SIZE]
     rows = []
     for review in batch:
-        status, comparison = classify_review(review, draft, current_valid)
+        materialize_review_fields(review)
+        if review.content_oversized:
+            status, comparison = 'oversized', 'unknown'
+        else:
+            status, comparison = classify_review(review, draft, current_valid)
         if not category or status == category:
             rows.append({'id': review.pk, 'status': status, 'comparison': comparison})
     return {'draft_id': draft_id, 'after': after, 'category': category, 'scanned': len(batch), 'rows': rows,

@@ -2,11 +2,17 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded source and clinical review-scan content
+
+**Changes:** Private source and clinical review scans bound selected snapshot and reason transfers, mark oversized rows as uninspected and retain scoped batch continuation.
+
+**Limits:** Database work and other data, including parent records, remain unbounded. See ADR 0149.
+
 ## 2026-11-24 — bounded recent-review content
 
 **Changes:** Four private detail pages bound selected review snapshot and reason transfers, suppress oversized content and retain the newest review's concurrency token.
 
-**Limits:** Database processing, other fields and pages remain unbounded; source and clinical review scans do not inherit this display protection. See ADR 0148.
+**Limits:** Database processing, other fields and pages remain unbounded; source and clinical review scans did not inherit this display protection at this step (see the subsequent ADR 0149). See ADR 0148.
 
 ## 2026-11-24 — bounded candidate-review scan content
 

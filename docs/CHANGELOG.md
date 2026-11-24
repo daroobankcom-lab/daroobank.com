@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded catalog-quality projection fetch
+
+**Changes:** The quality inspector selects a bounded search projection and flags oversized rows with unknown public-filter status instead of transferring the whole value.
+
+**Limits:** This adds an issue code and suppresses other quality conclusions for such rows; database work and omitted-suffix controls remain unchecked. See ADR 0127.
+
 ## 2026-11-24 — bounded synthetic repair projection fetch
 
 **Changes:** Synthetic projection-repair preview and locked commit select at most 8193 characters of the stored search projection; an oversized projection remains unsafe. Safe-length snapshots retain the complete text.

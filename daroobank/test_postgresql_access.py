@@ -96,6 +96,38 @@ class PostgreSQLAccessInspectionTests(TransactionTestCase):
             self.assertEqual(ProductPresentation.objects.count(), 1)
             transaction.set_rollback(True)
 
+    def test_table_owner_bypasses_unforced_rls_even_without_a_policy(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = current_user')
+            if not cursor.fetchone()[0]:
+                self.skipTest('Synthetic RLS owner test requires a disposable superuser')
+        role = connection.ops.quote_name('daroobank_owner_' + uuid4().hex)
+        name = 'synthetic_owned_' + uuid4().hex
+        table = connection.ops.quote_name(name)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute(f'CREATE ROLE {role} NOLOGIN NOSUPERUSER NOBYPASSRLS')
+                cursor.execute(f'GRANT USAGE ON SCHEMA public TO {role}')
+                cursor.execute(f'CREATE TABLE {table} (value integer)')
+                cursor.execute(f'INSERT INTO {table} VALUES (456)')
+                cursor.execute(f'ALTER TABLE {table} OWNER TO {role}')
+                cursor.execute(f'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY')
+                cursor.execute(f'SET LOCAL ROLE {role}')
+            unforced = inspect_access([name])
+            self.assertFalse(unforced['role_superuser'])
+            self.assertFalse(unforced['role_bypass_rls'])
+            self.assertEqual((unforced['tables_rls_enabled'], unforced['tables_rls_forced']), (1, 0))
+            with connection.cursor() as cursor:
+                cursor.execute(f'SELECT count(*) FROM {table}')
+                self.assertEqual(cursor.fetchone(), (1,))  # Owner bypasses unforced RLS.
+                cursor.execute(f'ALTER TABLE {table} FORCE ROW LEVEL SECURITY')
+            forced = inspect_access([name])
+            self.assertEqual((forced['tables_rls_enabled'], forced['tables_rls_forced']), (1, 1))
+            with connection.cursor() as cursor:
+                cursor.execute(f'SELECT count(*) FROM {table}')
+                self.assertEqual(cursor.fetchone(), (0,))  # No policies: default deny for this role.
+            transaction.set_rollback(True)
+
     def test_missing_public_schema_has_unknown_create_privilege(self):
         with connection.cursor() as cursor:
             cursor.execute('SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = current_user')

@@ -1,13 +1,14 @@
 from django import forms
 
-from daroobank.forms import RawControlsMixin
+from daroobank.forms import RawControlsMixin, RawMultilineControlsMixin
 
 from .models import ClinicalDraft, ClinicalDraftReview
 from .services import FIELDS, HASH, MAX_PK, DraftError, validate_data
 
 
-class DraftForm(RawControlsMixin, forms.Form):
-    # Statement is intentionally multiline; its existing service policy applies.
+class DraftForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
+    raw_multiline_control_fields = ('statement',)
+    # Statement remains multiline; tabs and line breaks are allowed.
     raw_control_fields = ('subject', 'title', 'reference_title', 'reference_url', 'reference_location',
                           'reference_author', 'reference_version')
     subject = forms.CharField(label='موضوع ساختگی (بدون ارتباط خودکار با کاتالوگ)', max_length=200)
@@ -36,6 +37,7 @@ class DraftForm(RawControlsMixin, forms.Form):
 
 
 class RevisionForm(DraftForm):
+    raw_multiline_control_fields = ('statement', 'change_reason')
     expected_parent_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
     change_reason = forms.CharField(label='دلیل ایجاد نسخه جدید', min_length=12, max_length=1000,
                                     widget=forms.Textarea(attrs={'rows': 3}))
@@ -47,7 +49,8 @@ class RevisionForm(DraftForm):
         return value
 
 
-class ReviewForm(forms.Form):
+class ReviewForm(RawMultilineControlsMixin, forms.Form):
+    raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[('', 'انتخاب کنید'),
         (ClinicalDraftReview.FURTHER_REVIEW, 'ارجاع برای بررسی بیشتر'), (ClinicalDraftReview.REJECT, 'رد پیش‌نویس'),
         (ClinicalDraftReview.DEFER, 'نیاز به بررسی یا مدرک بیشتر')])

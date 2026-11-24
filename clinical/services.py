@@ -2,7 +2,6 @@
 import hashlib
 import json
 import re
-import unicodedata
 from datetime import date
 
 from django.core.exceptions import PermissionDenied
@@ -12,7 +11,8 @@ from django.db.transaction import TransactionManagementError
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_account_exists
 from daroobank.write_conflict_boundary import write_conflict_boundary
-from daroobank.validation import valid_private_source_url, valid_review_reason
+from daroobank.validation import (has_control_or_surrogate, has_forbidden_multiline_control,
+                                  valid_private_source_url, valid_review_reason)
 from .models import ClinicalDraft, ClinicalDraftReview
 
 VIEW = 'clinical.view_clinicaldraft'
@@ -43,8 +43,7 @@ def require_staff(user, *perms):
 
 def _validate_text(field, value):
     if (not isinstance(value, str) or value != value.strip() or len(value) > LIMITS[field]
-            or any(unicodedata.category(c) == 'Cs' or (unicodedata.category(c) == 'Cc' and
-                   (field != 'statement' or c not in '\n\r\t')) for c in value)
+            or (has_forbidden_multiline_control(value) if field == 'statement' else has_control_or_surrogate(value))
             or (field not in OPTIONAL and not normalize_search(value))):
         raise DraftError('متن یا مشخصات ارجاع معتبر نیست.')
 

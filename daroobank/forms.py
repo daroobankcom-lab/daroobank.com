@@ -2,7 +2,7 @@
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
 
-from .validation import has_control_or_surrogate
+from .validation import has_control_or_surrogate, has_forbidden_multiline_control
 
 
 class RawControlsMixin:
@@ -16,6 +16,21 @@ class RawControlsMixin:
             field = self.fields[name]
             value = field.widget.value_from_datadict(self.data, self.files, self.add_prefix(name))
             if isinstance(value, str) and has_control_or_surrogate(value):
+                self.add_error(name, 'این مقدار شامل نویسه کنترلی نامعتبر است.')
+        return cleaned
+
+
+class RawMultilineControlsMixin:
+    """Inspect raw selected multiline values before whitespace cleanup can hide controls."""
+
+    raw_multiline_control_fields = ()
+
+    def clean(self):
+        cleaned = super().clean()
+        for name in self.raw_multiline_control_fields:
+            field = self.fields[name]
+            value = field.widget.value_from_datadict(self.data, self.files, self.add_prefix(name))
+            if isinstance(value, str) and has_forbidden_multiline_control(value):
                 self.add_error(name, 'این مقدار شامل نویسه کنترلی نامعتبر است.')
         return cleaned
 

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## Selected raw multiline controls
+
+**Changes:** Selected staff review reasons, clinical statements and revision reasons reject forbidden raw controls before form whitespace cleanup can hide them; permitted multiline whitespace remains supported.
+
+**Limits:** This is not a comprehensive Unicode or log-safety guarantee, and bound forms may redisplay submitted values. See ADR 0142.
+
 ## Candidate-review inspection
 
 **Changes:** Private product and price candidate pages offer bounded, read-only review-history inspection with post-batch filtering and explicit continuation.

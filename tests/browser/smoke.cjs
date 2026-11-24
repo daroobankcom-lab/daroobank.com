@@ -1074,6 +1074,17 @@ async function run() {
       assert(await reviewPage.locator('#id_reason').evaluate(el => document.activeElement === el));
       await checkLayout(reviewPage, `${domain} review errors 390`);
       await auditAccessibility(reviewPage, `${domain} review errors`);
+      // A raw control that Python would otherwise strip must not be saved.
+      await reviewPage.goto(base + detailPath);
+      const rawForm = reviewPage.locator('form.staff-review-form');
+      await rawForm.locator('#id_decision').selectOption('defer');
+      await rawForm.locator('#id_reason').fill('\u001cتوضیح ساختگی برای بازبینی مرورگر');
+      [response] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
+                                     rawForm.locator('button[type=submit]').click()]);
+      assert.equal(response.status(), 400);
+      assert.equal(await reviewPage.locator('#id_reason').getAttribute('aria-invalid'), 'true');
+      assert.match(await reviewPage.locator('#id_reason_error').innerText(), /نویسه کنترلی نامعتبر/);
+      assert.equal(await reviewPage.locator('#staff-form-errors a[href="#id_reason"]').count(), 1);
     }
     await reviewContext.close();
     const authorContext = await contextFor(browser, 390, errors);

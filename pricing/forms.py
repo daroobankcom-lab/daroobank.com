@@ -1,7 +1,7 @@
 import re
 
 from django import forms
-from daroobank.forms import SourceUploadRawControlsMixin
+from daroobank.forms import RawMultilineControlsMixin, SourceUploadRawControlsMixin
 from .importer import MAX_FILE_BYTES
 from .models import PriceCandidateReview
 from .reviews import MAX_PK
@@ -32,7 +32,8 @@ class PriceUploadForm(SourceUploadRawControlsMixin, forms.Form):
         return values
 
 
-class PriceReviewForm(forms.Form):
+class PriceReviewForm(RawMultilineControlsMixin, forms.Form):
+    raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[
         ('', 'یک نتیجه انتخاب کنید'),
         (PriceCandidateReview.ACCEPT_SUGGESTION, 'پذیرش اولیه پیشنهاد تطبیق'),

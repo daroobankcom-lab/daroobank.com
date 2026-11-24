@@ -282,4 +282,6 @@
 
 - [0141: candidate-review inspection](0141-candidate-review-inspection.md) — development-only bounded inspection.
 
+- [0142: raw multiline controls](0142-raw-multiline-controls.md) — development-only selected form validation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -1,7 +1,7 @@
 import re
 from django import forms
 
-from daroobank.forms import RawControlsMixin
+from daroobank.forms import RawControlsMixin, RawMultilineControlsMixin
 
 from .models import SourceClaimReview
 from .services import FIELDS, MAX_PK, ClaimError, validate_data
@@ -33,7 +33,8 @@ class SourceClaimForm(RawControlsMixin, forms.Form):
         return data
 
 
-class SourceReviewForm(forms.Form):
+class SourceReviewForm(RawMultilineControlsMixin, forms.Form):
+    raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[
         ('', 'یک نتیجه انتخاب کنید'), (SourceClaimReview.FURTHER_REVIEW, 'ارجاع برای بررسی بیشتر'),
         (SourceClaimReview.REJECT, 'رد ادعا'), (SourceClaimReview.DEFER, 'نیاز به مدرک یا بررسی بیشتر'),

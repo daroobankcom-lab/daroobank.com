@@ -143,6 +143,25 @@ class PostgreSQLAccessInspectionTests(TransactionTestCase):
                 self.assertIsNone(cursor.fetchone())
             transaction.set_rollback(True)  # Removes synthetic role and all grants.
 
+    def test_changed_session_authorization_can_hide_original_superuser(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = current_user')
+            if not cursor.fetchone()[0]:
+                self.skipTest('Synthetic session-authorization test requires a disposable superuser')
+        role = connection.ops.quote_name('daroobank_session_' + uuid4().hex)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute(f'CREATE ROLE {role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS')
+                cursor.execute(f'SET LOCAL SESSION AUTHORIZATION {role}')
+            restricted = inspect_access([])
+            self.assertFalse(restricted['role_superuser'])
+            self.assertFalse(restricted['session_superuser'])
+            self.assertFalse(restricted['role_switched'])
+            with connection.cursor() as cursor:
+                cursor.execute('RESET SESSION AUTHORIZATION')
+            self.assertTrue(inspect_access([])['role_superuser'])
+            transaction.set_rollback(True)
+
     def test_command_outputs_fixed_json_and_generic_database_failure(self):
         output = io.StringIO()
         call_command('inspect_postgresql_access', stdout=output)

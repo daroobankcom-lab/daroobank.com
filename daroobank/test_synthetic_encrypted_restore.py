@@ -72,6 +72,8 @@ class SyntheticEncryptedRestoreTests(TransactionTestCase):
 
                 key, cert = private_file('key.pem'), private_file('cert.pem')
                 other_key, other_cert = private_file('other-key.pem'), private_file('other-cert.pem')
+                signer, signer_public = private_file('signer.pem'), private_file('signer-public.pem')
+                wrong_public, signature = private_file('wrong-public.pem'), private_file('archive.sig')
                 archive, encrypted = private_file('source.dump'), private_file('archive.cms')
                 decrypted, tampered = private_file('decrypted.dump'), private_file('tampered.cms')
                 rejected_output = private_file('rejected.dump')
@@ -83,6 +85,13 @@ class SyntheticEncryptedRestoreTests(TransactionTestCase):
                                      '-subj', '/CN=synthetic-only', '-keyout', str(private_key), '-out', str(certificate)])
                     self.assertEqual(generated.returncode, 0, 'Synthetic key generation failed')
                     self.assertEqual(stat.S_IMODE(private_key.stat().st_mode), 0o600)
+                generated_signer = run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048',
+                                        '-out', str(signer)])
+                self.assertEqual(generated_signer.returncode, 0, 'Synthetic signing key generation failed')
+                self.assertEqual(stat.S_IMODE(signer.stat().st_mode), 0o600)
+                for private_key, public_key in ((signer, signer_public), (other_key, wrong_public)):
+                    public = run(['openssl', 'pkey', '-in', str(private_key), '-pubout', '-out', str(public_key)])
+                    self.assertEqual(public.returncode, 0, 'Synthetic public key export failed')
                 dumped = run(['pg_dump', '--no-password', '--format=custom', '--no-owner', '--no-acl', '--file', str(archive)])
                 self.assertEqual(dumped.returncode, 0, 'Synthetic dump failed')
                 self.assertGreater(archive.stat().st_size, 128)
@@ -93,18 +102,32 @@ class SyntheticEncryptedRestoreTests(TransactionTestCase):
                 self.assertEqual(info.returncode, 0, 'Synthetic CMS inspection failed')
                 self.assertIn(b'authEnvelopedData', info.stdout)
                 self.assertIn(b'aes-256-gcm', info.stdout.lower())
+                signature_options = ['-sigopt', 'rsa_padding_mode:pss', '-sigopt', 'rsa_pss_saltlen:digest']
+                signed = run(['openssl', 'dgst', '-sha256', '-sign', str(signer), *signature_options,
+                              '-out', str(signature), str(encrypted)])
+                self.assertEqual(signed.returncode, 0, 'Synthetic signing failed')
 
+                def verify_signature(envelope, public_key=signer_public):
+                    return run(['openssl', 'dgst', '-sha256', '-verify', str(public_key), *signature_options,
+                                '-signature', str(signature), str(envelope)])
+
+                self.assertEqual(verify_signature(encrypted).returncode, 0, 'Synthetic signature check failed')
+                self.assertNotEqual(verify_signature(encrypted, wrong_public).returncode, 0)
                 contents = bytearray(encrypted.read_bytes())
                 self.assertGreater(len(contents), 64)
                 contents[-1] ^= 1
                 tampered.write_bytes(contents)
+                self.assertNotEqual(verify_signature(tampered).returncode, 0)
                 decrypt = ['openssl', 'cms', '-decrypt', '-binary', '-inform', 'DER']
                 bad = run([*decrypt, '-in', str(tampered), '-recip', str(cert), '-inkey', str(key),
                            '-out', str(rejected_output)])
                 self.assertNotEqual(bad.returncode, 0, 'Tampered synthetic envelope was accepted')
-                wrong_key = run([*decrypt, '-in', str(encrypted), '-recip', str(other_cert), '-inkey', str(other_key),
+                wrong_recipient = run([*decrypt, '-in', str(encrypted), '-recip', str(other_cert), '-inkey', str(other_key),
+                                       '-out', str(rejected_output)])
+                self.assertNotEqual(wrong_recipient.returncode, 0, 'Wrong synthetic recipient was accepted')
+                wrong_key = run([*decrypt, '-in', str(encrypted), '-recip', str(cert), '-inkey', str(other_key),
                                  '-out', str(rejected_output)])
-                self.assertNotEqual(wrong_key.returncode, 0, 'Wrong synthetic key was accepted')
+                self.assertNotEqual(wrong_key.returncode, 0, 'Wrong synthetic private key was accepted')
                 # Failed decryption may leave plaintext in its output file. Never
                 # use rejected_output as input to pg_restore, even if it exists.
                 restored_archive = run([*decrypt, '-in', str(encrypted), '-recip', str(cert), '-inkey', str(key),
@@ -123,6 +146,9 @@ class SyntheticEncryptedRestoreTests(TransactionTestCase):
                 self.assertEqual(forged_dump.returncode, 0, 'Synthetic replacement dump failed')
                 self.assertNotEqual(forged.read_bytes(), archive.read_bytes())
                 self.assertEqual(run([*encrypt, '-in', str(forged), '-out', str(forged_encrypted), str(cert)]).returncode, 0)
+                self.assertNotEqual(verify_signature(forged_encrypted).returncode, 0)
+                # A valid old envelope/signature pair can be replayed: no freshness check here.
+                self.assertEqual(verify_signature(encrypted).returncode, 0)
                 replacement = run([*decrypt, '-in', str(forged_encrypted), '-recip', str(cert), '-inkey', str(key),
                                    '-out', str(forged_output)])
                 self.assertEqual(replacement.returncode, 0)

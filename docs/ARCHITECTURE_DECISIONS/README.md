@@ -274,4 +274,6 @@
 
 - [0137: price-review snapshot clues](0137-price-review-snapshot-clues.md) — development-only defensive display, 24 November 2026.
 
+- [0138: source deadlock victim](0138-source-deadlock-victim.md) — synthetic test correction, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

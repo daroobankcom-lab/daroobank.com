@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — synthetic source deadlock probe
+
+**Changes:** The actual PostgreSQL source-review deadlock probe checks both worker results and permits either real `40P01` victim, with the appropriate rollback or success outcome.
+
+**Limits:** Only a service-victim run exercises translation of a real deadlock through the writer; injected tests cover mappings separately. See ADR 0138.
+
 ## 2026-11-24 — price-review snapshot clues
 
 **Changes:** The selected price detail history checks recent stored review snapshots, suppresses details of inconsistent records, and compares consistent snapshots with the current candidate.

@@ -268,8 +268,8 @@ class SourceLatestReviewLockTests(TransactionTestCase):
         with ThreadPoolExecutor(max_workers=1) as pool:
             self.assertEqual(pool.submit(update).result(timeout=10), 1)
 
-    def test_actual_deadlock_with_review_lock_is_translated(self):
-        # The uncooperative writer locks in reverse order; the service waits first.
+    def test_actual_deadlock_with_review_lock_has_a_real_victim(self):
+        # The uncooperative writer locks in reverse order; PostgreSQL may choose either victim.
         from .services import _lock_latest_review
         row_locked, waiting, start_cycle = Event(), Event(), Event()
         manual_pid, service_pid = Queue(), Queue()
@@ -300,14 +300,29 @@ class SourceLatestReviewLockTests(TransactionTestCase):
                     self.assertTrue(waiting.wait(5))
                     assert_blocked_by_backend(self, service_pid.get(timeout=5), manual_pid.get(timeout=5))
                     start_cycle.set()
-                    with self.assertRaises(ReviewConflict) as caught:
+                    try:
                         service.result(timeout=10)
-                    driver = caught.exception.__cause__.__cause__
+                        service_error = None
+                    except ReviewConflict as exc:
+                        service_error = exc
+                    try:
+                        other.result(timeout=10)
+                        manual_error = None
+                    except DatabaseError as exc:
+                        manual_error = exc
+                    # Exactly one transaction must be a real deadlock victim; a
+                    # timeout, unrelated error or two successes is never accepted.
+                    self.assertNotEqual(service_error is None, manual_error is None)
+                    if service_error is not None:
+                        self.assertIsInstance(service_error.__cause__, DatabaseError)
+                        driver = service_error.__cause__.__cause__
+                    else:
+                        driver = manual_error.__cause__
                     self.assertEqual(getattr(driver, 'sqlstate', None) or getattr(driver, 'pgcode', None), '40P01')
-                    other.result(timeout=10)
                 finally:
                     start_cycle.set()
-        self.assertEqual(SourceClaimReview.objects.filter(claim=self.claim).count(), 1)
+        self.assertEqual(SourceClaimReview.objects.filter(claim=self.claim).count(),
+                         1 if service_error is not None else 2)
 
     def test_actual_serialization_failure_in_writer_is_translated(self):
         ready, resume = Event(), Event()

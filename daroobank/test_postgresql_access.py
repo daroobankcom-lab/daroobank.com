@@ -162,6 +162,33 @@ class PostgreSQLAccessInspectionTests(TransactionTestCase):
             self.assertTrue(inspect_access([])['role_superuser'])
             transaction.set_rollback(True)
 
+    def test_role_membership_can_enable_escalation_not_visible_in_role_flags(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = current_user')
+            if not cursor.fetchone()[0]:
+                self.skipTest('Synthetic role-membership test requires a disposable superuser')
+        low = connection.ops.quote_name('daroobank_low_' + uuid4().hex)
+        high = connection.ops.quote_name('daroobank_high_' + uuid4().hex)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute(f'CREATE ROLE {low} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS')
+                cursor.execute(f'CREATE ROLE {high} NOLOGIN SUPERUSER')
+                cursor.execute(f'GRANT {high} TO {low}')
+                cursor.execute(f'SET LOCAL SESSION AUTHORIZATION {low}')
+            before = inspect_access([])
+            self.assertFalse(before['role_superuser'])
+            self.assertFalse(before['session_superuser'])
+            self.assertFalse(before['role_switched'])
+            with connection.cursor() as cursor:
+                cursor.execute(f'SET LOCAL ROLE {high}')
+            after = inspect_access([])
+            self.assertTrue(after['role_superuser'])
+            self.assertFalse(after['session_superuser'])
+            self.assertTrue(after['role_switched'])
+            with connection.cursor() as cursor:
+                cursor.execute('RESET SESSION AUTHORIZATION')
+            transaction.set_rollback(True)
+
     def test_command_outputs_fixed_json_and_generic_database_failure(self):
         output = io.StringIO()
         call_command('inspect_postgresql_access', stdout=output)

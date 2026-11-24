@@ -108,6 +108,8 @@ def fingerprint(source_name, source_url, fields):
 def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False, on_staged=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.add_productcandidate')
+    if type(commit) is not bool:
+        raise IntakeError('حالت ثبت باید مقدار بولی صریح باشد.')
     if on_staged is not None and (not commit or not callable(on_staged)):
         raise IntakeError('ثبت جزئیات ردیف فقط در حالت ثبت مرحله‌ای ممکن است.')
     if commit and rights_attested is not True:

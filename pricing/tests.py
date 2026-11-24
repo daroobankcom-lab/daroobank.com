@@ -59,6 +59,28 @@ class PriceImportTests(TestCase):
             call_command('stage_price_csv', str(self.path), source_name='Synthetic', source_url='https://example.org', commit=True, stdout=io.StringIO())
         self.assertEqual(PriceCandidate.objects.count(), 0)
 
+    def test_commit_must_be_a_real_boolean_before_read_or_write(self):
+        self.write_csv([self.row])
+        data = self.path.read_bytes()
+        for value in (0, 1, None, 'False', 'True', [], {}):
+            for with_callback in (False, True):
+                with self.subTest(commit=value, callback=with_callback), transaction.atomic():
+                    stream = io.BytesIO(data)
+                    outcomes = []
+                    callback = (lambda *item: outcomes.append(item)) if with_callback else None
+                    with self.assertRaises(ImportValidationError):
+                        stage_csv(stream, 'منبع', 'https://example.org', commit=value,
+                                  rights_attested=True, on_staged=callback)
+                    self.assertEqual(stream.tell(), 0)
+                    self.assertEqual(outcomes, [])
+                    self.assertEqual(PriceCandidate.objects.count(), 0)
+                    transaction.set_rollback(True)
+        preview = stage_csv(io.BytesIO(data), 'منبع', 'https://example.org')
+        self.assertEqual(preview['rows'], 1)
+        self.assertEqual(PriceCandidate.objects.count(), 0)
+        staged = stage_csv(io.BytesIO(data), 'منبع', 'https://example.org', commit=True, rights_attested=True)
+        self.assertEqual(staged['created'], 1)
+
     def test_attested_staging_is_review_only_and_replay_is_idempotent(self):
         self.write_csv([self.row])
         output = io.StringIO()

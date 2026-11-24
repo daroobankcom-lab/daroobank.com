@@ -160,6 +160,27 @@ class ProductIntakeTests(TestCase):
         self.assertEqual(ProductCandidate.objects.count(), 0)
         self.assertEqual(ImportReceipt.objects.count(), 0)
 
+    def test_commit_must_be_a_real_boolean_before_read_or_write(self):
+        for value in (0, 1, None, 'False', 'True', [], {}):
+            for with_callback in (False, True):
+                with self.subTest(commit=value, callback=with_callback), transaction.atomic():
+                    stream = io.BytesIO(make_csv([self.row]))
+                    outcomes = []
+                    callback = (lambda *item: outcomes.append(item)) if with_callback else None
+                    with self.assertRaises(IntakeError):
+                        stage_products(stream, 'منبع', 'https://example.org', actor=self.submitter,
+                                       commit=value, rights_attested=True, on_staged=callback)
+                    self.assertEqual(stream.tell(), 0)
+                    self.assertEqual(outcomes, [])
+                    self.assertEqual(ProductCandidate.objects.count(), 0)
+                    transaction.set_rollback(True)
+        preview = stage_products(io.BytesIO(make_csv([self.row])), 'منبع', 'https://example.org', actor=self.submitter)
+        self.assertEqual(preview['rows'], 1)
+        self.assertEqual(ProductCandidate.objects.count(), 0)
+        staged = stage_products(io.BytesIO(make_csv([self.row])), 'منبع', 'https://example.org',
+                                actor=self.submitter, commit=True, rights_attested=True)
+        self.assertEqual(staged['created'], 1)
+
     def test_service_requires_actor_permissions_and_boolean_attestation(self):
         for actor in [self.viewer, self.add_only, self.regular, self.reviewer]:
             with self.subTest(actor=actor), self.assertRaises(PermissionDenied):

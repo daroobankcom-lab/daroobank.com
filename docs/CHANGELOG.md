@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — explicit intake commit mode
+
+**Changes:** Product and price intake services require an actual boolean for `commit`, before reading a file or writing. Synthetic tests cover selected non-boolean values, callbacks, preview and attested staging.
+
+**Limits:** This changes direct-call compatibility and does not replace source-rights verification or protect direct database writers. See ADR 0119.
+
 ## 2026-11-24 — raw controls at intake boundaries
 
 **Changes:** Product and price CSV parsers reject control/surrogate characters before cell trimming; price source validation and the two upload forms check raw source fields before controls can be erased. Synthetic direct and authenticated upload tests cover selected no-write paths.

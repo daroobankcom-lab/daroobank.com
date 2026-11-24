@@ -231,6 +231,8 @@ def suggest_product(row, *, lock=False):
 
 def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None, on_staged=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
+    if type(commit) is not bool:
+        raise ImportValidationError('Commit mode must be an explicit boolean.')
     if on_staged is not None and (not commit or not callable(on_staged)):
         raise ImportValidationError('Row outcomes require staged commit mode.')
     if commit and rights_attested is not True:

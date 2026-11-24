@@ -236,4 +236,6 @@
 
 - [0118: intake raw control characters](0118-intake-raw-control-characters.md) — development-only validation, 24 November 2026.
 
+- [0119: explicit intake commit mode](0119-explicit-intake-commit-mode.md) — development-only validation, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

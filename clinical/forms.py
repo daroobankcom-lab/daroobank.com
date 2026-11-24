@@ -10,7 +10,7 @@ class DraftForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
     raw_multiline_control_fields = ('statement',)
     # Statement remains multiline; tabs and line breaks are allowed.
     raw_control_fields = ('subject', 'title', 'reference_title', 'reference_url', 'reference_location',
-                          'reference_author', 'reference_version')
+                          'reference_author', 'reference_version', 'reference_published_on', 'reference_accessed_on')
     subject = forms.CharField(label='موضوع ساختگی (بدون ارتباط خودکار با کاتالوگ)', max_length=200)
     audience = forms.ChoiceField(label='مخاطب', choices=[('', 'انتخاب کنید')] + ClinicalDraft.AUDIENCES)
     title = forms.CharField(label='عنوان پیش‌نویس', max_length=200)
@@ -76,7 +76,7 @@ class ReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
 
 class ReferenceForm(RawControlsMixin, forms.Form):
     raw_control_fields = ('reference_title', 'reference_url', 'reference_location', 'reference_author', 'reference_version',
-                          'expected_draft_hash', 'expected_evidence_hash')
+                          'reference_published_on', 'reference_accessed_on', 'expected_draft_hash', 'expected_evidence_hash')
     reference_title = forms.CharField(label='عنوان ارجاع ساختگی', max_length=300)
     reference_url = forms.URLField(label='نشانی HTTPS ارجاع', max_length=200)
     reference_location = forms.CharField(label='محل دقیق در ارجاع', max_length=300)

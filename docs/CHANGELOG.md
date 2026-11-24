@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — reject raw controls in selected staff dates
+
+**Changes:** Source and clinical date forms reject control characters in the original date value instead of silently stripping them or treating them as empty.
+
+**Limits:** This covers selected forms, not all inputs or direct service callers. See ADR 0169.
+
 ## 2026-11-24 — reject raw controls in identity numeric inputs
 
 **Changes:** Selected identity IDs and quantities now report field errors instead of silently stripping control characters from raw form submissions.

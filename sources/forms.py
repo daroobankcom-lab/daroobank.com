@@ -8,7 +8,7 @@ from .services import FIELDS, MAX_PK, ClaimError, validate_data
 
 
 class SourceClaimForm(RawControlsMixin, forms.Form):
-    raw_control_fields = ('source_name', 'source_url', 'owner', 'evidence_url', 'evidence_note')
+    raw_control_fields = ('source_name', 'source_url', 'owner', 'evidence_url', 'evidence_note', 'starts_on', 'expires_on')
     source_name = forms.CharField(label='نام منبع', max_length=200)
     source_url = forms.URLField(label='نشانی HTTPS منبع', max_length=200)
     owner = forms.CharField(label='مالک یا دارنده حق اعلام‌شده', max_length=200)

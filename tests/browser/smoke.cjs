@@ -1266,6 +1266,27 @@ async function run() {
       page.locator('form.staff-review-form button[type=submit]').click()]);
     assert.equal(await page.locator('#staff-form-errors').count(), 0);
     assert.match(await page.locator('body').innerText(), /نتیجه محاسبه/);
+    // A forged date input can contain controls that the native date picker
+    // normally prevents; the server must report the raw value as invalid.
+    await page.goto(base + '/staff/sources/new/');
+    await page.locator('#id_source_name').fill('منبع ساختگی آزمون تاریخ');
+    await page.locator('#id_source_url').fill('https://example.org/date-check');
+    await page.locator('#id_owner').fill('مالک فرضی');
+    await page.locator('#id_evidence_url').fill('https://example.org/evidence');
+    await page.locator('#id_claims_collection').check();
+    await page.locator('#id_attestation').check();
+    const rawDateForm = page.locator('form.staff-review-form');
+    await rawDateForm.evaluate(el => { el.noValidate = true; });
+    await rawDateForm.locator('#id_starts_on').evaluate(el => { el.type = 'text'; el.value = '\t2026-01-02'; });
+    const [rawDateResponse] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      rawDateForm.locator('button[type=submit]').click()]);
+    assert.equal(rawDateResponse.status(), 200);
+    assert.match(rawDateResponse.headers()['cache-control'], /no-store/);
+    assert.match(await page.locator('main').innerText(), /نویسه کنترلی نامعتبر است/);
+    assert.equal(await page.locator('#staff-form-errors a[href="#id_starts_on"]').count(), 1);
+    assert.equal(await page.locator('#id_starts_on').getAttribute('aria-invalid'), 'true');
+    await checkLayout(page, 'raw date error');
+    await auditAccessibility(page, 'raw date error');
     await page.goto(base + '/staff/sources/new/');
     await page.locator('#id_source_name').fill('ادعای ساختگی طولانی مرورگر');
     await page.locator('#id_source_url').fill('https://example.org/oversized-claim');

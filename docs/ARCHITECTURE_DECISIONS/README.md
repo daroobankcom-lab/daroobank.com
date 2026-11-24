@@ -336,4 +336,6 @@
 
 - [0168: identity numeric raw controls](0168-identity-numeric-raw-controls.md) — development-only input validation.
 
+- [0169: staff date raw controls](0169-staff-date-raw-controls.md) — development-only input validation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

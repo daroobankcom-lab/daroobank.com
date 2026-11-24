@@ -33,7 +33,8 @@ class SourceClaimForm(RawControlsMixin, forms.Form):
         return data
 
 
-class SourceReviewForm(RawMultilineControlsMixin, forms.Form):
+class SourceReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
+    raw_control_fields = ('expected_review', 'expected_hash')
     raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[
         ('', 'یک نتیجه انتخاب کنید'), (SourceClaimReview.FURTHER_REVIEW, 'ارجاع برای بررسی بیشتر'),

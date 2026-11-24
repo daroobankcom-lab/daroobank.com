@@ -73,7 +73,8 @@ class PackageForm(AssertionForm):
     irc = forms.CharField(label='IRC ادعایی (اختیاری)', max_length=80, required=False)
 
 
-class IdentityReviewForm(RawMultilineControlsMixin, forms.Form):
+class IdentityReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
+    raw_control_fields = ('expected_review', 'expected_graph_hash')
     raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[('', 'انتخاب کنید'),
         ('further_review', 'ارجاع برای بررسی بیشتر'), ('reject', 'رد'), ('defer', 'نیاز به بررسی بیشتر')])
@@ -83,6 +84,7 @@ class IdentityReviewForm(RawMultilineControlsMixin, forms.Form):
 
 
 class PackageRevisionForm(PackageForm):
+    raw_control_fields = PackageForm.raw_control_fields + ('expected_graph_hash', 'expected_review')
     raw_multiline_control_fields = ('change_reason',)
     # Corrections remain tied to the same product; changing the product needs a separate assertion.
     product_id = None
@@ -93,6 +95,7 @@ class PackageRevisionForm(PackageForm):
 
 
 class IngredientRevisionForm(IngredientForm):
+    raw_control_fields = IngredientForm.raw_control_fields + ('expected_graph_hash',)
     raw_multiline_control_fields = ('change_reason',)
     change_reason = forms.CharField(label='دلیل اصلاح ادعایی', min_length=12, max_length=1000,
                                     widget=forms.Textarea(attrs={'rows': 3}))
@@ -100,6 +103,7 @@ class IngredientRevisionForm(IngredientForm):
 
 
 class FormulationRevisionForm(FormulationForm):
+    raw_control_fields = FormulationForm.raw_control_fields + ('expected_graph_hash',)
     raw_multiline_control_fields = ('change_reason',)
     change_reason = forms.CharField(label='دلیل اصلاح ادعایی', min_length=12, max_length=1000,
                                     widget=forms.Textarea(attrs={'rows': 3}))
@@ -107,6 +111,7 @@ class FormulationRevisionForm(FormulationForm):
 
 
 class ProductRevisionForm(ProductForm):
+    raw_control_fields = ProductForm.raw_control_fields + ('expected_graph_hash',)
     raw_multiline_control_fields = ('change_reason',)
     formulation_id = None
     change_reason = forms.CharField(label='دلیل اصلاح ادعایی', min_length=12, max_length=1000,

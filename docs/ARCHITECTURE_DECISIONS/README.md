@@ -290,4 +290,6 @@
 
 - [0145: window form input and errors](0145-window-form-input-and-errors.md) — development-only offline calculation.
 
+- [0146: raw concurrency-token controls](0146-raw-concurrency-token-controls.md) — development-only selected form validation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -37,6 +37,7 @@ class DraftForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
 
 
 class RevisionForm(DraftForm):
+    raw_control_fields = DraftForm.raw_control_fields + ('expected_parent_hash',)
     raw_multiline_control_fields = ('statement', 'change_reason')
     expected_parent_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
     change_reason = forms.CharField(label='دلیل ایجاد نسخه جدید', min_length=12, max_length=1000,
@@ -49,7 +50,8 @@ class RevisionForm(DraftForm):
         return value
 
 
-class ReviewForm(RawMultilineControlsMixin, forms.Form):
+class ReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
+    raw_control_fields = ('expected_review', 'expected_hash', 'expected_evidence_hash')
     raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[('', 'انتخاب کنید'),
         (ClinicalDraftReview.FURTHER_REVIEW, 'ارجاع برای بررسی بیشتر'), (ClinicalDraftReview.REJECT, 'رد پیش‌نویس'),
@@ -73,7 +75,8 @@ class ReviewForm(RawMultilineControlsMixin, forms.Form):
 
 
 class ReferenceForm(RawControlsMixin, forms.Form):
-    raw_control_fields = ('reference_title', 'reference_url', 'reference_location', 'reference_author', 'reference_version')
+    raw_control_fields = ('reference_title', 'reference_url', 'reference_location', 'reference_author', 'reference_version',
+                          'expected_draft_hash', 'expected_evidence_hash')
     reference_title = forms.CharField(label='عنوان ارجاع ساختگی', max_length=300)
     reference_url = forms.URLField(label='نشانی HTTPS ارجاع', max_length=200)
     reference_location = forms.CharField(label='محل دقیق در ارجاع', max_length=300)

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — suppress inconsistent detail values
+
+**Changes:** Private product and price detail pages replace selected identity and amount panels with a warning when candidate consistency checks fail; review gating remains independent.
+
+**Limits:** Other pages, metadata, histories and logs can still contain untrusted values. Consistency is neither authenticity nor approval, and reads are not snapshots. See ADR 0128.
+
 ## 2026-11-24 — bounded catalog-quality projection fetch
 
 **Changes:** The quality inspector selects a bounded search projection and flags oversized rows with unknown public-filter status instead of transferring the whole value.

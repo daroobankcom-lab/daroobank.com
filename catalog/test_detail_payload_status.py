@@ -54,6 +54,36 @@ class ProductDetailPayloadStatusTests(TestCase):
                     k: getattr(self.candidate, k) for k in update})
         self.assertFalse(ProductCandidateReview.objects.exists())
 
+    def test_inconsistent_identity_values_are_not_rendered_in_detail(self):
+        altered = {**self.row, 'name_fa': 'product-identity-canary', 'manufacturer': 'product-manufacturer-canary'}
+        ProductCandidate.objects.filter(pk=self.candidate.pk).update(source_fields=altered)
+        for method in (self.client.get, self.client.head):
+            with self.subTest(method=method.__name__):
+                response = method(self.url)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn(b'product-identity-canary', response.content)
+                self.assertNotIn(b'product-manufacturer-canary', response.content)
+                self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                if method == self.client.get:
+                    self.assertContains(response, 'مشخصات ناسازگار نمایش داده نمی‌شوند')
+                    self.assertNotContains(response, 'name="decision"')
+        self.assertFalse(ProductCandidateReview.objects.exists())
+
+    def test_stale_and_malformed_review_responses_suppress_inconsistent_identity(self):
+        initial = self.client.get(self.url).context['review_form'].initial
+        ProductCandidate.objects.filter(pk=self.candidate.pk).update(
+            source_fields={**self.row, 'name_fa': 'product-post-canary'})
+        review_url = reverse('staff_product_review', args=[self.candidate.pk])
+        for data, status in (({'decision': 'invalid'}, 400),
+                             ({**initial, 'decision': 'defer', 'reason': 'توضیح ساختگی برای بررسی اولیه'}, 409)):
+            with self.subTest(status=status):
+                response = self.client.post(review_url, data)
+                self.assertEqual(response.status_code, status)
+                self.assertNotContains(response, 'product-post-canary', status_code=status)
+                self.assertContains(response, 'مشخصات ناسازگار نمایش داده نمی‌شوند', status_code=status)
+                self.assertNotContains(response, 'name="decision"', status_code=status)
+        self.assertFalse(ProductCandidateReview.objects.exists())
+
     def test_stale_post_conflicts_without_review_or_form(self):
         before = self.client.get(self.url).context['review_form'].initial
         ProductCandidate.objects.filter(pk=self.candidate.pk).update(irc_normalized='changed')

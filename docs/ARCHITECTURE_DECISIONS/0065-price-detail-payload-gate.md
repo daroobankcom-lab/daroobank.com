@@ -1,6 +1,6 @@
 # ADR 0065: price detail payload consistency gate
 
-Status: development-only, 23 November 2026. Follows the local command check in [ADR 0062](0062-price-cli-payload-check.md).
+Status: development-only, 23 November 2026. Follows the local command check in [ADR 0062](0062-price-cli-payload-check.md). The subsequent selected display suppression is recorded in [ADR 0128](0128-suppress-inconsistent-detail-values.md).
 
 ## Decision
 

@@ -254,4 +254,6 @@
 
 - [0127: bounded quality projection](0127-bounded-quality-projection.md) — development-only diagnostic change, 24 November 2026.
 
+- [0128: suppress inconsistent detail values](0128-suppress-inconsistent-detail-values.md) — development-only presentation change, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

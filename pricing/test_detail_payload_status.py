@@ -50,6 +50,36 @@ class PriceDetailPayloadStatusTests(TestCase):
         match.assert_not_called()
         self.assertFalse(PriceCandidateReview.objects.exists())
 
+    def test_inconsistent_identity_and_amount_are_not_rendered_in_detail(self):
+        PriceCandidate.objects.filter(pk=self.candidate.pk).update(
+            source_fields={**self.row, 'manufacturer': 'price-identity-canary'},
+            original_amount='price-amount-canary', amount_rial=987654321)
+        for method in (self.client.get, self.client.head):
+            with self.subTest(method=method.__name__):
+                response = method(self.url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                for canary in (b'price-identity-canary', b'price-amount-canary', b'987654321'):
+                    self.assertNotIn(canary, response.content)
+                if method == self.client.get:
+                    self.assertContains(response, 'مشخصات و مبلغ ناسازگار نمایش داده نمی‌شوند')
+                    self.assertNotContains(response, 'name="decision"')
+        self.assertFalse(PriceCandidateReview.objects.exists())
+
+    def test_stale_and_malformed_review_responses_suppress_inconsistent_amount(self):
+        initial = self.client.get(self.url).context['review_form'].initial
+        PriceCandidate.objects.filter(pk=self.candidate.pk).update(original_amount='price-post-canary')
+        review_url = reverse('staff_price_review', args=[self.candidate.pk])
+        for data, status in (({'decision': 'invalid'}, 400),
+                             ({**initial, 'decision': 'defer', 'reason': 'توضیح ساختگی برای بررسی اولیه'}, 409)):
+            with self.subTest(status=status):
+                response = self.client.post(review_url, data)
+                self.assertEqual(response.status_code, status)
+                self.assertNotContains(response, 'price-post-canary', status_code=status)
+                self.assertContains(response, 'مشخصات و مبلغ ناسازگار نمایش داده نمی‌شوند', status_code=status)
+                self.assertNotContains(response, 'name="decision"', status_code=status)
+        self.assertFalse(PriceCandidateReview.objects.exists())
+
     def test_changed_fields_hash_and_source_url_each_suppress_current_suggestion(self):
         for update in (dict(payload_sha256='0' * 64),
                        dict(source_fields={**self.row, 'extra': 'synthetic-canary'}),

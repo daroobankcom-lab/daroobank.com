@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — selected check expression reuse
+
+**Changes:** The one-statement inspector reuses a materialized set of selected named-check expressions for its exact constant counts; a mixed-constraint test checks aggregate outcomes.
+
+**Limits:** Materialization costs vary; expression coverage and privacy boundaries are unchanged. See ADR 0106.
+
 ## 2026-11-24 — selected constant-false check clues
 
 **Changes:** The inspector flags exact deparsed false expressions on selected named model checks; a synthetic test confirms an otherwise valid insert is rejected.

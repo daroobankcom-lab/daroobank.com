@@ -453,6 +453,30 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'no_selected_issues')
             transaction.set_rollback(True)
 
+    def test_multiple_named_constant_checks_are_aggregated_independently(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('''CREATE TABLE synthetic_check_matrix (id integer,
+                    CONSTRAINT selected_true_a CHECK (true), CONSTRAINT selected_true_b CHECK (true),
+                    CONSTRAINT selected_null CHECK (NULL), CONSTRAINT selected_false_a CHECK (false),
+                    CONSTRAINT selected_other CHECK (1 = 1), CONSTRAINT ignored_false CHECK (false))''')
+                cursor.execute('ALTER TABLE synthetic_check_matrix ADD CONSTRAINT selected_false_b CHECK (false) NOT VALID')
+            names = ['selected_true_a', 'selected_true_b', 'selected_null', 'selected_false_a',
+                     'selected_false_b', 'selected_other', 'selected_missing']
+            checks = [('synthetic_check_matrix', name) for name in names]
+            with CaptureQueriesContext(connection) as queries:
+                report = inspect_schema(['synthetic_check_matrix'], check_constraints=checks)
+            self.assertEqual(len(queries), 1)
+            self.assertEqual(report['expected_check_constraints'], 7)
+            self.assertEqual(report['missing_check_constraints'], 1)
+            self.assertEqual(report['canonical_accept_all_named_checks'], 3)
+            self.assertEqual(report['canonical_reject_all_named_checks'], 2)
+            self.assertEqual(report['unvalidated_constraints'], 1)
+            self.assertEqual(report['status'], 'attention')
+            self.assertNotIn('synthetic_check_matrix', json.dumps(report))
+            self.assertNotIn('selected_true_a', json.dumps(report))
+            transaction.set_rollback(True)
+
     def test_unvalidated_constant_false_has_two_distinct_findings(self):
         with transaction.atomic():
             with connection.cursor() as cursor:

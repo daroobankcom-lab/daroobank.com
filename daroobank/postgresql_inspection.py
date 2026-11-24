@@ -209,6 +209,10 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             ), expected_checks AS (
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, constraint_name
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, constraint_name text)
+            ), matching_check_expressions AS MATERIALIZED (
+                SELECT pg_catalog.pg_get_expr(c.conbin, c.conrelid) AS expression
+                FROM expected_checks e JOIN pg_catalog.pg_constraint c
+                    ON c.conrelid = e.table_oid AND c.conname = e.constraint_name AND c.contype = 'c'
             ), expected_columns AS (
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, table_name, column_name, not_null, expected_type, skip_type
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS c(table_name text, column_name text, not_null boolean, expected_type text, skip_type boolean)
@@ -356,12 +360,8 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                     JOIN pg_catalog.pg_sequence s ON s.seqrelid = pg_catalog.pg_get_serial_sequence(
                         pg_catalog.format('%%I.%%I', n.nspname, c.relname), a.attname)::regclass
                     WHERE e.supported AND (s.seqincrement <= 0 OR s.seqmin < 1 OR s.seqcycle)),
-                (SELECT COUNT(*) FROM expected_checks e JOIN pg_catalog.pg_constraint c
-                    ON c.conrelid = e.table_oid AND c.conname = e.constraint_name AND c.contype = 'c'
-                    WHERE pg_catalog.pg_get_expr(c.conbin, c.conrelid) IN ('true', 'NULL::boolean')),
-                (SELECT COUNT(*) FROM expected_checks e JOIN pg_catalog.pg_constraint c
-                    ON c.conrelid = e.table_oid AND c.conname = e.constraint_name AND c.contype = 'c'
-                    WHERE pg_catalog.pg_get_expr(c.conbin, c.conrelid) = 'false')
+                (SELECT COUNT(*) FROM matching_check_expressions WHERE expression IN ('true', 'NULL::boolean')),
+                (SELECT COUNT(*) FROM matching_check_expressions WHERE expression = 'false')
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}

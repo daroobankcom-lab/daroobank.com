@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
-from django.db import connection
+from django.db import connection, transaction
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -17,7 +17,7 @@ from pricing.test_workflow import csv_bytes
 from .manifest_inspection import (BATCH_SIZE, MAX_ORDINAL, MAX_PK, InvalidManifestInspection,
                                   ReceiptNotFound, inspect_manifest)
 from .models import ImportReceipt, ImportReceiptItem
-from .receipts import manifest_item_safe, stage_price_with_receipt, stage_product_with_receipt
+from .receipts import manifest_item_safe, manifest_structure, stage_price_with_receipt, stage_product_with_receipt
 
 
 @override_settings(STAFF_PORTAL_ENABLED=True)
@@ -116,6 +116,38 @@ class ManifestInspectionTests(TestCase):
                 next_http = self.client.get(self.url(receipt), {'after': '۵۰', 'category': 'inconsistent'})
                 self.assertContains(next_http, 'ردیف داده 51')
                 self.assertNotContains(next_http, 'private-canary')
+
+    def test_structure_rejects_duplicate_ordinals_even_if_database_constraint_is_missing(self):
+        # A duplicate 1 and missing 2 preserve count, minimum, maximum and all
+        # status totals. The constraint is removed only inside a rolled-back
+        # synthetic test transaction, not as a repair procedure.
+        cases = [
+            (stage_product_with_receipt, make_csv([self.product_row] * 3), self.product_user),
+            (stage_price_with_receipt, csv_bytes([self.price_row] * 3), self.price_user),
+        ]
+        for service, payload, actor in cases:
+            with self.subTest(service=service.__name__):
+                receipt = service(io.BytesIO(payload), 'منبع آزمایشی',
+                    'https://example.org/ordinal-canary', actor=actor, rights_attested=True)[1]
+                self.assertEqual(manifest_structure(receipt), 'available')
+                self.client.force_login(actor)
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute('SET CONSTRAINTS ALL IMMEDIATE')
+                        cursor.execute('ALTER TABLE ingestion_importreceiptitem DROP CONSTRAINT receipt_item_unique_ordinal')
+                    receipt.items.filter(ordinal=2).update(ordinal=1)
+                    self.assertEqual(manifest_structure(receipt), 'invalid')
+                    report = self.scan(receipt, actor)
+                    self.assertEqual((report['status'], report['rows'], report['scanned']), ('invalid', [], 0))
+                    scan = self.client.get(self.url(receipt))
+                    detail = self.client.get(reverse('staff_import_receipt_detail', args=[receipt.pk]))
+                    self.assertContains(scan, 'ساختار یا شمارش فهرست ناسازگار است')
+                    self.assertContains(detail, 'تعداد یا ساختار فهرست ناسازگار است')
+                    self.assertNotContains(scan, 'ردیف داده 1')
+                    self.assertNotContains(detail, 'ردیف داده 1')
+                    self.assertEqual(scan['Cache-Control'], 'private, no-store, max-age=0')
+                    transaction.set_rollback(True)
+                self.assertEqual(manifest_structure(receipt), 'available')
 
     def test_invalid_candidate_and_mismatched_item_are_fixed_status_only(self):
         for receipt, user, model, fk in [(self.product_receipt, self.product_user, ProductCandidate, 'product_candidate_id'),

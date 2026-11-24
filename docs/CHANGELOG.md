@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — manifest ordinal distinctness
+
+**Changes:** Manifest structural checks now count distinct ordinals, detecting gaps masked by duplicate positions even if a uniqueness constraint is missing or bypassed. Product and price detail and inspection stop displaying structurally inconsistent rows.
+
+**Limits:** This adds aggregate database work and is neither schema repair nor a snapshot or proof of provenance; see ADR 0099.
+
 ## 2026-11-24 — selected failed-restore relation counts
 
 **Changes:** The synthetic restore drill compares selected target `public` relation-kind counts before and after a failed truncated restore; target-only canaries test detection and the equal-count replacement blind spot.

@@ -131,6 +131,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0098: failed-restore relation counts](0098-failed-restore-relation-counts.md) — development-only implementation, 24 November 2026.
 
+- [0099: manifest ordinal distinctness](0099-manifest-ordinal-distinctness.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

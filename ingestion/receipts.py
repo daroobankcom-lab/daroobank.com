@@ -80,14 +80,16 @@ def manifest_structure(receipt):
     if receipt.manifest_version != MANIFEST_VERSION:
         return 'invalid'
     rows = receipt.items.all()
-    totals = rows.aggregate(total=Count('pk'), first=Min('ordinal'), last=Max('ordinal'),
+    totals = rows.aggregate(total=Count('pk'), distinct_ordinals=Count('ordinal', distinct=True),
+        first=Min('ordinal'), last=Max('ordinal'),
         created=Count('pk', filter=Q(was_created=True)),
         products=Count('pk', filter=Q(product_candidate__isnull=False, price_candidate__isnull=True, match_status='')),
         prices=Count('pk', filter=Q(price_candidate__isnull=False, product_candidate__isnull=True)),
         suggested=Count('pk', filter=Q(match_status='suggested')),
         ambiguous=Count('pk', filter=Q(match_status='ambiguous')),
         unmatched=Count('pk', filter=Q(match_status='unmatched')))
-    valid = (totals['total'] == receipt.rows and totals['first'] == 1 and totals['last'] == receipt.rows
+    valid = (totals['total'] == receipt.rows and totals['distinct_ordinals'] == receipt.rows
+             and totals['first'] == 1 and totals['last'] == receipt.rows
              and totals['created'] == receipt.created and totals['total'] - totals['created'] == receipt.duplicates)
     if receipt.kind == ImportReceipt.PRODUCT:
         valid = valid and totals['products'] == receipt.rows

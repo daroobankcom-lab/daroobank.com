@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from daroobank.account_checks import current_accounts
+from daroobank.candidate_review_scan_views import scan_response
 from daroobank.review_history import recent_reviews_with_reviewers
 from daroobank.sample_downloads import synthetic_sample_response
 from sources.services import related_claims
@@ -179,6 +180,12 @@ def _get_candidate(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Candidate not found')
     return get_object_or_404(PriceCandidate, pk=pk)
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def review_inspection(request, pk):
+    return scan_response(request, pk, 'price')
 
 
 @login_required(login_url='staff_login')

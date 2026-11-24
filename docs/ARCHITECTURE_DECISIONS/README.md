@@ -280,4 +280,6 @@
 
 - [0140: product-review snapshot clues](0140-product-review-snapshot-clues.md) — development-only defensive display.
 
+- [0141: candidate-review inspection](0141-candidate-review-inspection.md) — development-only bounded inspection.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

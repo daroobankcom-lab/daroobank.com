@@ -7,6 +7,7 @@ from django.http import Http404, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from daroobank.account_checks import current_accounts
+from daroobank.candidate_review_scan_views import scan_response
 from daroobank.review_history import recent_reviews_with_reviewers
 from daroobank.sample_downloads import synthetic_sample_response
 from sources.services import related_claims
@@ -112,6 +113,12 @@ def detail_response(request, candidate, *, form=None, status=200):
         'source_claims': related_claims(request.user, candidate.source_url),
         'receipt_refs': related_receipts(request.user, candidate, 'product'),
     }, status=status)
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def review_inspection(request, pk):
+    return scan_response(request, pk, 'product')
 
 
 @login_required(login_url='staff_login')

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## Candidate-review inspection
+
+**Changes:** Private product and price candidate pages offer bounded, read-only review-history inspection with post-batch filtering and explicit continuation.
+
+**Limits:** This is not an audit or authentication; reads are separate and scans are not snapshots. See ADR 0141.
+
 ## Product-review snapshot clues
 
 **Changes:** The product candidate detail checks selected recent review snapshots, suppresses inconsistent review details, and compares consistent snapshots with the current candidate.

@@ -218,6 +218,34 @@ async function checkStaffScanError(page, label, width) {
   assert.equal(await page.locator('#after').inputValue(), '0');
 }
 
+async function checkCandidateReviewScan(page, path, label, width) {
+  await page.getByRole('link', {name: 'بازرسی محدود بازبینی‌ها ←'}).click();
+  assert.equal(new URL(page.url()).pathname, path);
+  assert.match(await page.locator('main .staff-alert').innerText(), /فیلتر فقط بر همان بخش اعمال می‌شود/);
+  assert.match(await page.locator('main .staff-alert').innerText(), /وجود یا صلاحیت بازبین و هویت تاریخی بررسی نمی‌شود/);
+  await checkScanIdSyntax(page, label);
+  await submitLocalizedScan(page, '۰۰۰۰');
+  await checkStaffScanError(page, label, width);
+  await page.getByRole('link', {name: 'بازگشت به نامزد ←'}).focus();
+  await page.keyboard.press('Tab');
+  await checkKeyboardFocus(page, '#after', `${label} start`, '.staff-section');
+  await page.keyboard.press('Tab');
+  await checkKeyboardFocus(page, '#category', `${label} category`, '.staff-section');
+  await page.locator('#category').selectOption('invalid_record');
+  await page.keyboard.press('Tab');
+  await checkKeyboardFocus(page, '.staff-filter button', `${label} submit`, '.staff-section');
+  await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=invalid_record'), page.keyboard.press('Enter')]);
+  assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 2/);
+  assert.equal(await page.locator('.staff-candidate').count(), 1);
+  const content = await page.locator('main').innerText();
+  assert.match(content, /رکورد بازبینی ناسازگار/);
+  assert(!content.includes('browser-reviewer'));
+  assert(!content.includes('browser-history-reason-canary'));
+  assert(!content.includes('browser-product-history-reason-canary'));
+  await checkLayout(page, `${label} ${width}`);
+  if (width === 390) await auditAccessibility(page, label);
+}
+
 // Reduce active-element diagnostics to fixed categories; never print page values or URLs.
 async function focusRegion(page, selector) {
   return page.evaluate(selector => {
@@ -673,6 +701,7 @@ async function run() {
       assert.match(await page.locator('#comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
       await checkLayout(page, `product review history ${width}`);
       if (width === 390) await auditAccessibility(page, 'product review history');
+      await checkCandidateReviewScan(page, `/staff/products/${ids.candidate}/reviews/inspection/`, 'product review scan', width);
       await page.goto(base + '/staff/sources/');
       assert.match(await page.locator('main .staff-alert').innerText(), /وجود فعلی حساب ثبت‌کننده فقط برای ادعاهای همین صفحه/);
       assert.match(await page.locator('main .staff-alert').innerText(), /وجود حساب به معنی فعال بودن یا احراز صلاحیت نیست/);
@@ -945,6 +974,7 @@ async function run() {
       await checkLayout(pricePage, `price detail ${width}`);
       if (width === 390) await auditAccessibility(pricePage, 'price detail');
       assert.match(await pricePage.locator('main').innerText(), /حساب ثبت‌کننده رسید در این فهرست بررسی نمی‌شود/);
+      await checkCandidateReviewScan(pricePage, `/staff/prices/${ids.price}/reviews/inspection/`, 'price review scan', width);
       response = await pricePage.goto(base + '/staff/operations/imports/');
       assert.equal(response.status(), 200);
       assert.match(await pricePage.locator('main').innerText(), /نمایش نام حساب فعلی، هویت تاریخی یا صلاحیت را اثبات نمی‌کند/);

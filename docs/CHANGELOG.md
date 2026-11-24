@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded related candidate comparisons
+
+**Changes:** Selected product and price comparison queries avoid transferring oversized related candidate JSON; uninspected comparisons do not yield details or price arithmetic.
+
+**Limits:** Current candidate, database work, other fields and endpoints remain outside this bound. See ADR 0156.
+
 ## 2026-11-24 — bounded receipt candidate JSON
 
 **Changes:** Private receipt detail and manifest inspection avoid transferring oversized candidate JSON, report it as uninspected and preserve pagination.

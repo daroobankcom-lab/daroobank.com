@@ -718,6 +718,8 @@ async function run() {
       assert(!productHistory.includes('browser-product-history-hidden-canary'));
       assert(!productHistory.includes('browser-product-history-reason-canary'));
       assert.match(await page.locator('#comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
+      assert.match(await page.locator('#comparison-heading').locator('..').innerText(), /نامزد بیش از حد بررسی است؛ مقایسه نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-product-comparison-canary'));
       await checkLayout(page, `product review history ${width}`);
       if (width === 390) await auditAccessibility(page, 'product review history');
       await checkCandidateReviewScan(page, `/staff/products/${ids.candidate}/reviews/inspection/`, 'product review scan', width);
@@ -1025,6 +1027,8 @@ async function run() {
       assert(!priceHistory.includes('browser-history-reason-canary'));
       assert.match(response.headers()['cache-control'], /no-store/);
       assert.match(await pricePage.locator('#price-comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
+      assert.match(await pricePage.locator('#price-comparison-heading').locator('..').innerText(), /نامزد بیش از حد بررسی است؛ مقایسه نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-price-comparison-canary'));
       await checkLayout(pricePage, `price detail ${width}`);
       if (width === 390) await auditAccessibility(pricePage, 'price detail');
       assert.match(await pricePage.locator('main').innerText(), /حساب ثبت‌کننده رسید در این فهرست بررسی نمی‌شود/);

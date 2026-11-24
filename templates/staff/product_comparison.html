@@ -6,10 +6,10 @@
   {% else %}
   <h3>نسخه‌های دیگر همین شناسه در همین نشانی منبع</h3>
   {% for item in comparison.revisions %}<article class="staff-review-item">
-    <strong><a class="staff-detail-link" href="{% url 'staff_product_detail' item.candidate.pk %}">نامزد {{ item.candidate.pk }} ←</a></strong>
+    {% if item.status == 'oversized' %}<strong>نامزد {{ item.candidate.pk }}</strong><p>نامزد بیش از حد بررسی است؛ مقایسه نشد و پیوند نمایش داده نمی‌شود.</p>{% else %}<strong><a class="staff-detail-link" href="{% url 'staff_product_detail' item.candidate.pk %}">نامزد {{ item.candidate.pk }} ←</a></strong>
     {% if not item.valid %}<p>داده یا نمایه نسخه دیگر معتبر نیست؛ مقایسه آن انجام نشد.</p>{% else %}
     {% if item.source_name_changed %}<p>نام منبع تفاوت دارد: این رکورد «{{ candidate.source_name }}»، رکورد دیگر «{{ item.candidate.source_name }}».</p>{% endif %}
-    {% include 'staff/comparison_changes.html' with changes=item.changes %}{% endif %}
+    {% include 'staff/comparison_changes.html' with changes=item.changes %}{% endif %}{% endif %}
   </article>{% empty %}<p class="staff-panel-note">نسخه دیگری در محدوده جست‌وجوی فعلی دیده نشد.</p>{% endfor %}
   {% if comparison.revisions_limited %}<p class="staff-panel-note">بیش از ۱۰ نسخه وجود دارد؛ فقط ۱۰ مورد اخیر بررسی شدند.</p>{% endif %}
   <h3>رکوردهای دارای IRC نرمال‌شده مشابه</h3>
@@ -17,7 +17,7 @@
   {% if not comparison.has_irc %}<p>IRC موجود یا قابل بررسی نیست؛ مقایسه بر اساس کد انجام نشد.</p>{% else %}
   <h4>نامزدهای داخلی</h4>
   {% for item in comparison.candidate_matches %}<article class="staff-review-item"><strong><a class="staff-detail-link" href="{% url 'staff_product_detail' item.candidate.pk %}">نامزد {{ item.candidate.pk }} · {{ item.candidate.source_fields.name_fa }} ←</a></strong>{% include 'staff/comparison_changes.html' with changes=item.changes %}</article>{% empty %}<p class="staff-panel-note">در محدوده بررسی نامزد قابل نمایش دیگری دیده نشد.</p>{% endfor %}
-  {% if comparison.candidate_matches_limited %}<p>بیش از ۱۰ نامزد نمایه‌شده وجود دارد؛ فقط ۱۰ مورد بررسی شدند.</p>{% endif %}{% if comparison.candidate_skipped %}<p>برخی نامزدهای بررسی‌شده به دلیل ناسازگاری داده یا نمایه کنار گذاشته شدند.</p>{% endif %}
+  {% if comparison.candidate_matches_limited %}<p>بیش از ۱۰ نامزد نمایه‌شده وجود دارد؛ فقط ۱۰ مورد بررسی شدند.</p>{% endif %}{% if comparison.candidate_skipped %}<p>برخی نامزدهای بررسی‌شده به دلیل ناسازگاری داده یا نمایه کنار گذاشته شدند.</p>{% endif %}{% if comparison.candidate_oversized %}<p>برخی نامزدها بیش از حد بررسی‌اند؛ مقایسه نشدند و پیوندشان نمایش داده نمی‌شود.</p>{% endif %}
   <h4>فرآورده‌های قابل نمایش عمومی</h4>
   {% for item in comparison.public_matches %}<article class="staff-review-item"><strong><a class="staff-detail-link" href="{% url 'presentation_detail' item.product.pk %}">{{ item.product.name_fa }} · شناسه {{ item.product.pk }} ←</a></strong>{% include 'staff/comparison_changes.html' with changes=item.changes %}</article>{% empty %}<p class="staff-panel-note">در محدوده بررسی فرآورده عمومی قابل نمایش دیده نشد.</p>{% endfor %}
   {% if comparison.public_matches_limited %}<p>بیش از ۱۰ رکورد عمومی نمایه‌شده وجود دارد؛ فقط ۱۰ مورد بررسی شدند.</p>{% endif %}{% if comparison.public_skipped %}<p>برخی رکوردهای بررسی‌شده به دلیل ناسازگاری یا شرایط نمایش کنار گذاشته شدند.</p>{% endif %}

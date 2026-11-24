@@ -90,6 +90,10 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         stage_products(io.BytesIO(make_csv([product_row])), 'منبع ساختگی مرورگر',
                        'https://example.org/browser-product', actor=author, commit=True, rights_attested=True)
         browser_candidate = ProductCandidate.objects.get(source_record_id='browser-product')
+        stage_products(io.BytesIO(make_csv([{**product_row, 'strength': '2 mg'}])), 'منبع ساختگی مرورگر',
+                       'https://example.org/browser-product', actor=author, commit=True, rights_attested=True)
+        ProductCandidate.objects.filter(source_record_id='browser-product').exclude(pk=browser_candidate.pk).update(
+            source_fields={'browser-product-comparison-canary': 'آ' * 100_000})
         valid_product_review = review_product(actor=reviewer, candidate_id=browser_candidate.pk, decision='defer',
                        reason='بازبینی فرآورده ساختگی برای مرورگر', expected_review=0,
                        expected_hash=browser_candidate.payload_sha256)
@@ -158,6 +162,10 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         PriceCandidate.objects.filter(pk=oversized_receipt.items.get().price_candidate_id).update(
             source_fields={'browser-receipt-json-canary': 'آ' * 100_000})
         browser_price = PriceCandidate.objects.get(source_record_id='browser-detail')
+        stage_csv(io.BytesIO(csv_bytes([{**price_row, 'amount': '200'}])), 'منبع ساختگی مرورگر',
+                  'https://example.org/browser-detail', staged_by=price_stager, commit=True, rights_attested=True)
+        PriceCandidate.objects.filter(source_record_id='browser-detail').exclude(pk=browser_price.pk).update(
+            source_fields={'browser-price-comparison-canary': 'آ' * 100_000})
         valid_price_review = record_preliminary_review(actor=reviewer, candidate_id=browser_price.pk, decision='defer',
                                   reason='بازبینی قیمت ساختگی برای مرورگر', expected_review=0,
                                   expected_product=0, expected_product_hash='')
@@ -191,7 +199,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                    BROWSER_BAD_PRICE=str(bad_price.pk))
         try:
             result = subprocess.run(['node', 'smoke.cjs'], cwd=ROOT / 'tests' / 'browser', env=env,
-                                    capture_output=True, text=True, timeout=180)
+                                    capture_output=True, text=True, timeout=240)
         except subprocess.TimeoutExpired:
             if os.environ.get('GITHUB_ACTIONS') == 'true':
                 print(browser_failure_annotation(None, ''), flush=True)
@@ -204,7 +212,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IdentityPackageReview.objects.count(), 2)
         self.assertEqual(ClinicalDraftReview.objects.count(), 2)
         self.assertEqual(SourceClaimReview.objects.count(), 2)
-        self.assertEqual(PriceCandidate.objects.count(), 3)
+        self.assertEqual(PriceCandidate.objects.count(), 4)
         self.assertEqual(ImportReceipt.objects.count(), 2)
         self.assertEqual(browser_receipt.items.count(), 2)
         self.assertIn('browser checks passed', result.stdout)

@@ -1043,29 +1043,35 @@ async function run() {
     const reviewContext = await contextFor(browser, 390, errors);
     const reviewPage = await reviewContext.newPage();
     await login(reviewPage, reviewer);
-    for (const [detailPath, domain] of [[`/staff/sources/${ids.claim}/`, 'source'],
-                                        [`/staff/clinical/${ids.clinical_leaf}/`, 'clinical']]) {
+    for (const [detailPath, domain, field] of [
+      [`/staff/products/${ids.candidate}/`, 'product', 'expected_hash'],
+      [`/staff/prices/${ids.price}/`, 'price', 'expected_product'],
+      [`/staff/sources/${ids.claim}/`, 'source', 'expected_review'],
+      [`/staff/clinical/${ids.clinical_leaf}/`, 'clinical', 'expected_evidence_hash'],
+      [`/staff/catalog/identity/package/${ids.package}/`, 'identity', 'expected_graph_hash'],
+    ]) {
       let response = await reviewPage.goto(base + detailPath);
       assert.equal(response.status(), 200);
       const form = reviewPage.locator('form.staff-review-form');
-      const oldVersion = await form.locator('#id_expected_review').inputValue();
+      const oldVersion = await form.locator(`#id_${field}`).inputValue();
       await form.locator('#id_decision').selectOption('defer');
       await form.locator('#id_reason').fill('بازبینی ساختگی برای آزمایش خطا');
-      await form.locator('#id_expected_review').evaluate(el => { el.value = '9223372036854775808'; });
+      await form.locator(`#id_${field}`).evaluate(el => { el.value = 'invalid-hidden-token'; });
       [response] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
                                      form.locator('button[type=submit]').click()]);
       assert.equal(response.status(), 400);
       assert.match(response.headers()['cache-control'], /no-store/);
       assert.match(response.headers()['x-robots-tag'], /noindex/);
       assert.equal(response.headers()['referrer-policy'], 'same-origin');
-      const alert = reviewPage.getByRole('alert').filter({hasText: 'شناسه بازبینی معتبر نیست'});
+      const alert = reviewPage.getByRole('alert').filter({hasText: 'اطلاعات پنهان بازبینی معتبر نیست'});
       assert.equal(await alert.count(), 1);
       const retry = alert.getByRole('link', {name: 'بازگشت به جزئیات و شروع دوباره ←'});
       assert.equal(await retry.getAttribute('href'), detailPath);
       await checkLayout(reviewPage, `${domain} invalid review 390`);
       await auditAccessibility(reviewPage, `${domain} invalid review`);
-      await Promise.all([reviewPage.waitForURL(base + detailPath), retry.click()]);
-      assert.equal(await reviewPage.locator('form.staff-review-form #id_expected_review').inputValue(), oldVersion);
+      await retry.focus();
+      await Promise.all([reviewPage.waitForURL(base + detailPath), reviewPage.keyboard.press('Enter')]);
+      assert.equal(await reviewPage.locator(`form.staff-review-form #id_${field}`).inputValue(), oldVersion);
       assert.equal(await reviewPage.locator('form.staff-review-form #id_reason').inputValue(), '');
       assert.equal(await reviewPage.locator('form.staff-review-form #id_decision').inputValue(), '');
     }

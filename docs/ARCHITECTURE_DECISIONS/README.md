@@ -300,4 +300,6 @@
 
 - [0150: bounded review-scan parent fields](0150-bounded-review-scan-parent-fields.md) — development-only defensive inspection.
 
+- [0151: hidden review-token recovery](0151-hidden-review-token-recovery.md) — development-only staff navigation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

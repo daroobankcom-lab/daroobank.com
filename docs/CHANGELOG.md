@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — hidden review-token recovery
+
+**Changes:** Five staff review forms offer an explicit same-origin GET restart for invalid hidden tokens, with a warning that unsaved inputs are discarded.
+
+**Limits:** Reopening does not bypass validation, preserve inputs or guarantee a subsequent submission. See ADR 0151.
+
 ## 2026-11-24 — bounded review-scan parent fields
 
 **Changes:** Selected current source and clinical TextFields are bounded during review scans; invalid product/price scan requests check candidate existence without loading candidate JSON.

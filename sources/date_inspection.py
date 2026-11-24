@@ -3,6 +3,7 @@ from datetime import date
 
 from django.utils import timezone
 
+from .claim_reads import bounded_claim_notes, materialize_claim_note
 from .models import SourceClaim
 from .services import FIELDS, date_label
 
@@ -22,12 +23,13 @@ def inspect_dates(*, after=0, category='', today=None):
             or (today is not None and type(today) is not date)):
         raise InvalidDateInspection
     today = today if today is not None else timezone.localdate()
-    claims = list(SourceClaim.objects.filter(pk__gt=after)
-                  .only('id', 'payload_sha256', *FIELDS).order_by('pk')[:BATCH_SIZE + 1])
+    claims = list(bounded_claim_notes(SourceClaim.objects.filter(pk__gt=after)
+                  .only('id', 'payload_sha256', *FIELDS).order_by('pk'))[:BATCH_SIZE + 1])
     more = len(claims) > BATCH_SIZE
     batch = claims[:BATCH_SIZE]
     rows = []
     for claim in batch:
+        materialize_claim_note(claim)
         status = date_label(claim, today=today)
         if not category or status == category:
             rows.append({'id': claim.pk, 'status': status})

@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'OVERSIZED_RECEIPT', 'CLAIM', 'CANDIDATE', 'OVERSIZED_CANDIDATE', 'OVERSIZED_PRICE', 'BAD_CANDIDATE', 'BAD_PRICE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'OVERSIZED_RECEIPT', 'CLAIM', 'OVERSIZED_CLAIM', 'CANDIDATE', 'OVERSIZED_CANDIDATE', 'OVERSIZED_PRICE', 'BAD_CANDIDATE', 'BAD_PRICE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -661,9 +661,16 @@ async function run() {
       assert.equal(new URL(page.url()).pathname, '/staff/sources/');
       assert.match(await page.locator('#date-summary-heading').innerText(), /خلاصه تاریخ در همین صفحه/);
       const summary = page.locator('section[aria-labelledby="date-summary-heading"]');
-      assert.match(await summary.innerText(), /فقط 1 ادعای نمایش‌داده‌شده/);
+      assert.match(await summary.innerText(), /فقط 2 ادعای نمایش‌داده‌شده/);
       assert.match(await summary.locator('.staff-stat-grid > div').first().locator('span').innerText(), /گذشته/);
       assert.equal((await summary.locator('.staff-stat-grid > div').first().locator('strong').innerText()).trim(), '1');
+      response = await page.goto(base + `/staff/sources/${ids.oversized_claim}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /شرح مدرک بیش از حد مجاز است؛ نمایش داده نمی‌شود/);
+      assert(!(await page.locator('main').innerText()).includes('browser-claim-note-canary'));
+      assert.equal(await page.locator('form[action$="/review/"]').count(), 0);
+      await checkLayout(page, `oversized source note ${width}`);
+      if (width === 390) await auditAccessibility(page, 'oversized source note');
       await page.goto(base + `/staff/sources/${ids.claim}/`);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی منبع ساختگی برای مرورگر'}).innerText(), /بازبینی منبع ساختگی برای مرورگر/);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
@@ -766,7 +773,7 @@ async function run() {
       await checkKeyboardFocus(page, '.staff-filter button', `scan submit ${width}`, '.staff-section');
       await Promise.all([page.waitForURL('**/staff/sources/dates/?after=0&category=expired'), page.keyboard.press('Enter')]);
       assert.equal(new URL(page.url()).searchParams.get('category'), 'expired');
-      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 2/);
       assert.match(await page.locator('main').innerText(), /مطابق فیلتر در همین بخش: 1/);
       assert.equal(await page.getByRole('link', {name: 'جزئیات ادعا'}).count(), 1);
       await checkLayout(page, `source date scan ${width}`);

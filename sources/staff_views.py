@@ -11,6 +11,7 @@ from daroobank.account_checks import current_account_ids, current_accounts
 from daroobank.review_history import recent_reviews_with_reviewers
 from daroobank.scan_input import parse_scan_after
 from daroobank.scan_responses import invalid_scan_response
+from .claim_reads import bounded_claim_notes, materialize_claim_note
 from .date_inspection import DATE_CATEGORIES, MAX_PK, inspect_dates
 from .forms import SourceClaimForm, SourceReviewForm
 from .models import SourceClaim, SourceClaimReview
@@ -23,7 +24,9 @@ from .services import (ADD, FIELDS, REVIEW, VIEW, ClaimConflict, ClaimError, Rev
 def get_claim(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Claim not found')
-    return get_object_or_404(SourceClaim.objects.all(), pk=pk)
+    claim = get_object_or_404(bounded_claim_notes(SourceClaim.objects.all()), pk=pk)
+    materialize_claim_note(claim)
+    return claim
 
 
 @login_required(login_url='staff_login')
@@ -39,7 +42,7 @@ def claims(request):
         rows = rows.filter(latest_decision__isnull=True)
     elif status:
         rows = rows.filter(latest_decision=status)
-    page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    page = Paginator(bounded_claim_notes(rows), 20).get_page(request.GET.get('page', 1))
     # One local date for every row in this response, including across midnight.
     # This summary is only for the current page, not a database-wide count.
     today = timezone.localdate()
@@ -48,6 +51,7 @@ def claims(request):
     recorders = (current_account_ids([claim.recorded_by_id for claim in page_claims], using=page_claims[0]._state.db)
                  if page_claims else set())
     for claim in page_claims:
+        materialize_claim_note(claim)
         claim.recorder_missing = claim.recorded_by_id not in recorders
         claim.date_status = date_label(claim, today=today)
         date_counts[claim.date_status] += 1
@@ -171,7 +175,7 @@ def review(request, pk):
         review_claim(actor=request.user, claim_id=pk, **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
-        claim.refresh_from_db()
+        claim = get_claim(pk)
         return detail_response(request, claim, form=form, status=409)
     except SourceClaim.DoesNotExist:
         return HttpResponseBadRequest('Claim no longer exists.')

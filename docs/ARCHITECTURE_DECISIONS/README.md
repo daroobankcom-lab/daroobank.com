@@ -318,4 +318,6 @@
 
 - [0159: bounded staging replay JSON](0159-bounded-staging-replay-json.md) — development-only defensive staging reads.
 
+- [0160: bounded source claim note reads](0160-bounded-source-claim-note-reads.md) — development-only defensive display and inspection.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

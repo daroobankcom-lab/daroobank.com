@@ -2,10 +2,9 @@
 import re
 from datetime import date
 
-from django.db.models.functions import Substr
-
 from daroobank.validation import valid_review_reason
 from daroobank.review_content_bounds import bounded_review_fields, materialize_review_fields
+from .claim_reads import bounded_claim_notes, materialize_claim_note
 from .models import SourceClaim, SourceClaimReview
 from .services import FIELDS, MAX_PK, VIEW, ClaimError, fingerprint, require_staff, snapshot, valid_claim, validate_data
 
@@ -67,13 +66,11 @@ def inspect_reviews(*, actor, claim_id, after=0, category=''):
     if (type(after) is not int or not 0 <= after <= MAX_PK
             or not isinstance(category, str) or category not in ('', *CATEGORIES)):
         raise InvalidReviewInspection
-    # A bypassed TextField can exceed its validator limit; select one extra
-    # character so validation fails without loading its full content.
-    claim = (SourceClaim.objects.filter(pk=claim_id).defer('evidence_note')
-             .annotate(_note_prefix=Substr('evidence_note', 1, 1001)).first())
+    # One extra character proves an over-limit note invalid without a full fetch.
+    claim = bounded_claim_notes(SourceClaim.objects.filter(pk=claim_id)).first()
     if claim is None:
         raise ReviewInspectionNotFound
-    claim.evidence_note = claim._note_prefix
+    materialize_claim_note(claim)
     current_valid = valid_claim(claim)
     # Avoid an inner reviewer join: missing accounts do not hide review rows.
     reviews = list(bounded_review_fields(SourceClaimReview.objects.filter(claim_id=claim_id, pk__gt=after)).order_by('pk')[:BATCH_SIZE + 1])

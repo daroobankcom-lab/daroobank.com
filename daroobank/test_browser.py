@@ -29,7 +29,7 @@ from pricing.models import PriceCandidate, PriceCandidateReview
 from pricing.test_workflow import csv_bytes
 from pricing.reviews import record_preliminary_review
 from sources.services import record_claim, review_claim
-from sources.models import SourceClaimReview
+from sources.models import SourceClaim, SourceClaimReview
 from tools.browser_test_diagnostics import browser_failure_annotation
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -68,6 +68,14 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
             'claims_collection': True, 'claims_storage': False, 'claims_publication': False,
             'starts_on': None, 'expires_on': timezone.localdate() - timedelta(days=1),
         })
+        oversized_claim, _ = record_claim(actor=author, data={
+            'source_name': 'ادعای ساختگی طولانی مرورگر', 'source_url': 'https://example.org/oversized-claim',
+            'owner': 'مالک فرضی', 'evidence_url': 'https://example.org/evidence', 'evidence_note': '',
+            'claims_collection': True, 'claims_storage': False, 'claims_publication': False,
+            'starts_on': None, 'expires_on': None,
+        })
+        SourceClaim.objects.filter(pk=oversized_claim.pk).update(
+            evidence_note='ر' * 100_000 + 'browser-claim-note-canary')
         reviewer = user('browser-reviewer', 'view_identityworkspace', 'review_identityworkspace')
         reviewer.user_permissions.add(*Permission.objects.filter(content_type__app_label='clinical',
                                       codename__in=['view_clinicaldraft', 'review_clinicaldraft']))
@@ -196,7 +204,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
                    BROWSER_OVERSIZED_PACKAGE=str(oversized_package.pk), BROWSER_OVERSIZED_INGREDIENT=str(oversized_ingredient.pk),
                    BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
-                   BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_OVERSIZED_RECEIPT=str(oversized_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk),
+                   BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_OVERSIZED_RECEIPT=str(oversized_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk), BROWSER_OVERSIZED_CLAIM=str(oversized_claim.pk),
                    BROWSER_CANDIDATE=str(browser_candidate.pk), BROWSER_OVERSIZED_CANDIDATE=str(oversized_product_candidate.pk),
                    BROWSER_OVERSIZED_PRICE=str(oversized_price_candidate.pk), BROWSER_BAD_CANDIDATE=str(bad_product.pk),
                    BROWSER_BAD_PRICE=str(bad_price.pk))

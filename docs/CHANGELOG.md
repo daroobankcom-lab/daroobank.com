@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded source evidence-note reads
+
+**Changes:** Selected source claim displays and inspections bound evidence-note transfers and hide over-limit content, which is provably invalid under the existing field limit.
+
+**Limits:** Other fields, writers and database work remain outside this bound. See ADR 0160.
+
 ## 2026-11-24 — bounded staging replay JSON
 
 **Changes:** Product and price staging pre-lookups select only existing IDs and duplicate rereads bound candidate JSON under the existing lock; oversized replay conflicts roll back.

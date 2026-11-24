@@ -16,6 +16,7 @@ from daroobank.account_checks import current_account_exists
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import SourceClaim, SourceClaimReview
+from .claim_reads import bounded_claim_notes, materialize_claim_note
 
 FIELDS = ('source_name', 'source_url', 'owner', 'evidence_url', 'evidence_note', 'claims_collection',
           'claims_storage', 'claims_publication', 'starts_on', 'expires_on')
@@ -85,6 +86,8 @@ def claim_data(claim):
 
 
 def valid_claim(claim):
+    if getattr(claim, 'note_oversized', False):
+        return False
     try:
         data = claim_data(claim)
         validate_data(data)
@@ -169,7 +172,10 @@ def related_claims(user, source_url):
     except ClaimError:
         return {'can_view': True, 'invalid_url': True, 'items': [], 'limited': False}
     latest = SourceClaimReview.objects.filter(claim_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
-    rows = list(SourceClaim.objects.filter(source_url=source_url).annotate(latest_decision=Subquery(latest))
-                .order_by('-pk')[:SUMMARY_LIMIT + 1])
-    return {'can_view': True, 'invalid_url': False, 'limited': len(rows) > SUMMARY_LIMIT,
-            'items': [{'claim': claim, 'date_label': date_label(claim)} for claim in rows[:SUMMARY_LIMIT]]}
+    rows = list(bounded_claim_notes(SourceClaim.objects.filter(source_url=source_url)
+                .annotate(latest_decision=Subquery(latest)).order_by('-pk'))[:SUMMARY_LIMIT + 1])
+    items = []
+    for claim in rows[:SUMMARY_LIMIT]:
+        materialize_claim_note(claim)
+        items.append({'claim': claim, 'date_label': date_label(claim)})
+    return {'can_view': True, 'invalid_url': False, 'limited': len(rows) > SUMMARY_LIMIT, 'items': items}

@@ -316,6 +316,10 @@ Direct service tests reject selected truthy and falsey non-boolean `commit` valu
 
 Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. `daroobank/test_staff_raw_text_controls.py` checks selected source, clinical and identity forms and selected HTTP writes; an unchanged empty extra component row is skipped rather than validated (ADR 0133). `daroobank/test_staff_empty_posts.py` checks required errors and no selected writes for six empty staff POSTs with CSRF enforcement (ADR 0134). `daroobank/test_sample_downloads.py` checks the two fixed synthetic downloads, permissions and preview without writes; the browser smoke exercises both downloads (ADR 0136). Selected form summaries and their handling of field, hidden, general and formset errors are checked in these HTTP tests; the Chromium smoke checks a summary link by keyboard on one invalid identity form (ADR 0135). Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
+## Local price-list JSON transfer
+
+`pricing/test_list_candidates_bounded_json.py` checks selected SQL, boundaries, SQL/JSON null, reduced output, no partial validation and limit/filter semantics. This does not bound database work or make normal CLI output confidential; see [ADR 0170](ARCHITECTURE_DECISIONS/0170-bounded-price-cli-candidate-json.md).
+
 ## Selected staff date raw controls
 
 `daroobank/test_staff_raw_date_controls.py` covers selected optional date fields, prefixed forms, raw controls, valid dates and CSRF-authorized HTTP submissions without writes. An opt-in Chromium check covers a crafted source-date error. Other inputs and direct service calls remain outside scope; see [ADR 0169](ARCHITECTURE_DECISIONS/0169-staff-date-raw-controls.md).

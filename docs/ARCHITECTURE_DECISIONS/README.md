@@ -338,4 +338,6 @@
 
 - [0169: staff date raw controls](0169-staff-date-raw-controls.md) — development-only input validation.
 
+- [0170: bounded price CLI candidate JSON](0170-bounded-price-cli-candidate-json.md) — development-only diagnostic reads.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

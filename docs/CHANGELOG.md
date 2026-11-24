@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded price-list CLI payloads
+
+**Changes:** The local price-list command limits selected candidate JSON transfer and emits an explicit oversized/unknown row without matching or printing its payload.
+
+**Limits:** Consumers must handle this new shape; the bound does not cover database work or make output confidential. See ADR 0170.
+
 ## 2026-11-24 — reject raw controls in selected staff dates
 
 **Changes:** Source and clinical date forms reject control characters in the original date value instead of silently stripping them or treating them as empty.

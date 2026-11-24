@@ -1,6 +1,7 @@
 import json
 
 from django.core.management.base import BaseCommand, CommandError
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from pricing.importer import match_fields_valid, suggest_product
 from pricing.models import PriceCandidate
 from pricing.reviews import ReviewConflict, ensure_candidate_integrity
@@ -21,7 +22,13 @@ class Command(BaseCommand):
         if options['status']:
             records = records.filter(match_status=options['status'])
         data = []
-        for item in records[:limit]:
+        for item in bounded_candidates(records)[:limit]:
+            materialize_candidate(item)
+            if item.content_oversized:
+                # A partial/missing payload is uninspected, not necessarily invalid.
+                data.append({'id': item.pk, 'review_required': True, 'payload_status': 'oversized',
+                             'current_suggestion': {'match_status': 'unknown', 'suggested_product_id': None}})
+                continue
             try:
                 ensure_candidate_integrity(item)
             except ReviewConflict:

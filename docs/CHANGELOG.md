@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — unknown source and clinical status labels
+
+**Changes:** Selected source and clinical queues and related-source hints distinguish unknown non-null reviews from no review.
+
+**Limits:** This does not validate history, prevent writes or establish source rights or clinical approval; nulls and other paths remain outside the check. See ADR 0131.
+
 ## 2026-11-24 — unknown candidate status labels
 
 **Changes:** Selected product and price queues and review histories show a fixed invalid label instead of mapping an unknown status to a normal one.

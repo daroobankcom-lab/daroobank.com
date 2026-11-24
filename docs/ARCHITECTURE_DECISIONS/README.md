@@ -260,4 +260,6 @@
 
 - [0130: unknown candidate status labels](0130-unknown-candidate-status-labels.md) — development-only defensive display, 24 November 2026.
 
+- [0131: unknown source and clinical status labels](0131-unknown-source-clinical-status-labels.md) — development-only defensive display, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

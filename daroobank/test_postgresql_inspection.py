@@ -262,6 +262,36 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'no_selected_issues')
             transaction.set_rollback(True)
 
+    def test_unique_nondefault_operator_class_is_reported(self):
+        for keys in ('source_url varchar_pattern_ops, payload_sha256',
+                     'source_url, payload_sha256 varchar_pattern_ops'):
+            with self.subTest(keys=keys), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
+                    cursor.execute('CREATE UNIQUE INDEX synthetic_unique_pattern ON sources_sourceclaim (' + keys + ')')
+                report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
+                self.assertEqual(report['missing_unique_keys'], 1)
+                self.assertEqual(report['status'], 'attention')
+                transaction.set_rollback(True)
+
+    def test_unique_index_collation_different_from_column_is_reported(self):
+        cases = [('source_url COLLATE "C", payload_sha256', 'source_url', 0),
+                 ('source_url, payload_sha256 COLLATE "C"', 'payload_sha256', 1)]
+        for keys, column, ordinal in cases:
+            with self.subTest(column=column), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT unique_source_claim_revision')
+                    cursor.execute('CREATE UNIQUE INDEX synthetic_unique_collation ON sources_sourceclaim (' + keys + ')')
+                    cursor.execute('''SELECT i.indcollation[%s] <> a.attcollation
+                                      FROM pg_catalog.pg_index i JOIN pg_catalog.pg_attribute a
+                                      ON a.attrelid = i.indrelid AND a.attname = %s
+                                      WHERE i.indexrelid = 'synthetic_unique_collation'::regclass''', [ordinal, column])
+                    self.assertTrue(cursor.fetchone()[0])
+                report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys())
+                self.assertEqual(report['missing_unique_keys'], 1)
+                self.assertEqual(report['status'], 'attention')
+                transaction.set_rollback(True)
+
     def test_reordered_unique_index_is_conservatively_reported_missing(self):
         with transaction.atomic():
             with connection.cursor() as cursor:

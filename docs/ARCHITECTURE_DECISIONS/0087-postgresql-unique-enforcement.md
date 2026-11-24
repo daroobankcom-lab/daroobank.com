@@ -1,6 +1,6 @@
 # ADR 0087: PostgreSQL selected unique-key enforcement timing
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0073](0073-postgresql-unique-key-clues.md) and [ADR 0086](0086-unsupported-unique-declarations.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0073](0073-postgresql-unique-key-clues.md) and [ADR 0086](0086-unsupported-unique-declarations.md). [ADR 0088](0088-postgresql-unique-operator-collation.md) adds selected operator-class and index-versus-column collation clues.
 
 ## Decision
 

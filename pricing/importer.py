@@ -40,6 +40,12 @@ OPTIONAL = {'effective_date', 'source_published_date'}
 CATEGORIES = {'official_consumer', 'retail', 'manufacturer', 'wholesale', 'unit'}
 UNITS = {'package', 'tablet', 'capsule', 'ampoule', 'vial', 'ml'}
 AMOUNT_PATTERN = re.compile(r'^[0-9]+(?:\.[0-9]+)?$')
+AMOUNT_DIGITS = str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789')
+UNSAFE_AMOUNT_CATEGORIES = frozenset({'Cc', 'Cs', 'Cf', 'Mn', 'Me', 'Zl', 'Zp'})
+
+
+def _unsafe_amount_characters(value):
+    return any(unicodedata.category(char) in UNSAFE_AMOUNT_CATEGORIES for char in value)
 
 
 class ImportValidationError(ValueError):
@@ -59,9 +65,14 @@ def validate_source(name, url):
 
 def amount_to_rial(amount, currency):
     """Convert bounded, explicitly declared currency exactly and without rounding."""
-    if not isinstance(amount, str) or len(amount) > LIMITS['amount']:
+    if not isinstance(amount, str) or len(amount) > LIMITS['amount'] or _unsafe_amount_characters(amount):
         raise ImportValidationError('Amount must be a bounded plain decimal string.')
-    number = normalize_search(amount).replace('٫', '.')
+    normalized = unicodedata.normalize('NFKC', amount)
+    if _unsafe_amount_characters(normalized):
+        raise ImportValidationError('Amount must be a bounded plain decimal string.')
+    # Search normalization intentionally removes marks and format characters;
+    # financial amounts must reject them rather than silently change the input.
+    number = normalized.translate(AMOUNT_DIGITS).replace('٫', '.').strip()
     if not AMOUNT_PATTERN.fullmatch(number):
         raise ImportValidationError('Amount must be a positive plain decimal without separators or exponent.')
     if not isinstance(currency, str) or currency not in {'RIAL', 'TOMAN'}:
@@ -119,6 +130,10 @@ def parse_csv(path):
                 raise ImportValidationError('Input exceeds the 5000-row limit.')
             if None in row or any(value is None for value in row.values()):
                 raise ImportValidationError(f'Row {line}: wrong number of fields.')
+            # Inspect the raw amount before strip(), which can hide control or
+            # line-separator characters at either edge of a CSV cell.
+            if _unsafe_amount_characters(row['amount']):
+                raise ImportValidationError(f'Row {line}: invalid or oversized amount.')
             row = {key: value.strip() for key, value in row.items()}
             for key in FIELDS:
                 if '\x00' in row[key] or len(row[key]) > LIMITS[key]:

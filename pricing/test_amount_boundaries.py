@@ -1,5 +1,6 @@
 """Length and precision boundaries for direct synthetic amount conversion."""
 import random
+import unicodedata
 from decimal import localcontext
 
 from django.test import SimpleTestCase
@@ -21,6 +22,31 @@ class PriceAmountBoundaryTests(SimpleTestCase):
         for value in (None, 1, True, b'1'):
             with self.subTest(value=value), self.assertRaises(ImportValidationError):
                 amount_to_rial(value, 'RIAL')
+
+    def test_amount_does_not_silently_remove_controls_or_combining_marks(self):
+        unsafe = ('1\u200b2', '1\u202e2', '1\u0301', '1\u20dd', '1\ufe0f', '\t1', '\n1',
+                  '\u200f1', '1\u2028', '\u00a81')  # NFKC of the last adds a combining mark.
+        for value in unsafe:
+            for currency in ('RIAL', 'TOMAN'):
+                with self.subTest(value=repr(value), currency=currency), self.assertRaises(ImportValidationError):
+                    amount_to_rial(value, currency)
+        self.assertEqual(amount_to_rial(' ۱۲۳ ', 'RIAL'), 123)
+        self.assertEqual(amount_to_rial('⑩.0', 'RIAL'), 10)
+
+    def test_all_unicode_codepoints_with_unsafe_categories_are_rejected_in_an_amount(self):
+        forbidden = {'Cc', 'Cs', 'Cf', 'Mn', 'Me', 'Zl', 'Zp'}
+        checked = 0
+        for codepoint in range(0x110000):
+            char = chr(codepoint)
+            if (unicodedata.category(char) in forbidden
+                    or any(unicodedata.category(c) in forbidden for c in unicodedata.normalize('NFKC', char))):
+                checked += 1
+                try:
+                    amount_to_rial('1' + char + '2', 'RIAL')
+                except ImportValidationError:
+                    continue
+                self.fail(f'Forbidden synthetic codepoint U+{codepoint:04X} was accepted')
+        self.assertGreater(checked, 3000)
 
     def test_conversion_does_not_depend_on_ambient_decimal_context(self):
         with localcontext() as context:

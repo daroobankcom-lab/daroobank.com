@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import importlib
 import io
 import json
@@ -10,7 +11,7 @@ from types import SimpleNamespace
 from django.apps import apps
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection
+from django.db import connection, transaction
 from django.test import TestCase
 from django.urls import reverse
 
@@ -151,6 +152,40 @@ class PriceImportTests(TestCase):
         ]:
             with self.subTest(amount=amount, currency=currency), self.assertRaises(ImportValidationError):
                 amount_to_rial(amount, currency)
+
+    def test_hidden_or_control_characters_in_amount_reject_the_whole_csv(self):
+        for amount in ('1\u200b2', '1\u202e2', '1\u0301', '1\u20dd', '1\ufe0f', '\t1', '\n1', '1\u2028', '\u00a81'):
+            with self.subTest(amount=repr(amount)), transaction.atomic():
+                self.write_csv([self.row, {**self.row, 'source_record_id': 'bad', 'amount': amount}])
+                with self.assertRaises(ImportValidationError) as error:
+                    self.stage(commit=True)
+                self.assertNotIn(amount, str(error.exception))
+                self.assertEqual(PriceCandidate.objects.count(), 0)
+                transaction.set_rollback(True)
+        self.write_csv([{**self.row, 'amount': ' ۱۲۳ '}])
+        self.stage(commit=True)
+        self.assertEqual(PriceCandidate.objects.get().amount_rial, 1230)
+
+    def test_legacy_candidate_with_hidden_amount_is_withheld_from_comparison(self):
+        from .comparisons import price_revision_context
+        from .reviews import ReviewConflict, ensure_candidate_integrity
+
+        self.write_csv([self.row])
+        self.stage(commit=True)
+        candidate = PriceCandidate.objects.get()
+        fields = dict(candidate.source_fields)
+        fields['amount'] = '1\u200b2'
+        payload = json.dumps({'source_name': candidate.source_name, 'fields': fields},
+                             sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+        digest = hashlib.sha256(payload.encode('utf-8')).hexdigest()
+        # Simulate a coherent historical row accepted by the old normalizer.
+        PriceCandidate.objects.filter(pk=candidate.pk).update(
+            source_fields=fields, original_amount=fields['amount'], amount_rial=120, payload_sha256=digest)
+        candidate.refresh_from_db()
+        with self.assertRaises(ReviewConflict):
+            ensure_candidate_integrity(candidate)
+        self.assertFalse(price_revision_context(candidate)['available'])
+        self.assertEqual(PriceCandidate.objects.count(), 1)
 
     def test_compatibility_digit_amount_staging_and_invalid_file_is_atomic(self):
         self.write_csv([{**self.row, 'amount': '⑩.0', 'currency': 'RIAL'},

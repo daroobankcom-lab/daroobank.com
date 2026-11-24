@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — reject hidden characters in price amounts
+
+**Changes:** Price amount conversion rejects selected Unicode controls, format characters, marks and line separators before normalization; CSV checks the raw cell before trimming. Synthetic direct, atomic CSV, legacy integrity and Unicode-category tests cover selected cases.
+
+**Limits:** Some formerly accepted legacy candidates will require review; compatibility digits and ordinary outer spaces remain supported. This is not complete Unicode, source or financial validation. See ADR 0117.
+
 ## 2026-11-24 — synthetic encrypted restore probe
 
 **Changes:** Added an opt-in OpenSSL CMS envelope, detached synthetic signature and isolated PostgreSQL restore exercise with selected tamper, wrong-key, replacement-archive and replay controls; CI opts in.

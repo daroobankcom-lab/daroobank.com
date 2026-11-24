@@ -232,4 +232,6 @@
 
 - [0116: synthetic encrypted restore drill](0116-synthetic-encrypted-restore-drill.md) — development-only test, 24 November 2026.
 
+- [0117: price amount invisible characters](0117-price-amount-invisible-characters.md) — development-only validation, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

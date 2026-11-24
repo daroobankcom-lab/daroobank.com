@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'CLAIM', 'CANDIDATE', 'BAD_CANDIDATE', 'BAD_PRICE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'PRICE', 'RECEIPT', 'OVERSIZED_RECEIPT', 'CLAIM', 'CANDIDATE', 'BAD_CANDIDATE', 'BAD_PRICE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -1061,6 +1061,18 @@ async function run() {
       await checkLayout(pricePage, `receipt inspection error ${width}`);
       await pricePage.getByRole('link', {name: 'شروع دوباره بازرسی ←'}).click();
       assert.equal(new URL(pricePage.url()).pathname, receiptInspection);
+      response = await pricePage.goto(base + `/staff/operations/imports/${ids.oversized_receipt}/`);
+      assert.equal(response.status(), 200);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await pricePage.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ سازگاری بررسی نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-receipt-json-canary'));
+      await checkLayout(pricePage, `oversized receipt detail ${width}`);
+      response = await pricePage.goto(base + `/staff/operations/imports/${ids.oversized_receipt}/inspection/?category=oversized`);
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ سازگاری آن بررسی نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-receipt-json-canary'));
+      await checkLayout(pricePage, `oversized receipt inspection ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'oversized receipt inspection');
       await priceContext.close();
     }
     // A malformed hidden review version gets a private 400 and a safe GET

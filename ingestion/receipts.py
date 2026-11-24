@@ -9,6 +9,7 @@ from catalog.intake import MAX_ROWS as MAX_PRODUCT_ROWS, stage_products
 from pricing.comparisons import valid_candidate as valid_price
 from pricing.importer import MAX_ROWS as MAX_PRICE_ROWS, stage_csv, validate_source
 from .exceptions import StagingConflict
+from .candidate_reads import bounded_manifest_candidates, materialize_manifest_candidate
 from .models import ImportReceipt, ImportReceiptItem
 
 PRODUCT_VIEW = 'catalog.view_productcandidate'
@@ -144,12 +145,14 @@ def manifest_context(receipt, page_number):
     if status != 'available':
         return {'status': status}
     candidate_field = 'product_candidate' if receipt.kind == ImportReceipt.PRODUCT else 'price_candidate'
-    page = Paginator(receipt.items.select_related(candidate_field).order_by('ordinal'), PAGE_SIZE).get_page(page_number)
+    rows = bounded_manifest_candidates(receipt.items.order_by('ordinal'), candidate_field)
+    page = Paginator(rows, PAGE_SIZE).get_page(page_number)
     # All candidates came from the same joined SELECT. Never share this cache
     # across pages or requests, and always compare each item's own fields.
     candidate_cache = {}
     for item in page.object_list:
-        item.safe = manifest_item_safe(receipt, item, _candidate_cache=candidate_cache)
+        materialize_manifest_candidate(item, candidate_field)
+        item.safe = not item.candidate_oversized and manifest_item_safe(receipt, item, _candidate_cache=candidate_cache)
     return {'status': 'available', 'page': page}
 
 

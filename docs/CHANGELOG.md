@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — bounded receipt candidate JSON
+
+**Changes:** Private receipt detail and manifest inspection avoid transferring oversized candidate JSON, report it as uninspected and preserve pagination.
+
+**Limits:** This does not bound database work or other fields and endpoints. See ADR 0155.
+
 ## 2026-11-24 — bounded identity revision-link reasons
 
 **Changes:** Identity detail and lineage reads bound selected revision-link reason transfers while keeping existing validation and pagination.

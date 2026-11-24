@@ -2,12 +2,13 @@
 from django.core.exceptions import PermissionDenied
 
 from .models import ImportReceipt
+from .candidate_reads import bounded_manifest_candidates, materialize_manifest_candidate
 from .receipts import manifest_item_safe, manifest_structure, visible_kinds
 
 BATCH_SIZE = 50
 MAX_ORDINAL = 5000
 MAX_PK = 9_223_372_036_854_775_807
-CATEGORIES = ('consistent', 'inconsistent')
+CATEGORIES = ('consistent', 'inconsistent', 'oversized')
 
 
 class ReceiptNotFound(ValueError):
@@ -37,14 +38,17 @@ def inspect_manifest(*, actor, receipt_id, after=0, category=''):
     if status != 'available':
         return report
     field = 'product_candidate' if receipt.kind == ImportReceipt.PRODUCT else 'price_candidate'
-    batch = list(receipt.items.select_related(field).filter(ordinal__gt=after).order_by('ordinal')[:BATCH_SIZE + 1])
+    queryset = receipt.items.filter(ordinal__gt=after).order_by('ordinal')
+    batch = list(bounded_manifest_candidates(queryset, field)[:BATCH_SIZE + 1])
     scanned = batch[:BATCH_SIZE]
     rows = []
     # All candidates were materialized by the same bounded join. Cache only
     # candidate validation, not the distinct row-to-candidate comparisons.
     candidate_cache = {}
     for item in scanned:
-        item_status = 'consistent' if manifest_item_safe(receipt, item, _candidate_cache=candidate_cache) else 'inconsistent'
+        materialize_manifest_candidate(item, field)
+        item_status = ('oversized' if item.candidate_oversized else
+                       'consistent' if manifest_item_safe(receipt, item, _candidate_cache=candidate_cache) else 'inconsistent')
         if not category or category == item_status:
             rows.append({'ordinal': item.ordinal, 'status': item_status})
     report.update(scanned=len(scanned), rows=rows,

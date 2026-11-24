@@ -308,4 +308,6 @@
 
 - [0154: bounded identity revision-link reason](0154-bounded-identity-revision-reason.md) — development-only defensive inspection.
 
+- [0155: bounded manifest candidate JSON](0155-bounded-manifest-candidate-json.md) — development-only defensive inspection.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -152,6 +152,11 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                   staged_by=price_stager, commit=True, rights_attested=True)
         _, browser_receipt = stage_price_with_receipt(io.BytesIO(csv_bytes([price_row, price_row])), 'منبع ساختگی مرورگر',
             'https://example.org/browser-detail', actor=price_stager, rights_attested=True)
+        _, oversized_receipt = stage_price_with_receipt(
+            io.BytesIO(csv_bytes([{**price_row, 'source_record_id': 'oversized-receipt-row'}])),
+            'منبع ساختگی مرورگر', 'https://example.org/oversized-receipt', actor=price_stager, rights_attested=True)
+        PriceCandidate.objects.filter(pk=oversized_receipt.items.get().price_candidate_id).update(
+            source_fields={'browser-receipt-json-canary': 'آ' * 100_000})
         browser_price = PriceCandidate.objects.get(source_record_id='browser-detail')
         valid_price_review = record_preliminary_review(actor=reviewer, candidate_id=browser_price.pk, decision='defer',
                                   reason='بازبینی قیمت ساختگی برای مرورگر', expected_review=0,
@@ -181,7 +186,7 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
                    BROWSER_FORMULATION=str(formulation.pk), BROWSER_PRODUCT=str(product.pk), BROWSER_PACKAGE=str(package.pk),
                    BROWSER_OVERSIZED_PACKAGE=str(oversized_package.pk), BROWSER_OVERSIZED_INGREDIENT=str(oversized_ingredient.pk),
                    BROWSER_CLINICAL_LEAF=str(clinical_leaf.pk), BROWSER_PRICE=str(browser_price.pk),
-                   BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk),
+                   BROWSER_RECEIPT=str(browser_receipt.pk), BROWSER_OVERSIZED_RECEIPT=str(oversized_receipt.pk), BROWSER_CLAIM=str(browser_claim.pk),
                    BROWSER_CANDIDATE=str(browser_candidate.pk), BROWSER_BAD_CANDIDATE=str(bad_product.pk),
                    BROWSER_BAD_PRICE=str(bad_price.pk))
         try:
@@ -199,8 +204,8 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(IdentityPackageReview.objects.count(), 2)
         self.assertEqual(ClinicalDraftReview.objects.count(), 2)
         self.assertEqual(SourceClaimReview.objects.count(), 2)
-        self.assertEqual(PriceCandidate.objects.count(), 2)
-        self.assertEqual(ImportReceipt.objects.count(), 1)
+        self.assertEqual(PriceCandidate.objects.count(), 3)
+        self.assertEqual(ImportReceipt.objects.count(), 2)
         self.assertEqual(browser_receipt.items.count(), 2)
         self.assertIn('browser checks passed', result.stdout)
         print(result.stdout.strip())

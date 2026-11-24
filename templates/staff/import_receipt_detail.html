@@ -14,7 +14,7 @@
       {% for item in manifest.page %}<article class="staff-review-item"><strong>ردیف داده {{ item.ordinal }} · {% if item.was_created %}نامزد جدید{% else %}تکراری{% endif %}</strong>
       {% if item.safe %}<p>شناسه منبع: <bdi>{{ item.source_record_id }}</bdi></p><p class="staff-break">اثر انگشت محتوای نامزد: <bdi dir="ltr">{{ item.payload_sha256 }}</bdi></p>
       {% if receipt.kind == 'product' %}<a class="staff-detail-link" href="{% url 'staff_product_detail' item.product_candidate_id %}">مشاهده نامزد فرآورده ←</a>{% else %}<p>تطبیق هنگام ورود: {% if item.match_status == 'suggested' %}پیشنهاد تطبیق{% elif item.match_status == 'ambiguous' %}مبهم یا بیش از سقف{% else %}بدون تطبیق{% endif %}</p><a class="staff-detail-link" href="{% url 'staff_price_detail' item.price_candidate_id %}">مشاهده نامزد قیمت ←</a>{% endif %}
-      {% else %}<p>اطلاعات ردیف یا نامزد ناسازگار است؛ جزئیات و پیوند نمایش داده نمی‌شوند.</p>{% endif %}</article>{% endfor %}
+      {% elif item.candidate_oversized %}<p>نامزد بیش از حد بررسی است؛ سازگاری بررسی نشد و جزئیات و پیوند نمایش داده نمی‌شوند.</p>{% else %}<p>اطلاعات ردیف یا نامزد ناسازگار است؛ جزئیات و پیوند نمایش داده نمی‌شوند.</p>{% endif %}</article>{% endfor %}
       {% if manifest.page.has_other_pages %}<nav class="staff-pagination" aria-label="صفحات ردیف‌های رسید">{% if manifest.page.has_previous %}<a href="?page={{ manifest.page.previous_page_number }}">صفحه قبل</a>{% endif %}<span>صفحه {{ manifest.page.number }} از {{ manifest.page.paginator.num_pages }}</span>{% if manifest.page.has_next %}<a href="?page={{ manifest.page.next_page_number }}">صفحه بعد</a>{% endif %}</nav>{% endif %}
     {% endif %}</section>
 </div></section>{% endblock %}

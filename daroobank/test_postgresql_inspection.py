@@ -442,13 +442,27 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                     self.assertEqual(json.loads(output.getvalue())['status'], 'no_selected_issues')
                 transaction.set_rollback(True)
 
-    def test_unexpected_canonical_true_check_is_outside_the_selected_scope(self):
+    def test_unexpected_canonical_checks_are_outside_the_selected_scope(self):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT synthetic_extra_true CHECK (true)')
+                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT synthetic_extra_false CHECK (false)')
             report = inspect_schema(expected_tables(), check_constraints=expected_check_constraints())
             self.assertEqual(report['canonical_accept_all_named_checks'], 0)
+            self.assertEqual(report['canonical_reject_all_named_checks'], 0)
             self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
+    def test_unvalidated_constant_false_has_two_distinct_findings(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim DROP CONSTRAINT source_claim_scope_present')
+                cursor.execute('ALTER TABLE sources_sourceclaim ADD CONSTRAINT source_claim_scope_present CHECK (false) NOT VALID')
+            report = inspect_schema(expected_tables(), check_constraints=expected_check_constraints())
+            self.assertEqual(report['missing_check_constraints'], 0)
+            self.assertEqual(report['unvalidated_constraints'], 1)
+            self.assertEqual(report['canonical_reject_all_named_checks'], 1)
+            self.assertEqual(report['status'], 'attention')
             transaction.set_rollback(True)
 
     def test_migration_recorder_missing_column_is_reported(self):

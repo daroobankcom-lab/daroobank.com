@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## Product-review snapshot clues
+
+**Changes:** The product candidate detail checks selected recent review snapshots, suppresses inconsistent review details, and compares consistent snapshots with the current candidate.
+
+**Limits:** Unkeyed checks are not authentication or audit; coherent rewrites can pass, reads are not snapshots and other outputs remain outside this display. See ADR 0140.
+
 ## 2026-11-24 — candidate review error summaries
 
 **Changes:** Product and price review errors receive a descriptive page title and server-rendered summary; when the form is unavailable, a fixed notice replaces links to absent fields.

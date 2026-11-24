@@ -665,6 +665,11 @@ async function run() {
       await page.goto(base + `/staff/products/${ids.candidate}/`);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی فرآورده ساختگی برای مرورگر'}).innerText(), /بازبینی فرآورده ساختگی برای مرورگر/);
       assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      const productHistory = await page.locator('main').innerText();
+      assert.match(productHistory, /رکورد بازبینی یا تصویر آن ناسازگار است/);
+      assert.match(productHistory, /این مقایسه تأیید اصالت یا هویت نیست/);
+      assert(!productHistory.includes('browser-product-history-hidden-canary'));
+      assert(!productHistory.includes('browser-product-history-reason-canary'));
       assert.match(await page.locator('#comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
       await checkLayout(page, `product review history ${width}`);
       if (width === 390) await auditAccessibility(page, 'product review history');

@@ -16,6 +16,7 @@ from ingestion.receipts import related_receipts, stage_product_with_receipt
 from .comparisons import product_comparison_context, valid_candidate
 from .intake import IntakeError, ReviewConflict, require_staff, review_product, stage_products
 from .models import ProductCandidate, ProductCandidateReview
+from .review_inspection import classify_review
 from .staff_forms import ProductReviewForm, ProductUploadForm
 
 VIEW = 'catalog.view_productcandidate'
@@ -96,6 +97,9 @@ def detail_response(request, candidate, *, form=None, status=200):
     reviews = recent_reviews_with_reviewers(candidate.reviews.all())
     candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
     comparison = product_comparison_context(candidate)
+    for review in reviews:
+        review.technical_status, review.candidate_comparison = classify_review(
+            review, candidate, comparison['available'] and candidate.display_stager is not None)
     can_review = (comparison['available'] and request.user.has_perm(REVIEW) and candidate.staged_by_id != request.user.pk
                   and candidate.display_stager is not None and candidate.source_rights_attested)
     if form is None and can_review:

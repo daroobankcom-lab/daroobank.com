@@ -16,7 +16,7 @@ from django.utils import timezone
 from catalog.identity import digest, ingredient_snapshot, revise_identity
 from catalog.intake import review_product, stage_products
 from catalog.test_intake import make_csv
-from catalog.models import IngredientDraft, IdentityPackageReview, ProductCandidate, ProductPresentation
+from catalog.models import IngredientDraft, IdentityPackageReview, ProductCandidate, ProductCandidateReview, ProductPresentation
 from catalog.quality import MAX_INSPECTED_SEARCH_LENGTH
 from catalog.test_identity import ALL, INGREDIENT, build, user
 from clinical.services import create_draft, draft_data, review_draft
@@ -86,9 +86,16 @@ class SyntheticBrowserTests(StaticLiveServerTestCase):
         stage_products(io.BytesIO(make_csv([product_row])), 'منبع ساختگی مرورگر',
                        'https://example.org/browser-product', actor=author, commit=True, rights_attested=True)
         browser_candidate = ProductCandidate.objects.get(source_record_id='browser-product')
-        review_product(actor=reviewer, candidate_id=browser_candidate.pk, decision='defer',
+        valid_product_review = review_product(actor=reviewer, candidate_id=browser_candidate.pk, decision='defer',
                        reason='بازبینی فرآورده ساختگی برای مرورگر', expected_review=0,
                        expected_hash=browser_candidate.payload_sha256)
+        invalid_product_review = review_product(actor=reviewer, candidate_id=browser_candidate.pk, decision='defer',
+                       reason='بازبینی ساختگی برای تغییر در آزمون مرورگر', expected_review=valid_product_review.pk,
+                       expected_hash=browser_candidate.payload_sha256)
+        # Direct mutation is restricted to the disposable synthetic browser DB.
+        ProductCandidateReview.objects.filter(pk=invalid_product_review.pk).update(
+            review_snapshot={'unexpected': 'browser-product-history-hidden-canary'},
+            reason='browser-product-history-reason-canary توضیح ساختگی')
         bad_product_row = {**product_row, 'source_record_id': 'browser-invalid-product', 'irc': '999'}
         stage_products(io.BytesIO(make_csv([bad_product_row])), 'منبع ساختگی مرورگر',
                        'https://example.org/browser-invalid-product', actor=author, commit=True, rights_attested=True)

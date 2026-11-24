@@ -278,4 +278,6 @@
 
 - [0139: candidate review error summary](0139-candidate-review-error-summary.md) — development-only server-rendered usability, 24 November 2026.
 
+- [0140: product-review snapshot clues](0140-product-review-snapshot-clues.md) — development-only defensive display.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

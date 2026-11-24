@@ -244,7 +244,7 @@ class ProductIntakeTests(TestCase):
         self.client.force_login(self.reviewer)
         detail = self.client.get(reverse('staff_product_detail', args=[candidate.pk]))
         self.assertContains(detail, 'ثبت بازبینی اولیه')
-        self.assertContains(detail, 'فقط شناسه آخرین بازبینی موجود بررسی می‌شود')
+        self.assertContains(detail, 'فقط شناسه آخرین بازبینی موجود برای تشخیص تغییر بررسی می‌شود')
         self.assertContains(detail, 'تغییر هم‌زمان یا بعدی تاریخچه همچنان ممکن است')
         self.assert_private(detail)
         self.assertEqual(self.review(candidate).status_code, 302)

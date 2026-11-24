@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from itertools import product
 
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models.signals import pre_save
 from django.test import TestCase
 
@@ -20,6 +21,17 @@ class PresentationPartialValidationTests(TestCase):
 
     def copies(self):
         return (ProductPresentation.objects.get(pk=self.product.pk), ProductPresentation.objects.get(pk=self.product.pk))
+
+    def test_unsaved_instance_cannot_be_partially_updated(self):
+        unsaved = ProductPresentation(
+            name_fa='محصول ساختگی', manufacturer='سازنده', strength='5 mg',
+            dosage_form='قرص', package_description='10 عدد', source_name='منبع',
+            source_url='https://example.org/synthetic')
+        before = ProductPresentation.objects.count()
+        with self.assertRaises(ValueError), transaction.atomic():
+            unsaved.save(update_fields=['name_fa'])
+        self.assertIsNone(unsaved.pk)
+        self.assertEqual(ProductPresentation.objects.count(), before)
 
     def test_publication_date_prospective_truth_table(self):
         date = datetime(2026, 1, 1, tzinfo=timezone.utc)

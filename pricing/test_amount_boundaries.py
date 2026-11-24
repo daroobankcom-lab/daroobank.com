@@ -37,6 +37,14 @@ class PriceAmountBoundaryTests(SimpleTestCase):
             with self.subTest(value=value), self.assertRaises(ImportValidationError):
                 amount_to_rial('1', value)
 
+    def test_toman_upper_boundary_fraction_and_leading_zeroes(self):
+        self.assertEqual(amount_to_rial('000922337203685477580.7000', 'TOMAN'), MAX_RIAL)
+        for amount in ('922337203685477580.8', '922337203685477580.70001',
+                       '922337203685477581', '000.000'):
+            with self.subTest(amount=amount), self.assertRaises(ImportValidationError):
+                amount_to_rial(amount, 'TOMAN')
+        self.assertEqual(amount_to_rial('000.10000', 'TOMAN'), 1)
+
     def test_expanded_unicode_amounts_against_integer_arithmetic(self):
         rng = random.Random(24011226)
         chars = '0123456789۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩⑩⑪⑳㉚㊿'

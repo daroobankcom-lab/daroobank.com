@@ -218,4 +218,6 @@
 
 - [0109: isolated test-database collision](0109-isolated-test-database-collision.md) — development-only implementation, 24 November 2026.
 
+- [0110: PostgreSQL session-access clues](0110-postgresql-session-access-clues.md) — development-only implementation, 24 November 2026.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

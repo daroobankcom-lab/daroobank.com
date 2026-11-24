@@ -284,6 +284,8 @@ CI run 45171291395 failed the forced-colors home skip-link visibility assertion;
 
 ## PostgreSQL readiness retry window
 
+`daroobank/test_postgresql_access.py` tests read-only aggregate access clues, error gates, synthetic role switching, a column-only grant missed by table-level counts, and superuser bypass of forced RLS; selected privileged test cases skip without a synthetic superuser. These are not a privilege audit or production security validation; see [ADR 0110](ARCHITECTURE_DECISIONS/0110-postgresql-session-access-clues.md).
+
 `daroobank/test_postgresql.py` checks actual synthetic success and an absent database, plus deterministic no-late-retry, zero-window and unexpected-exception behavior. It does not simulate all network hangs or establish a hard wall-clock deadline; see [ADR 0076](ARCHITECTURE_DECISIONS/0076-postgresql-readiness-window.md).
 
 ## Isolated general PostgreSQL tests

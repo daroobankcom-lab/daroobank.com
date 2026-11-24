@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL session-access clues
+
+**Changes:** Added a development-only, one-statement aggregate inspection of selected current-role attributes, table-level privileges, RLS flags and server-observed transport. Synthetic restricted-role and RLS-bypass tests cover selected limits.
+
+**Limits:** It reports facts, not a security pass or production authorization; column grants, role escalation paths, policies and end-to-end transport remain outside scope. See ADR 0110.
+
 ## 2026-11-24 — isolated PostgreSQL test-database collision guard
 
 **Changes:** The synthetic, browser and restore test settings use a PostgreSQL test-creation backend that fails on a colliding name without dropping or reusing the pre-existing database. Real synthetic canaries cover all three settings with and without `--noinput`.

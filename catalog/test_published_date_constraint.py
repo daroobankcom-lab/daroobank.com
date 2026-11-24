@@ -19,7 +19,7 @@ class PublishedDateConstraintTests(TestCase):
             source_url='https://example.org/synthetic', published=False, verified_at=None)
 
     def test_database_rejects_invalid_publication_even_when_model_save_is_bypassed(self):
-        for writer in ('update', 'sql', 'bulk_create'):
+        for writer in ('update', 'sql', 'bulk_create', 'bulk_update'):
             with self.subTest(writer=writer), transaction.atomic():
                 with self.assertRaises(IntegrityError) as error, transaction.atomic():
                     if writer == 'update':
@@ -28,16 +28,31 @@ class PublishedDateConstraintTests(TestCase):
                         with connection.cursor() as cursor:
                             cursor.execute('UPDATE catalog_productpresentation SET published = true WHERE id = %s',
                                            [self.product.pk])
-                    else:
+                    elif writer == 'bulk_create':
                         ProductPresentation.objects.bulk_create([ProductPresentation(
                             name_fa='ساختگی', manufacturer='ساختگی', strength='1 mg', dosage_form='قرص',
                             package_description='10 عدد', source_name='ساختگی', source_url='https://example.org',
                             published=True, verified_at=None)])
+                    else:
+                        self.product.published = True
+                        ProductPresentation.objects.bulk_update([self.product], ['published'])
                 self.assertEqual(getattr(error.exception.__cause__, 'sqlstate', None), '23514')
                 self.product.refresh_from_db()
                 self.assertFalse(self.product.published)
                 self.assertIsNone(self.product.verified_at)
                 self.assertEqual(ProductPresentation.objects.count(), 1)
+
+    def test_invalid_row_rolls_back_a_multirow_bulk_update(self):
+        date = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        other = ProductPresentation.objects.create(
+            name_fa='فرآورده ساختگی دوم', manufacturer='سازنده', strength='1 mg', dosage_form='قرص',
+            package_description='10 عدد', source_name='منبع', source_url='https://example.org',
+            verified_at=date, published=False)
+        before = list(ProductPresentation.objects.order_by('pk').values_list('pk', 'published', 'verified_at'))
+        self.product.published = other.published = True
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ProductPresentation.objects.bulk_update([other, self.product], ['published'])
+        self.assertEqual(list(ProductPresentation.objects.order_by('pk').values_list('pk', 'published', 'verified_at')), before)
 
     def test_all_other_boolean_date_combinations_are_permitted(self):
         date = datetime(2026, 1, 1, tzinfo=timezone.utc)

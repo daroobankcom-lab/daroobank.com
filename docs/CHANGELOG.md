@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — PostgreSQL auto-field generation clues
+
+**Changes:** The read-only inspector checks selected model and recorder auto fields for an owned sequence and supported identity or legacy-default clues; synthetic DDL covers missing/always identity, missing ownership and missing default.
+
+**Limits:** The legacy default expression and current sequence value are not verified; a wrong default can pass. See ADR 0093.
+
 ## 2026-11-24 — PostgreSQL migration-recorder primary-key clue
 
 **Changes:** The catalog inspector checks selected primary-key index properties for Django's migration recorder; a synthetic DDL test removes the key and substitutes a standalone unique index.

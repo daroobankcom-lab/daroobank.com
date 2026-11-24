@@ -119,6 +119,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0092: PostgreSQL migration-recorder primary key](0092-postgresql-migration-recorder-primary-key.md) — development-only implementation, 24 November 2026.
 
+- [0093: PostgreSQL auto-field generation clues](0093-postgresql-auto-field-generation.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

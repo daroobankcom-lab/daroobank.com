@@ -1,6 +1,6 @@
 # ADR 0092: PostgreSQL migration-recorder primary-key clue
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0089](0089-postgresql-migration-recorder-columns.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0089](0089-postgresql-migration-recorder-columns.md). [ADR 0093](0093-postgresql-auto-field-generation.md) adds limited auto-generation clues, not sequence-state verification.
 
 ## Decision
 

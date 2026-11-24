@@ -5,7 +5,7 @@ import re
 from django.apps import apps
 from django.db import connection
 from django.db.migrations.recorder import MigrationRecorder
-from django.db.models import CheckConstraint, Index, UniqueConstraint
+from django.db.models import AutoField, BigAutoField, CheckConstraint, Index, SmallAutoField, UniqueConstraint
 
 
 def expected_tables():
@@ -130,6 +130,20 @@ def expected_columns():
     return sorted(result)
 
 
+def expected_auto_fields():
+    """Auto-numbered local fields, including the separate migration recorder model."""
+    result = set()
+    for model in [*apps.get_models(include_auto_created=True), MigrationRecorder.Migration]:
+        meta = model._meta
+        if not meta.managed or meta.proxy or meta.swapped:
+            continue
+        for field in meta.local_fields:
+            if isinstance(field, AutoField) and field.column:
+                supported = type(field) in (AutoField, BigAutoField, SmallAutoField)
+                result.add((meta.db_table, field.column, supported))
+    return sorted(result)
+
+
 def expected_field_indexes():
     """Local fields whose current model metadata explicitly requests a DB index."""
     result = set()
@@ -160,7 +174,7 @@ def expected_named_indexes():
 
 
 def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constraints=(), columns=(), field_indexes=(),
-                   named_indexes=(), unsupported_uniques=()):
+                   named_indexes=(), unsupported_uniques=(), auto_fields=()):
     """Return aggregate clues from one PostgreSQL statement, never catalog names or data.
 
     Resolution follows the active search path. This is not a comparison to the
@@ -204,6 +218,9 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             ), expected_named AS (
                 SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, index_name, columns, descending, supported
                 FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS i(table_name text, index_name text, columns jsonb, descending jsonb, supported boolean)
+            ), expected_auto AS (
+                SELECT pg_catalog.to_regclass(pg_catalog.format('%%I', table_name)) AS table_oid, column_name, supported
+                FROM pg_catalog.jsonb_to_recordset(%s::jsonb) AS a(table_name text, column_name text, supported boolean)
             )
             SELECT
                 (SELECT COUNT(*) FROM names),
@@ -307,7 +324,19 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
                       AND (SELECT pg_catalog.array_agg((o.option & 2) = 2 ORDER BY o.ordinal)
                            FROM pg_catalog.unnest(i.indoption::smallint[]) WITH ORDINALITY AS o(option, ordinal)
                            WHERE o.ordinal <= i.indnkeyatts)
-                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(e.descending)::boolean)))
+                          = ARRAY(SELECT pg_catalog.jsonb_array_elements_text(e.descending)::boolean))),
+                (SELECT COUNT(*) FROM expected_auto),
+                (SELECT COUNT(*) FROM expected_auto WHERE NOT supported),
+                (SELECT COUNT(*) FROM expected_auto e WHERE e.supported AND NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_class c
+                    JOIN tables t ON t.oid = c.oid
+                    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                    JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attname = e.column_name
+                        AND a.attnum > 0 AND NOT a.attisdropped
+                    LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
+                    WHERE c.oid = e.table_oid
+                      AND (a.attidentity = 'd' OR (a.attidentity = '' AND d.oid IS NOT NULL))
+                      AND pg_catalog.pg_get_serial_sequence(pg_catalog.format('%%I.%%I', n.nspname, c.relname), a.attname) IS NOT NULL))
         ''', [table_names,
               json.dumps([dict(zip(('src', 'col', 'dst', 'dst_col'), item)) for item in foreign_keys]),
               json.dumps([{'name': table, 'columns': columns, 'is_primary': primary}
@@ -319,7 +348,9 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
               json.dumps([{'table_name': table, 'column_name': name} for table, name in field_indexes]),
               json.dumps([{'table_name': table, 'index_name': name, 'columns': keys,
                            'descending': descending, 'supported': supported}
-                          for table, name, keys, descending, supported in named_indexes])])
+                          for table, name, keys, descending, supported in named_indexes]),
+              json.dumps([{'table_name': table, 'column_name': column, 'supported': supported}
+                          for table, column, supported in auto_fields])])
         values = cursor.fetchone()
     keys = ('expected_tables', 'unresolved_tables', 'non_table_relations', 'unvalidated_constraints',
             'invalid_indexes', 'disabled_triggers', 'expected_foreign_keys', 'missing_foreign_keys',
@@ -328,7 +359,7 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             'column_nullability_mismatches', 'unsupported_column_types', 'skipped_auto_m2m_pk_types',
             'skipped_migration_pk_types', 'column_type_mismatches',
             'expected_field_indexes', 'missing_field_indexes', 'expected_named_indexes', 'unsupported_named_indexes',
-            'missing_named_indexes')
+            'missing_named_indexes', 'expected_auto_fields', 'unsupported_auto_fields', 'missing_auto_generation')
     result = dict(zip(keys, values))
     # This is a model-metadata coverage count, not a separate database query.
     result['unsupported_unique_constraints'] = len(unsupported_uniques)
@@ -337,5 +368,6 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
         'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
         'nondefault_action_foreign_keys', 'missing_unique_keys', 'unsupported_unique_constraints', 'missing_check_constraints', 'missing_columns',
         'column_nullability_mismatches', 'unsupported_column_types', 'column_type_mismatches',
-        'missing_field_indexes', 'unsupported_named_indexes', 'missing_named_indexes')) else 'no_selected_issues')
+        'missing_field_indexes', 'unsupported_named_indexes', 'missing_named_indexes', 'unsupported_auto_fields',
+        'missing_auto_generation')) else 'no_selected_issues')
     return result

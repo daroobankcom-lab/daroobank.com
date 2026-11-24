@@ -5,11 +5,11 @@ from unittest.mock import patch
 
 from django.core.management import CommandError, call_command
 from django.db import DatabaseError, connection, transaction
-from django.db.models import Deferrable, F, Q, UniqueConstraint
+from django.db.models import AutoField, Deferrable, F, Q, UniqueConstraint
 from django.test import TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from .postgresql_inspection import (expected_check_constraints, expected_columns, expected_field_indexes,
+from .postgresql_inspection import (expected_auto_fields, expected_check_constraints, expected_columns, expected_field_indexes,
                                      expected_foreign_keys, expected_named_indexes, expected_tables, expected_unique_keys,
                                      inspect_schema, unsupported_unique_constraints)
 
@@ -32,6 +32,8 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertEqual(report['expected_columns'], len(expected_columns()))
         self.assertGreater(report['expected_columns'], 0)
         self.assertEqual(report['skipped_migration_pk_types'], 1)
+        self.assertEqual(report['expected_auto_fields'], len(expected_auto_fields()))
+        self.assertGreater(report['expected_auto_fields'], 0)
         self.assertEqual(report['expected_field_indexes'], len(expected_field_indexes()))
         self.assertGreater(report['expected_field_indexes'], 0)
         self.assertEqual(report['expected_named_indexes'], len(expected_named_indexes()))
@@ -40,7 +42,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                     'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys',
                     'unsupported_unique_constraints', 'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches',
                     'column_type_mismatches', 'unsupported_column_types', 'missing_field_indexes',
-                    'unsupported_named_indexes', 'missing_named_indexes'):
+                    'unsupported_named_indexes', 'missing_named_indexes', 'unsupported_auto_fields', 'missing_auto_generation'):
             self.assertEqual(report[key], 0, key)
         self.assertEqual(set(connection.introspection.table_names()), before)
         self.assertIn('sources_sourceclaim', expected_tables())
@@ -54,7 +56,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             with CaptureQueriesContext(connection) as queries:
                 report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
                                         expected_check_constraints(), expected_columns(), expected_field_indexes(),
-                                        expected_named_indexes(), unsupported_unique_constraints())
+                                        expected_named_indexes(), unsupported_unique_constraints(), expected_auto_fields())
             self.assertEqual(len(queries), 1)
             self.assertEqual(report['status'], 'no_selected_issues')
 
@@ -396,6 +398,89 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
                 self.assertEqual(report[finding], 1)
                 self.assertEqual(report['status'], 'attention')
                 transaction.set_rollback(True)
+
+    def test_missing_or_always_auto_generation_is_reported(self):
+        cases = [('sources_sourceclaim', 'DROP IDENTITY'), ('sources_sourceclaim', 'SET GENERATED ALWAYS'),
+                 ('django_migrations', 'DROP IDENTITY'), ('auth_user_groups', 'DROP IDENTITY')]
+        for table, alteration in cases:
+            with self.subTest(table=table, alteration=alteration), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE ' + connection.ops.quote_name(table) + ' ALTER COLUMN id ' + alteration)
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report['missing_auto_generation'], 1)
+                self.assertEqual(report['status'], 'attention')
+                self.assertNotIn(table, output.getvalue())
+                transaction.set_rollback(True)
+
+    def test_unsupported_auto_field_metadata_requires_attention(self):
+        with patch('catalog.management.commands.inspect_postgresql_schema.expected_auto_fields',
+                   return_value=[('synthetic_private_table', 'private_key', False)]):
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['expected_auto_fields'], 1)
+            self.assertEqual(report['unsupported_auto_fields'], 1)
+            self.assertEqual(report['missing_auto_generation'], 0)
+            self.assertEqual(report['status'], 'attention')
+            self.assertNotIn('synthetic_private_table', output.getvalue())
+            self.assertNotIn('private_key', output.getvalue())
+
+    def test_custom_auto_field_subclass_is_counted_as_unsupported(self):
+        from sources.models import SourceClaim
+
+        class CustomAutoField(AutoField):
+            pass
+
+        custom = CustomAutoField(primary_key=True)
+        custom.set_attributes_from_name('synthetic_id')
+        with patch.object(SourceClaim._meta, 'local_fields', [custom]):
+            self.assertIn(('sources_sourceclaim', 'synthetic_id', False), expected_auto_fields())
+
+    def test_legacy_owned_serial_with_default_is_accepted(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id DROP IDENTITY')
+                cursor.execute('CREATE SEQUENCE synthetic_serial OWNED BY sources_sourceclaim.id')
+                cursor.execute("ALTER TABLE sources_sourceclaim ALTER COLUMN id SET DEFAULT nextval('synthetic_serial')")
+            output = io.StringIO()
+            call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['missing_auto_generation'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
+
+    def test_serial_requires_an_owned_sequence_and_a_default(self):
+        for owned, default in ((False, True), (True, False)):
+            with self.subTest(owned=owned, default=default), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id DROP IDENTITY')
+                    cursor.execute('CREATE SEQUENCE synthetic_serial' + (' OWNED BY sources_sourceclaim.id' if owned else ''))
+                    if default:
+                        cursor.execute("ALTER TABLE sources_sourceclaim ALTER COLUMN id SET DEFAULT nextval('synthetic_serial')")
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report['missing_auto_generation'], 1)
+                self.assertEqual(report['status'], 'attention')
+                transaction.set_rollback(True)
+
+    def test_serial_default_expression_is_not_fully_checked(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id DROP IDENTITY')
+                cursor.execute('CREATE SEQUENCE synthetic_serial OWNED BY sources_sourceclaim.id')
+                cursor.execute('ALTER TABLE sources_sourceclaim ALTER COLUMN id SET DEFAULT 42')
+            output = io.StringIO()
+            call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['missing_auto_generation'], 0)
+            self.assertEqual(report['status'], 'no_selected_issues')
+            transaction.set_rollback(True)
 
     def test_migration_recorder_primary_key_constraint_is_required(self):
         with transaction.atomic():

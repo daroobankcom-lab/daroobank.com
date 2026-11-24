@@ -1,21 +1,23 @@
 """Synthetic source-review snapshot checks; never legal or provenance validation."""
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import date
+from threading import Event
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
-from django.db import connection
-from django.test import TestCase, override_settings
+from django.db import close_old_connections, connection, transaction
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from .models import SourceClaim, SourceClaimReview
 from .review_inspection import (BATCH_SIZE, MAX_PK, InvalidReviewInspection,
                                 ReviewInspectionNotFound, classify_review, inspect_reviews)
-from .services import claim_data, fingerprint, record_claim, review_claim
+from .services import claim_data, fingerprint, record_claim, review_claim, snapshot
 
 
 @override_settings(STAFF_PORTAL_ENABLED=True)
@@ -283,3 +285,58 @@ class SourceReviewInspectionTests(TestCase):
         response = self.client.get(reverse('staff_source_review_inspection', args=[1]))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+
+
+class SourceReviewCursorConcurrencyTests(TransactionTestCase):
+    def test_late_commit_with_lower_id_can_fall_behind_forward_cursor(self):
+        # This uses a direct test-only insertion that bypasses the review writer;
+        # it demonstrates one non-snapshot cursor limitation, not supported usage.
+        User = get_user_model()
+        author = User.objects.create_user('synthetic-cursor-author', is_staff=True)
+        reviewer = User.objects.create_user('synthetic-cursor-reviewer', is_staff=True)
+        author.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                    codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        data = {'source_name': 'منبع ساختگی', 'source_url': 'https://example.org/cursor-race',
+                'owner': 'مالک ساختگی', 'evidence_url': 'https://example.org/cursor-evidence',
+                'evidence_note': '', 'claims_collection': True, 'claims_storage': False,
+                'claims_publication': False, 'starts_on': None, 'expires_on': None}
+        claim, _ = record_claim(actor=author, data=data)
+        fields = {'claim_id': claim.pk, 'reviewer_id': reviewer.pk, 'decision': 'defer',
+                  'reason': 'دلیل ساختگی برای بررسی آزمایشی', 'claim_payload_sha256': claim.payload_sha256,
+                  'review_snapshot': {**snapshot(data), 'recorded_by_id': author.pk}}
+        inserted, release = Event(), Event()
+        held = {}
+
+        def late_writer():
+            close_old_connections()
+            try:
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET LOCAL statement_timeout = '10s'")
+                    held['pk'] = SourceClaimReview.objects.create(**fields).pk
+                    inserted.set()
+                    if not release.wait(10):
+                        raise TimeoutError('Synthetic cursor-race barrier timed out')
+                return held['pk']
+            finally:
+                connection.close()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(late_writer)
+            try:
+                self.assertTrue(inserted.wait(10), 'Pending review was not inserted')
+                later = SourceClaimReview.objects.bulk_create([SourceClaimReview(**fields) for _ in range(BATCH_SIZE + 1)])
+                self.assertGreater(later[0].pk, held['pk'])
+                first = inspect_reviews(actor=author, claim_id=claim.pk)
+                self.assertEqual(first['scanned'], BATCH_SIZE)
+                self.assertIsNotNone(first['next_after'])
+                self.assertGreater(first['next_after'], held['pk'])
+                self.assertNotIn(held['pk'], [row['id'] for row in first['rows']])
+            finally:
+                release.set()
+            self.assertEqual(future.result(timeout=15), held['pk'])
+        continuation = inspect_reviews(actor=author, claim_id=claim.pk, after=first['next_after'])
+        self.assertNotIn(held['pk'], [row['id'] for row in continuation['rows']])
+        self.assertEqual([row['id'] for row in continuation['rows']], [later[-1].pk])
+        fresh = inspect_reviews(actor=author, claim_id=claim.pk)
+        self.assertEqual(fresh['rows'][0]['id'], held['pk'])

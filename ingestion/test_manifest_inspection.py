@@ -1,14 +1,16 @@
 """Synthetic tests for private, bounded per-receipt consistency scans."""
 import io
 import random
+from concurrent.futures import ThreadPoolExecutor
 from copy import copy
+from threading import Event
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
-from django.db import connection, transaction
-from django.test import TestCase, override_settings
+from django.db import close_old_connections, connection, transaction
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
@@ -347,3 +349,51 @@ class ManifestInspectionTests(TestCase):
         user.groups.add(group)
         self.assertEqual(self.scan(self.price_receipt, user)['status'], 'available')
         with self.assertRaises(ReceiptNotFound): self.scan(self.product_receipt, user)
+
+
+class ManifestInspectionConcurrencyTests(TransactionTestCase):
+    def test_read_committed_scan_can_observe_deletion_after_structure_check(self):
+        # Demonstrate one nonparticipating bulk mutation, not a supported writer
+        # or an isolation fix. Each thread uses its own PostgreSQL connection.
+        from . import manifest_inspection
+        user = get_user_model().objects.create_user('synthetic-manifest-race', is_staff=True)
+        user.user_permissions.add(*Permission.objects.filter(content_type__app_label='catalog',
+                                  codename__in=['view_productcandidate', 'add_productcandidate']))
+        row = dict(source_record_id='synthetic-race', name_fa='محصول مصنوعی', name_en='',
+                   manufacturer='سازنده', strength='5 mg', dosage_form='قرص',
+                   package_description='10 عدد', irc='001')
+        receipt = stage_product_with_receipt(io.BytesIO(make_csv([row])), 'منبع مصنوعی',
+            'https://example.org/manifest-race', actor=user, rights_attested=True)[1]
+        aggregated, release = Event(), Event()
+        original = manifest_inspection.manifest_structure
+
+        def pause_after_aggregate(observed):
+            status = original(observed)
+            aggregated.set()
+            if not release.wait(10):
+                raise TimeoutError('Synthetic manifest race barrier timed out')
+            return status
+
+        def reader():
+            close_old_connections()
+            try:
+                actor = get_user_model().objects.get(pk=user.pk)
+                with connection.cursor() as cursor:
+                    cursor.execute("SET statement_timeout = '10s'")
+                return inspect_manifest(actor=actor, receipt_id=receipt.pk)
+            finally:
+                connection.close()
+
+        with patch('ingestion.manifest_inspection.manifest_structure', side_effect=pause_after_aggregate):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(reader)
+                try:
+                    self.assertTrue(aggregated.wait(10), 'Reader did not reach aggregate barrier')
+                    deleted, _ = ImportReceiptItem.objects.filter(receipt=receipt).delete()
+                    self.assertEqual(deleted, 1)
+                finally:
+                    release.set()
+                report = future.result(timeout=15)
+        self.assertEqual((report['status'], report['scanned'], report['rows']), ('available', 0, []))
+        later = inspect_manifest(actor=user, receipt_id=receipt.pk)
+        self.assertEqual((later['status'], later['scanned'], later['rows']), ('invalid', 0, []))

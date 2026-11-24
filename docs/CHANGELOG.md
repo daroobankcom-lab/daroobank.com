@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-24 — unsupported unique declarations
+
+**Changes:** The read-only schema inspector reports unsupported managed-model unique declarations as an aggregate attention count instead of silently omitting them. Synthetic metadata tests cover conditions, expressions, include, operator classes, explicit null semantics, deferrability and subclasses.
+
+**Limits:** This is a model-metadata coverage clue, not a comparison of those definitions or full schema equivalence. See ADR 0086.
+
 ## 2026-11-24 — PostgreSQL selected unique-key null semantics
 
 **Changes:** The inspector flags `NULLS NOT DISTINCT` substitutes for selected model unique keys expecting PostgreSQL's default semantics; a synthetic PostgreSQL 16 DDL test exercises the discrepancy.

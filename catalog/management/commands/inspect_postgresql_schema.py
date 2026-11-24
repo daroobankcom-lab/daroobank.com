@@ -7,7 +7,7 @@ from django.db import DatabaseError, connection
 
 from daroobank.postgresql_inspection import (expected_check_constraints, expected_columns, expected_field_indexes,
                                              expected_foreign_keys, expected_named_indexes, expected_tables,
-                                             expected_unique_keys, inspect_schema)
+                                             expected_unique_keys, inspect_schema, unsupported_unique_constraints)
 
 
 class Command(BaseCommand):
@@ -19,7 +19,7 @@ class Command(BaseCommand):
         try:
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
                                     expected_check_constraints(), expected_columns(), expected_field_indexes(),
-                                    expected_named_indexes())
+                                    expected_named_indexes(), unsupported_unique_constraints())
         except DatabaseError as exc:
             raise CommandError('PostgreSQL catalog inspection could not be completed.') from exc
         self.stdout.write(json.dumps(report, sort_keys=True))

@@ -34,8 +34,14 @@ def expected_foreign_keys():
     return sorted(result)
 
 
+def _supported_unique_constraint(constraint):
+    return (type(constraint) is UniqueConstraint and bool(constraint.fields) and not constraint.expressions
+            and constraint.condition is None and not constraint.include and not constraint.opclasses
+            and constraint.nulls_distinct is None and constraint.deferrable is None)
+
+
 def expected_unique_keys():
-    """Simple managed-model unique keys; ignore partial/expression/custom variants."""
+    """Selected simple managed-model unique keys; unsupported variants are counted separately."""
     result = set()
     for model in apps.get_models(include_auto_created=True):
         meta = model._meta
@@ -47,10 +53,21 @@ def expected_unique_keys():
         for group in meta.unique_together:
             result.add((meta.db_table, tuple(meta.get_field(name).column for name in group), False))
         for constraint in meta.constraints:
-            if (isinstance(constraint, UniqueConstraint) and constraint.fields and not constraint.expressions
-                    and constraint.condition is None and not constraint.include and not constraint.opclasses
-                    and constraint.nulls_distinct is None):
+            if _supported_unique_constraint(constraint):
                 result.add((meta.db_table, tuple(meta.get_field(name).column for name in constraint.fields), False))
+    return sorted(result)
+
+
+def unsupported_unique_constraints():
+    """Named model unique declarations excluded from the selected key comparison."""
+    result = set()
+    for model in apps.get_models(include_auto_created=True):
+        meta = model._meta
+        if not meta.managed or meta.proxy or meta.swapped:
+            continue
+        for constraint in meta.constraints:
+            if isinstance(constraint, UniqueConstraint) and not _supported_unique_constraint(constraint):
+                result.add((meta.db_table, constraint.name))
     return sorted(result)
 
 
@@ -130,7 +147,8 @@ def expected_named_indexes():
     return sorted(result)
 
 
-def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constraints=(), columns=(), field_indexes=(), named_indexes=()):
+def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constraints=(), columns=(), field_indexes=(),
+                   named_indexes=(), unsupported_uniques=()):
     """Return aggregate clues from one PostgreSQL statement, never catalog names or data.
 
     Resolution follows the active search path. This is not a comparison to the
@@ -287,10 +305,12 @@ def inspect_schema(table_names, foreign_keys=(), unique_keys=(), check_constrain
             'expected_field_indexes', 'missing_field_indexes', 'expected_named_indexes', 'unsupported_named_indexes',
             'missing_named_indexes')
     result = dict(zip(keys, values))
+    # This is a model-metadata coverage count, not a separate database query.
+    result['unsupported_unique_constraints'] = len(unsupported_uniques)
     result['status'] = ('attention' if any(result[key] for key in (
         'unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes',
         'disabled_triggers', 'missing_foreign_keys', 'nondeferred_foreign_keys',
-        'nondefault_action_foreign_keys', 'missing_unique_keys', 'missing_check_constraints', 'missing_columns',
+        'nondefault_action_foreign_keys', 'missing_unique_keys', 'unsupported_unique_constraints', 'missing_check_constraints', 'missing_columns',
         'column_nullability_mismatches', 'unsupported_column_types', 'column_type_mismatches',
         'missing_field_indexes', 'unsupported_named_indexes', 'missing_named_indexes')) else 'no_selected_issues')
     return result

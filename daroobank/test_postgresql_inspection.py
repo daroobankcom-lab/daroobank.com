@@ -5,12 +5,13 @@ from unittest.mock import patch
 
 from django.core.management import CommandError, call_command
 from django.db import DatabaseError, connection, transaction
+from django.db.models import Deferrable, F, Q, UniqueConstraint
 from django.test import TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
 from .postgresql_inspection import (expected_check_constraints, expected_columns, expected_field_indexes,
                                      expected_foreign_keys, expected_named_indexes, expected_tables, expected_unique_keys,
-                                     inspect_schema)
+                                     inspect_schema, unsupported_unique_constraints)
 
 
 @override_settings(DEBUG=True)
@@ -36,7 +37,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
         self.assertGreater(report['expected_named_indexes'], 0)
         for key in ('unresolved_tables', 'non_table_relations', 'unvalidated_constraints', 'invalid_indexes', 'disabled_triggers',
                     'missing_foreign_keys', 'nondeferred_foreign_keys', 'nondefault_action_foreign_keys', 'missing_unique_keys',
-                    'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches',
+                    'unsupported_unique_constraints', 'missing_check_constraints', 'missing_columns', 'column_nullability_mismatches',
                     'column_type_mismatches', 'unsupported_column_types', 'missing_field_indexes',
                     'unsupported_named_indexes', 'missing_named_indexes'):
             self.assertEqual(report[key], 0, key)
@@ -52,7 +53,7 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             with CaptureQueriesContext(connection) as queries:
                 report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
                                         expected_check_constraints(), expected_columns(), expected_field_indexes(),
-                                        expected_named_indexes())
+                                        expected_named_indexes(), unsupported_unique_constraints())
             self.assertEqual(len(queries), 1)
             self.assertEqual(report['status'], 'no_selected_issues')
 
@@ -172,6 +173,62 @@ class PostgreSQLSchemaInspectionTests(TransactionTestCase):
             self.assertEqual(report['status'], 'attention')
             self.assertNotIn('synthetic_nonunique', output.getvalue())
             transaction.set_rollback(True)
+
+    def test_unsupported_model_unique_declarations_require_attention(self):
+        from sources.models import SourceClaim
+        declarations = [
+            UniqueConstraint(fields=['owner'], condition=Q(claims_collection=True), name='synthetic_partial_unique'),
+            UniqueConstraint(F('owner'), name='synthetic_expression_unique'),
+            UniqueConstraint(fields=['owner'], include=['source_name'], name='synthetic_included_unique'),
+            UniqueConstraint(fields=['owner'], opclasses=['varchar_pattern_ops'], name='synthetic_opclass_unique'),
+            UniqueConstraint(fields=['owner'], nulls_distinct=False, name='synthetic_null_unique'),
+            UniqueConstraint(fields=['owner'], deferrable=Deferrable.DEFERRED, name='synthetic_deferred_unique'),
+        ]
+        for declaration in declarations:
+            with self.subTest(name=declaration.name), patch.object(
+                    SourceClaim._meta, 'constraints', [*SourceClaim._meta.constraints, declaration]):
+                output = io.StringIO()
+                with self.assertRaises(CommandError):
+                    call_command('inspect_postgresql_schema', stdout=output)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report['unsupported_unique_constraints'], 1)
+                self.assertEqual(report['missing_unique_keys'], 0)
+                self.assertEqual(report['status'], 'attention')
+                self.assertNotIn(declaration.name, output.getvalue())
+
+    def test_unsupported_unique_subclass_is_counted_without_names(self):
+        from sources.models import SourceClaim
+
+        class CustomUnique(UniqueConstraint):
+            pass
+
+        declarations = [CustomUnique(fields=['owner'], name='synthetic_custom_unique'),
+                        UniqueConstraint(fields=['owner'], nulls_distinct=True, name='synthetic_true_unique')]
+        with patch.object(SourceClaim._meta, 'constraints', [*SourceClaim._meta.constraints, *declarations]):
+            output = io.StringIO()
+            with self.assertRaises(CommandError):
+                call_command('inspect_postgresql_schema', stdout=output)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['unsupported_unique_constraints'], 2)
+            self.assertEqual(report['missing_unique_keys'], 0)
+            self.assertEqual(report['status'], 'attention')
+            for declaration in declarations:
+                self.assertNotIn(declaration.name, output.getvalue())
+
+    def test_unsupported_unique_is_reported_in_single_read_only_statement(self):
+        from sources.models import SourceClaim
+        constraint = UniqueConstraint(fields=['owner'], nulls_distinct=False, name='synthetic_readonly_unique')
+        with patch.object(SourceClaim._meta, 'constraints', [*SourceClaim._meta.constraints, constraint]):
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute('SET TRANSACTION READ ONLY')
+                with CaptureQueriesContext(connection) as queries:
+                    report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
+                        expected_check_constraints(), expected_columns(), expected_field_indexes(),
+                        expected_named_indexes(), unsupported_unique_constraints())
+                self.assertEqual(len(queries), 1)
+                self.assertEqual(report['unsupported_unique_constraints'], 1)
+                self.assertEqual(report['status'], 'attention')
 
     def test_partial_unique_index_does_not_replace_full_unique(self):
         with transaction.atomic():

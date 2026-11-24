@@ -105,6 +105,8 @@ Record future decisions with context, alternatives, consequences and status. Sup
 
 - [0085: PostgreSQL unique-key null semantics](0085-postgresql-unique-null-semantics.md) — development-only implementation, 24 November 2026.
 
+- [0086: unsupported unique declarations](0086-unsupported-unique-declarations.md) — development-only implementation, 24 November 2026.
+
 - [0016: bounded clinical technical inspection](0016-clinical-technical-inspection.md) — development-only implementation, 22 November 2026.
 
 - [0017: batched clinical technical inspection](0017-batched-clinical-inspection.md) — development-only implementation, 22 November 2026.

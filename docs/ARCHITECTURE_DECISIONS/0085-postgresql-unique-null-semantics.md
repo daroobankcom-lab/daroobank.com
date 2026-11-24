@@ -1,6 +1,6 @@
 # ADR 0085: selected PostgreSQL unique-key null semantics
 
-Status: development-only implementation, 24 November 2026; extends [ADR 0073](0073-postgresql-unique-key-clues.md).
+Status: development-only implementation, 24 November 2026; extends [ADR 0073](0073-postgresql-unique-key-clues.md). [ADR 0086](0086-unsupported-unique-declarations.md) adds an unsupported-declaration count, but does not compare those definitions.
 
 ## Decision
 

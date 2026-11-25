@@ -356,4 +356,6 @@
 
 - [0178: clinical child author status](0178-clinical-child-author-status.md) — development-only bounded preview.
 
+- [0179: disabled raw inputs](0179-disabled-raw-inputs.md) — shared form compatibility.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

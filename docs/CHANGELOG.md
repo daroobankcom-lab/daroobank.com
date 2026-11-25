@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — respect disabled form fields
+
+**Changes:** Shared selected raw-input checks ignore request values for server-disabled fields, consistent with Django's initial-value semantics. Enabled fields retain duplicate and control rejection.
+
+**Limits:** No current workflow was made disabled; other fields and direct service calls remain outside scope. See ADR 0179.
+
 ## 2026-11-25 — clinical child preview author status
 
 **Changes:** The capped clinical child preview distinguishes a missing current author account from invalid or oversized child data using one batched existence check.

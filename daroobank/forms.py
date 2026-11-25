@@ -55,10 +55,15 @@ class ExplicitBooleanField(forms.BooleanField):
 
 def _duplicate_field(form, name):
     """Only selected single-value fields use this check, not multi-selects."""
-    return hasattr(form.data, 'getlist') and len(form.data.getlist(form.add_prefix(name))) > 1
+    return (not form.fields[name].disabled and hasattr(form.data, 'getlist')
+            and len(form.data.getlist(form.add_prefix(name))) > 1)
 
 
 def _check_raw_field(form, name, invalid_control):
+    # Like Django's own field cleaning, disabled fields use the server's
+    # initial value; arbitrary request data must not alter or invalidate it.
+    if form.fields[name].disabled:
+        return
     if _duplicate_field(form, name):
         form.add_error(name, 'این مقدار بیش از یک بار ارسال شده است.')
         return
@@ -107,7 +112,8 @@ class SourceUploadRawControlsMixin(RawControlsMixin):
 
     def clean(self):
         cleaned = super().clean()
-        if (hasattr(self.files, 'getlist') and len(self.files.getlist(self.add_prefix('csv_file'))) > 1):
+        if (not self.fields['csv_file'].disabled and hasattr(self.files, 'getlist')
+                and len(self.files.getlist(self.add_prefix('csv_file'))) > 1):
             self.add_error('csv_file', 'بیش از یک فایل ارسال شده است.')
         return cleaned
 

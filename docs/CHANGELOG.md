@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — reject repeated staff-login credentials
+
+**Changes:** The development staff login form rejects repeated enabled username/password values before invoking an authentication backend, preserving the generic error and existing sessions.
+
+**Limits:** Other parameters and authentication routes remain outside this check; see ADR 0182.
+
 ## 2026-11-25 — opt-in synthetic staff-login throttle
 
 **Changes:** An optional development-only shared PostgreSQL fixed-window throttle limits CSRF-accepted staff-login POSTs by pseudonymized server client address. A dry-run-first, bounded synthetic maintenance command removes older windows when explicitly requested.

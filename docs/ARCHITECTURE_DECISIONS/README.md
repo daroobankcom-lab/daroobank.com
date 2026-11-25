@@ -362,4 +362,6 @@
 
 - [0181: development staff-login throttle](0181-development-staff-login-throttle.md) — opt-in synthetic defense in depth.
 
+- [0182: repeated staff-login credentials](0182-repeated-staff-login-credentials.md) — narrow form hardening.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

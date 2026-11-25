@@ -125,6 +125,15 @@ class StaffAuthenticationForm(AuthenticationForm):
         # keyboard and screen-reader users. Leave the browser's initial focus.
         self.fields['username'].widget.attrs.pop('autofocus', None)
 
+    def clean(self):
+        # AuthenticationForm would otherwise silently use the last POST value.
+        # Reject ambiguous credentials before invoking any authentication backend
+        # and preserve the same non-enumerating error as other login failures.
+        if any(_duplicate_field(self, name) for name in ('username', 'password')):
+            self.user_cache = None
+            raise self.get_invalid_login_error()
+        return super().clean()
+
     def confirm_login_allowed(self, user):
         try:
             super().confirm_login_allowed(user)

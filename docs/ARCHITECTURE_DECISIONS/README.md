@@ -358,4 +358,6 @@
 
 - [0179: disabled raw inputs](0179-disabled-raw-inputs.md) — shared form compatibility.
 
+- [0180: opt-in process and database probes](0180-opt-in-process-database-probes.md) — narrow operational foundation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

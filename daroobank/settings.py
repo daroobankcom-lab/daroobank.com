@@ -7,6 +7,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get('DAROOBANK_DEBUG') == '1'
 # The staff portal is restricted to development until MFA, throttling and audit exist.
 STAFF_PORTAL_ENABLED = DEBUG
+# Opt-in only: restrict these public probe paths at the proxy/network layer.
+HEALTH_PROBES_ENABLED = os.environ.get('DAROOBANK_HEALTH_PROBES_ENABLED') == '1'
 SECRET_KEY = os.environ.get('DAROOBANK_SECRET_KEY', '')
 if not SECRET_KEY:
     if DEBUG:
@@ -19,6 +21,7 @@ if DEBUG:
 INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing', 'sources', 'ingestion', 'clinical']
 MIDDLEWARE = [
     'daroobank.middleware.ContentSecurityPolicyMiddleware',
+    'daroobank.middleware.HealthProbePrivacyHeadersMiddleware',
     'daroobank.middleware.EarlyRedirectPrivacyHeadersMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'daroobank.middleware.PublicReadPrivacyHeadersMiddleware',

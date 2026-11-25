@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — opt-in process and PostgreSQL probes
+
+**Changes:** Added default-off, minimal HTTP process liveness and database-connectivity probes; database errors return a generic unavailable response and selected responses are not cached.
+
+**Limits:** The unauthenticated paths require separate network restriction. A successful probe does not verify migrations, backups, workers, data or production readiness; the SQL timeout is not an end-to-end deadline. See ADR 0180.
+
 ## 2026-11-25 — respect disabled form fields
 
 **Changes:** Shared selected raw-input checks ignore request values for server-disabled fields, consistent with Django's initial-value semantics. Enabled fields retain duplicate and control rejection.

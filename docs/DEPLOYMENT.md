@@ -2,6 +2,10 @@
 
 A development Django application, PostgreSQL-only configuration, `.env.example` and a development Compose stack exist; there is no production deployment configuration or infrastructure. The Compose stack and development server are not suitable for production. No deployment has been performed or authorized.
 
+## Optional minimal operational probes
+
+`DAROOBANK_HEALTH_PROBES_ENABLED=1` opts in to unauthenticated `/health/live/` and `/health/ready/` GET/HEAD paths; the default is off. Liveness only checks that the process can return a response, while readiness performs a narrow default PostgreSQL `SELECT 1`, not a complete service or migration check. A failure returns 503 without database details. Network/proxy restrictions, polling limits, host and HTTPS configuration, response deadlines, monitoring and incident ownership remain external responsibilities. A PostgreSQL statement timeout is not a hard request deadline. See [ADR 0180](ARCHITECTURE_DECISIONS/0180-opt-in-process-database-probes.md); enabling these paths is not production authorization.
+
 ## Proposed deployment topology
 
 TLS-terminating reverse proxy → independent Django web processes → PostgreSQL; separate scheduler and bounded worker processes → Redis queue and permitted source endpoints. Use private networks and least-privilege credentials; optionally private object storage for authorized payloads/images. Isolate worker resource quotas and egress so a crawl failure does not take down the web service. Choose provider/region only after review of Iranian connectivity, resilience, sanctions/vendor constraints, data residency and qualified local legal advice.

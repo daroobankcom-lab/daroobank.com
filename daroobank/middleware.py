@@ -48,6 +48,21 @@ def _staff_headers(response):
     response['Referrer-Policy'] = 'same-origin'
 
 
+class HealthProbePrivacyHeadersMiddleware:
+    """Non-cacheable, non-indexable probe responses, including early errors."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if request.path_info == '/health' or request.path_info.startswith('/health/'):
+            response['Cache-Control'] = 'no-store'
+            response['X-Robots-Tag'] = 'noindex, nofollow'
+            response['Referrer-Policy'] = 'no-referrer'
+        return response
+
+
 class EarlyRedirectPrivacyHeadersMiddleware:
     """Apply known-path headers to redirects produced before URL resolution.
 

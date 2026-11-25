@@ -5,8 +5,11 @@ from sources import staff_views as source_staff_views
 from ingestion import staff_views as ingestion_staff_views
 from clinical import staff_views as clinical_staff_views
 from . import staff_views as workspace_views
+from . import health
 
 urlpatterns = [
+    path('health/live/', health.live, name='health_live'),
+    path('health/ready/', health.ready, name='health_ready'),
     path('', views.home, name='home'),
     path('search/', views.search, name='search'),
     path('api/v1/search/', views.search_api, name='search_api'),

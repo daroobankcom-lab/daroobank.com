@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — clinical lock-test coordination
+
+**Changes:** The synthetic oversized clinical writer test signals immediately before its target-row lock rather than before preliminary reads, while retaining the real PostgreSQL blocker and rollback assertions.
+
+**Limits:** One earlier concurrent full-run failure has no confirmed root cause; timing-sensitive tests cannot establish complete concurrency safety. See ADR 0174.
+
 ## 2026-11-25 — checkbox state after form errors
 
 **Changes:** Selected checkboxes now render their validated boolean state after form errors; false or malformed raw values no longer appear checked or echo as the input value.

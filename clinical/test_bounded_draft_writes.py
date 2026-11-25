@@ -178,13 +178,27 @@ class BoundedClinicalWriterRaces(TransactionTestCase):
                     def perform():
                         with connection.cursor() as cursor:
                             cursor.execute('SELECT pg_backend_pid()')
-                            pids.put(cursor.fetchone()[0])
-                        return self.operation(kind, child)
+                            pid = cursor.fetchone()[0]
+                        notified = False
+                        def observe(execute, sql, params, many, context):
+                            nonlocal notified
+                            # Signal immediately before the writer attempts the
+                            # target row lock, not before unrelated account,
+                            # permission or evidence reads have completed.
+                            if (not notified and 'FROM "clinical_clinicaldraft"' in sql
+                                    and 'FOR UPDATE' in sql and params and params[-1] == target.pk):
+                                notified = True
+                                pids.put(pid)
+                            return execute(sql, params, many, context)
+                        with connection.execute_wrapper(observe):
+                            return self.operation(kind, child)
                     with ThreadPoolExecutor(max_workers=1) as pool:
                         with transaction.atomic():
                             ClinicalDraft.objects.filter(pk=target.pk).update(statement='آ' * 100_000)
                             future = pool.submit(self.worker, perform)
-                            self.assertTrue(self.wait_until_blocked(pids.get(timeout=8), future))
+                            pid = pids.get(timeout=12)
+                            self.assertTrue(self.wait_until_blocked(pid, future),
+                                            f'{kind} did not wait for the {target_name} row')
                         with self.assertRaises(DraftConflict):
                             future.result(timeout=10)
                     self.assertEqual(before, (ClinicalDraft.objects.count(), ClinicalDraftReview.objects.count(),

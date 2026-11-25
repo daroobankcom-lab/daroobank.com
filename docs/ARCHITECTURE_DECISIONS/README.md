@@ -346,4 +346,6 @@
 
 - [0173: checkbox bound rendering](0173-checkbox-bound-rendering.md) — development-only form rendering correction.
 
+- [0174: clinical lock observation timing](0174-clinical-lock-observation-timing.md) — test-only coordination.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

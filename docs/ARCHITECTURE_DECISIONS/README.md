@@ -354,4 +354,6 @@
 
 - [0177: deferred presentation save intent](0177-deferred-presentation-save-intent.md) — development data-integrity fix.
 
+- [0178: clinical child author status](0178-clinical-child-author-status.md) — development-only bounded preview.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

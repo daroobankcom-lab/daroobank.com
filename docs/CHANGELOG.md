@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — clinical child preview author status
+
+**Changes:** The capped clinical child preview distinguishes a missing current author account from invalid or oversized child data using one batched existence check.
+
+**Limits:** This is not historical identity or clinical verification and can change immediately. See ADR 0178.
+
 ## 2026-11-25 — preserve implicit partial presentation saves
 
 **Changes:** Deferred same-database presentation saves preserve the originally loaded/assigned field set before projection generation and use the existing locked prospective-row path. A selected concurrent synthetic update no longer gets overwritten by an unloaded stale field.

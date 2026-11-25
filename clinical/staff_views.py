@@ -158,10 +158,16 @@ def detail_response(request, draft, *, form=None, status=200):
         else:
             review.evidence_status = 'unknown'
     children = list(bounded_draft_text(draft.revisions.select_related('parent').order_by('-pk'))[:11]) if valid else []
-    for child in children[:10]:
+    visible_children = children[:10]
+    for child in visible_children:
         materialize_draft_text(child)
         child.text_uninspected = draft_text_uninspected(child)
         child.is_valid = not child.text_uninspected and valid_draft(child)
+    valid_children = [child for child in visible_children if child.is_valid]
+    child_authors = current_account_ids([child.author_id for child in valid_children], using=draft._state.db) if valid_children else set()
+    for child in visible_children:
+        child.preview_status = ('oversized' if child.text_uninspected else 'invalid' if not child.is_valid
+                                else 'author_missing' if child.author_id not in child_authors else 'available')
     return render(request, 'staff/clinical_detail.html', {
         'page_title': 'پیش‌نویس علمی | داروبانک', 'description': 'جزئیات داخلی پیش‌نویس.',
         'noindex': True, 'private_staff': True, 'draft': draft, 'valid': valid, 'reviews': reviews,

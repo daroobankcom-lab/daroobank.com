@@ -53,40 +53,63 @@ class ExplicitBooleanField(forms.BooleanField):
             return True
 
 
+def _duplicate_field(form, name):
+    """Only selected single-value fields use this check, not multi-selects."""
+    return hasattr(form.data, 'getlist') and len(form.data.getlist(form.add_prefix(name))) > 1
+
+
+def _check_raw_field(form, name, invalid_control):
+    if _duplicate_field(form, name):
+        form.add_error(name, 'این مقدار بیش از یک بار ارسال شده است.')
+        return
+    field = form.fields[name]
+    value = field.widget.value_from_datadict(form.data, form.files, form.add_prefix(name))
+    if isinstance(value, str) and invalid_control(value):
+        form.add_error(name, 'این مقدار شامل نویسه کنترلی نامعتبر است.')
+
+
 class RawControlsMixin:
-    """Check raw selected single-line input that field cleanup may have trimmed."""
+    """Check selected single-line input before cleanup hides controls or duplicates."""
 
     raw_control_fields = ()
+
+    def has_changed(self):
+        # A duplicated value on an otherwise-empty optional formset row must
+        # not be skipped merely because its last value is blank.
+        return super().has_changed() or any(_duplicate_field(self, name) for name in self.raw_control_fields)
 
     def clean(self):
         cleaned = super().clean()
         for name in self.raw_control_fields:
-            field = self.fields[name]
-            value = field.widget.value_from_datadict(self.data, self.files, self.add_prefix(name))
-            if isinstance(value, str) and has_control_or_surrogate(value):
-                self.add_error(name, 'این مقدار شامل نویسه کنترلی نامعتبر است.')
+            _check_raw_field(self, name, has_control_or_surrogate)
         return cleaned
 
 
 class RawMultilineControlsMixin:
-    """Inspect raw selected multiline values before whitespace cleanup can hide controls."""
+    """Inspect selected multiline input before cleanup hides controls or duplicates."""
 
     raw_multiline_control_fields = ()
+
+    def has_changed(self):
+        return super().has_changed() or any(_duplicate_field(self, name) for name in self.raw_multiline_control_fields)
 
     def clean(self):
         cleaned = super().clean()
         for name in self.raw_multiline_control_fields:
-            field = self.fields[name]
-            value = field.widget.value_from_datadict(self.data, self.files, self.add_prefix(name))
-            if isinstance(value, str) and has_forbidden_multiline_control(value):
-                self.add_error(name, 'این مقدار شامل نویسه کنترلی نامعتبر است.')
+            _check_raw_field(self, name, has_forbidden_multiline_control)
         return cleaned
 
 
 class SourceUploadRawControlsMixin(RawControlsMixin):
-    """Reject raw source controls before CharField/URLField trim can hide them."""
+    """Check selected upload metadata and the single-file contract."""
 
-    raw_control_fields = ('source_name', 'source_url')
+    raw_control_fields = ('source_name', 'source_url', 'action')
+
+    def clean(self):
+        cleaned = super().clean()
+        if (hasattr(self.files, 'getlist') and len(self.files.getlist(self.add_prefix('csv_file'))) > 1):
+            self.add_error('csv_file', 'بیش از یک فایل ارسال شده است.')
+        return cleaned
 
 
 class StaffAuthenticationForm(AuthenticationForm):

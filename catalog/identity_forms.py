@@ -88,7 +88,7 @@ class PackageForm(AssertionForm):
 
 
 class IdentityReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
-    raw_control_fields = ('expected_review', 'expected_graph_hash')
+    raw_control_fields = ('decision', 'expected_review', 'expected_graph_hash')
     raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[('', 'انتخاب کنید'),
         ('further_review', 'ارجاع برای بررسی بیشتر'), ('reject', 'رد'), ('defer', 'نیاز به بررسی بیشتر')])

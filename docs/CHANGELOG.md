@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — reject selected duplicate staff inputs
+
+**Changes:** Selected single-value staff fields, choices and upload files reject duplicate submissions; an otherwise-empty component row with a duplicate value is no longer silently skipped.
+
+**Limits:** This is not a general defense for every input, proxy, login or direct service. See ADR 0176.
+
 ## 2026-11-25 — formulation formset management validation
 
 **Changes:** Selected create and correction formsets reject raw control characters or duplicate values in their total/initial management fields before attempting a write.

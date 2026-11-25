@@ -1437,6 +1437,31 @@ async function run() {
     assert.match(await page.locator('main').innerText(), /صفحه را دوباره باز کنید/);
     await checkLayout(page, 'invalid management form');
     await auditAccessibility(page, 'invalid management form');
+    // Even when the final duplicate value is blank, an extra component row
+    // must not be silently treated as unchanged.
+    await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
+    const duplicateForm = page.locator('form.staff-review-form');
+    await duplicateForm.evaluate(el => { el.noValidate = true; });
+    await duplicateForm.locator('#id_synthetic_ack').check();
+    await duplicateForm.locator('#id_change_reason').fill('دلیل اصلاح ساختگی برای مرورگر');
+    await duplicateForm.locator('#id_name').fill('فرمول اصلاحی ساختگی مرورگر');
+    await duplicateForm.evaluate(el => {
+      for (const value of ['2', '']) {
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = 'parts-1-numerator'; input.value = value;
+        el.appendChild(input);
+      }
+    });
+    const [duplicateResponse] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      duplicateForm.locator('button[type=submit]').click()]);
+    assert.equal(duplicateResponse.status(), 200);
+    assert.match(duplicateResponse.headers()['cache-control'], /no-store/);
+    assert.match(await page.title(), /^خطا در فرم/);
+    assert.equal(await page.locator('#staff-form-errors a[href="#id_parts-1-numerator"]').count(), 1);
+    assert.equal(await page.locator('#id_parts-1-numerator').getAttribute('aria-invalid'), 'true');
+    assert.match(await page.locator('main').innerText(), /بیش از یک بار ارسال شده است/);
+    await checkLayout(page, 'duplicate optional component');
+    await auditAccessibility(page, 'duplicate optional component');
     let child = await revision(page, `/staff/catalog/identity/ingredient/${ids.ingredient}/correction/`, '#id_name_fa', 'ماده اصلاحی ساختگی مرورگر');
     assert.match(child, /\/ingredient\/\d+\/$/);
     assert.match(await page.locator('body').innerText(), /ماده اصلاحی ساختگی مرورگر/);

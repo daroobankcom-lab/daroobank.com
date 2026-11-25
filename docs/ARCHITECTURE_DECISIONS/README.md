@@ -350,4 +350,6 @@
 
 - [0175: formset management raw input](0175-formset-management-raw-input.md) — development-only selected form validation.
 
+- [0176: staff single-value duplicates](0176-staff-single-value-duplicates.md) — development-only selected form validation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

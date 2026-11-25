@@ -33,7 +33,7 @@ class PriceUploadForm(SourceUploadRawControlsMixin, forms.Form):
 
 
 class PriceReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
-    raw_control_fields = ('expected_review', 'expected_product', 'expected_product_hash')
+    raw_control_fields = ('decision', 'expected_review', 'expected_product', 'expected_product_hash')
     raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[
         ('', 'یک نتیجه انتخاب کنید'),

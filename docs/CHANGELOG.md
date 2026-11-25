@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — preserve implicit partial presentation saves
+
+**Changes:** Deferred same-database presentation saves preserve the originally loaded/assigned field set before projection generation and use the existing locked prospective-row path. A selected concurrent synthetic update no longer gets overwritten by an unloaded stale field.
+
+**Limits:** Loaded stale fields, full saves, bulk/direct SQL and other interleavings remain outside this guarantee. See ADR 0177.
+
 ## 2026-11-25 — reject selected duplicate staff inputs
 
 **Changes:** Selected single-value staff fields, choices and upload files reject duplicate submissions; an otherwise-empty component row with a duplicate value is no longer silently skipped.

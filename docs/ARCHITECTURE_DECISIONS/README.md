@@ -352,4 +352,6 @@
 
 - [0176: staff single-value duplicates](0176-staff-single-value-duplicates.md) — development-only selected form validation.
 
+- [0177: deferred presentation save intent](0177-deferred-presentation-save-intent.md) — development data-integrity fix.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -43,6 +43,23 @@ class ProductPresentation(models.Model):
             force_insert, force_update, using, update_fields = self._parse_save_params(
                 *args, method_name='save', force_insert=force_insert, force_update=force_update,
                 using=using, update_fields=update_fields)
+        # Django normally infers a partial update when saving a deferred object
+        # back to its original database. Capture that intent before projection
+        # generation/full_clean touch deferred attributes and make them appear
+        # loaded to Model.save(). Otherwise a concurrent unrelated field change
+        # can be overwritten by a stale value loaded before the UPDATE waits.
+        if update_fields is None and not force_insert:
+            deferred = {field.attname for field in self._meta.concrete_fields
+                        if field.attname not in self.__dict__ and field.generated is False}
+            if deferred:
+                write_db = using or router.db_for_write(type(self), instance=self)
+                if write_db == self._state.db:
+                    field_names = {field.attname for field in self._meta.concrete_fields
+                                   if field not in self._meta.pk_fields and not hasattr(field, 'through')}
+                    loaded = field_names.difference(deferred)
+                    if loaded:
+                        update_fields = loaded
+                        using = write_db
         kwargs = dict(force_insert=force_insert, force_update=force_update, using=using, update_fields=update_fields)
         if update_fields is not None:
             update_fields = set(update_fields)

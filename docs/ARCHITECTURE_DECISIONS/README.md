@@ -348,4 +348,6 @@
 
 - [0174: clinical lock observation timing](0174-clinical-lock-observation-timing.md) — test-only coordination.
 
+- [0175: formset management raw input](0175-formset-management-raw-input.md) — development-only selected form validation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

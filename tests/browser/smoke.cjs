@@ -1416,6 +1416,27 @@ async function run() {
     assert.equal(await page.locator('#id_parts-0-numerator').getAttribute('aria-invalid'), 'true');
     await checkLayout(page, 'raw numeric revision error');
     await auditAccessibility(page, 'raw numeric revision error');
+    // Hidden management fields can be tampered with outside ordinary UI. A
+    // duplicate must be rejected without creating the otherwise-valid revision.
+    await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
+    const managementForm = page.locator('form.staff-review-form');
+    await managementForm.locator('#id_synthetic_ack').check();
+    await managementForm.locator('#id_change_reason').fill('دلیل اصلاح ساختگی برای مرورگر');
+    await managementForm.locator('#id_name').fill('فرمول اصلاحی ساختگی مرورگر');
+    await managementForm.evaluate(el => {
+      const duplicate = document.createElement('input');
+      duplicate.type = 'hidden'; duplicate.name = 'parts-TOTAL_FORMS'; duplicate.value = '5';
+      el.appendChild(duplicate);
+    });
+    const [managementResponse] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      managementForm.locator('button[type=submit]').click()]);
+    assert.equal(managementResponse.status(), 200);
+    assert.match(managementResponse.headers()['cache-control'], /no-store/);
+    assert.match(await page.title(), /^خطا در فرم/);
+    assert.match(await page.locator('#staff-form-errors').innerText(), /ساختار فرم را بررسی کنید/);
+    assert.match(await page.locator('main').innerText(), /صفحه را دوباره باز کنید/);
+    await checkLayout(page, 'invalid management form');
+    await auditAccessibility(page, 'invalid management form');
     let child = await revision(page, `/staff/catalog/identity/ingredient/${ids.ingredient}/correction/`, '#id_name_fa', 'ماده اصلاحی ساختگی مرورگر');
     assert.match(child, /\/ingredient\/\d+\/$/);
     assert.match(await page.locator('body').innerText(), /ماده اصلاحی ساختگی مرورگر/);

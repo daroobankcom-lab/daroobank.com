@@ -3,6 +3,7 @@ from django import forms
 from django.forms import BaseFormSet, formset_factory
 
 from daroobank.forms import ExplicitBooleanField, RawControlsMixin, RawMultilineControlsMixin
+from daroobank.validation import has_control_or_surrogate
 from .identity import MAX_COMPONENTS
 
 
@@ -35,7 +36,20 @@ class ComponentForm(RawControlsMixin, forms.Form):
     denominator_unit = forms.CharField(label='واحد مخرج', max_length=50)
 
 
-class BaseComponentFormSet(BaseFormSet):
+class RawManagementControlsMixin:
+    """Reject ambiguous selected management fields before accepting a formset."""
+
+    def clean(self):
+        super().clean()
+        for field in ('TOTAL_FORMS', 'INITIAL_FORMS'):
+            name = self.add_prefix(field)
+            values = self.data.getlist(name) if hasattr(self.data, 'getlist') else [self.data.get(name)]
+            if (len(values) > 1 or any(isinstance(value, str) and has_control_or_surrogate(value)
+                                       for value in values)):
+                raise forms.ValidationError('ساختار فرم اجزا معتبر نیست؛ صفحه را دوباره باز کنید.')
+
+
+class BaseComponentFormSet(RawManagementControlsMixin, BaseFormSet):
     def clean(self):
         super().clean()
         if not self.management_form.is_valid():
@@ -119,7 +133,7 @@ class ProductRevisionForm(ProductForm):
     expected_graph_hash = forms.RegexField(regex=r'^[0-9a-f]{64}$', max_length=64, widget=forms.HiddenInput)
 
 
-class BaseRevisionComponentFormSet(BaseFormSet):
+class BaseRevisionComponentFormSet(RawManagementControlsMixin, BaseFormSet):
     def __init__(self, *args, expected_initial, **kwargs):
         self.expected_initial = expected_initial
         super().__init__(*args, **kwargs)

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — formulation formset management validation
+
+**Changes:** Selected create and correction formsets reject raw control characters or duplicate values in their total/initial management fields before attempting a write.
+
+**Limits:** Hidden fields are still client-controlled; this does not establish authorization or identity. See ADR 0175.
+
 ## 2026-11-25 — clinical lock-test coordination
 
 **Changes:** The synthetic oversized clinical writer test signals immediately before its target-row lock rather than before preliminary reads, while retaining the real PostgreSQL blocker and rollback assertions.

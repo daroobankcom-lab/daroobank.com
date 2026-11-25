@@ -316,6 +316,10 @@ Direct service tests reject selected truthy and falsey non-boolean `commit` valu
 
 Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. `daroobank/test_staff_raw_text_controls.py` checks selected source, clinical and identity forms and selected HTTP writes; an unchanged empty extra component row is skipped rather than validated (ADR 0133). `daroobank/test_staff_empty_posts.py` checks required errors and no selected writes for six empty staff POSTs with CSRF enforcement (ADR 0134). `daroobank/test_sample_downloads.py` checks the two fixed synthetic downloads, permissions and preview without writes; the browser smoke exercises both downloads (ADR 0136). Selected form summaries and their handling of field, hidden, general and formset errors are checked in these HTTP tests; the Chromium smoke checks a summary link by keyboard on one invalid identity form (ADR 0135). Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
+## Opt-in synthetic staff-login throttle
+
+`daroobank/test_staff_login_throttle.py`, `daroobank/test_staff_login_cleanup.py` and `staff_security/test_migration.py` cover selected fixed-window, privacy, CSRF, account/session, real row-lock, concurrent cleanup and synthetic upgrade scenarios. Tests do not prove universal concurrency, anonymity, MFA or production security; see [ADR 0181](ARCHITECTURE_DECISIONS/0181-development-staff-login-throttle.md).
+
 ## Opt-in operational probes
 
 `daroobank/test_health_probes.py` covers default-off configuration, methods and privacy headers, CSRF, real PostgreSQL connectivity and selected timeout/recovery behavior. These tests do not establish complete readiness or network-failure coverage; see [ADR 0180](ARCHITECTURE_DECISIONS/0180-opt-in-process-database-probes.md).

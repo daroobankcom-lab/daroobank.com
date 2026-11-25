@@ -9,6 +9,8 @@ DEBUG = os.environ.get('DAROOBANK_DEBUG') == '1'
 STAFF_PORTAL_ENABLED = DEBUG
 # Opt-in only: restrict these public probe paths at the proxy/network layer.
 HEALTH_PROBES_ENABLED = os.environ.get('DAROOBANK_HEALTH_PROBES_ENABLED') == '1'
+# Synthetic development control only, not MFA or a production access policy.
+STAFF_LOGIN_THROTTLE_ENABLED = DEBUG and os.environ.get('DAROOBANK_STAFF_LOGIN_THROTTLE') == '1'
 SECRET_KEY = os.environ.get('DAROOBANK_SECRET_KEY', '')
 if not SECRET_KEY:
     if DEBUG:
@@ -18,7 +20,7 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = [x.strip() for x in os.environ.get('DAROOBANK_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if x.strip()]
 if DEBUG:
     ALLOWED_HOSTS += ['.e2b.app', 'testserver']
-INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing', 'sources', 'ingestion', 'clinical']
+INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing', 'sources', 'ingestion', 'clinical', 'staff_security']
 MIDDLEWARE = [
     'daroobank.middleware.ContentSecurityPolicyMiddleware',
     'daroobank.middleware.HealthProbePrivacyHeadersMiddleware',

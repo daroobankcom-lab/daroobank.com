@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — opt-in synthetic staff-login throttle
+
+**Changes:** An optional development-only shared PostgreSQL fixed-window throttle limits CSRF-accepted staff-login POSTs by pseudonymized server client address. A dry-run-first, bounded synthetic maintenance command removes older windows when explicitly requested.
+
+**Limits:** Default off, disabled outside debug; not MFA, distributed-attack protection or a production access policy. Proxy configuration, unbounded row growth, manual cleanup and security review remain important; see ADR 0181.
+
 ## 2026-11-25 — opt-in process and PostgreSQL probes
 
 **Changes:** Added default-off, minimal HTTP process liveness and database-connectivity probes; database errors return a generic unavailable response and selected responses are not cached.

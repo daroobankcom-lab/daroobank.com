@@ -360,4 +360,6 @@
 
 - [0180: opt-in process and database probes](0180-opt-in-process-database-probes.md) — narrow operational foundation.
 
+- [0181: development staff-login throttle](0181-development-staff-login-throttle.md) — opt-in synthetic defense in depth.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

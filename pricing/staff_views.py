@@ -1,11 +1,12 @@
 """Development-only, permission-gated price staging and preliminary review."""
 import unicodedata
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, OuterRef, Subquery
-from django.http import Http404, HttpResponseBadRequest
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
@@ -43,6 +44,18 @@ class StaffLoginView(LoginView):
     authentication_form = StaffAuthenticationForm
     template_name = 'staff/login.html'
     extra_context = {'page_title': 'ورود همکاران | داروبانک', 'description': 'ورود به بخش داخلی داروبانک.', 'noindex': True, 'private_staff': True}
+
+    def post(self, request, *args, **kwargs):
+        if settings.STAFF_LOGIN_THROTTLE_ENABLED:
+            from staff_security.throttle import consume_attempt
+            outcome = consume_attempt(request.META.get('REMOTE_ADDR'))
+            if outcome != 'allowed':
+                if outcome == 'limited':
+                    return HttpResponse('تعداد درخواست ورود بیش از حد است؛ بعداً تلاش کنید.\n', status=429,
+                                        content_type='text/plain; charset=utf-8')
+                return HttpResponse('ورود موقتاً در دسترس نیست.\n', status=503,
+                                    content_type='text/plain; charset=utf-8')
+        return super().post(request, *args, **kwargs)
 
     def get_default_redirect_url(self):
         # Django's safe explicit `next` is resolved before this default.

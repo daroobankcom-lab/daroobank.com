@@ -12,7 +12,7 @@ const base = process.env.BROWSER_BASE_URL;
 const author = process.env.BROWSER_AUTHOR;
 const reviewer = process.env.BROWSER_REVIEWER;
 const password = process.env.BROWSER_PASSWORD;
-const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE']
+const ids = Object.fromEntries(['INGREDIENT', 'LEAF', 'FORMULATION', 'PRODUCT', 'PACKAGE', 'OVERSIZED_PACKAGE', 'OVERSIZED_INGREDIENT', 'CLINICAL_LEAF', 'OVERSIZED_DRAFT', 'PRICE', 'RECEIPT', 'OVERSIZED_RECEIPT', 'CLAIM', 'OVERSIZED_CLAIM', 'CANDIDATE', 'OVERSIZED_CANDIDATE', 'OVERSIZED_PRICE', 'BAD_CANDIDATE', 'BAD_PRICE']
   .map(key => [key.toLowerCase(), process.env['BROWSER_' + key]]));
 assert(base && author && reviewer && password && Object.values(ids).every(Boolean), 'Missing synthetic test settings');
 const parsedBase = new URL(base);
@@ -31,6 +31,84 @@ async function contextFor(browser, width, errors, options = {}) {
   return context;
 }
 
+// Test-only CSSOM mutations preserve the response's CSP while exercising
+// accessibility negative controls; production templates do not use this helper.
+async function addTestStyles(page, css) {
+  return page.evaluateHandle(text => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(text);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    return sheet;
+  }, css);
+}
+async function removeTestStyles(sheet) {
+  await sheet.evaluate(value => {
+    document.adoptedStyleSheets = document.adoptedStyleSheets.filter(other => other !== value);
+  });
+  await sheet.dispose();
+}
+
+async function checkCsp(browser, errors) {
+  const context = await contextFor(browser, 390, errors);
+  // Fulfilled only in the synthetic browser; the app does not serve this script.
+  await context.route('**/synthetic-csp-same-origin.js', route => route.fulfill({
+    status: 200, contentType: 'application/javascript', body: 'window.syntheticCspSameOrigin = true;',
+  }));
+  const page = await context.newPage();
+  const response = await page.goto(base + '/');
+  assert.equal(response.status(), 200);
+  assert.match(response.headers()['content-security-policy'] || '', /script-src 'self'/);
+  assert.equal(await page.locator('script[type="application/ld+json"]').count(), 1);
+  const structuredData = JSON.parse(await page.locator('script[type="application/ld+json"]').textContent());
+  assert.equal(structuredData['@type'], 'WebSite');
+  await page.evaluate(() => {
+    window.syntheticCspViolations = [];
+    document.addEventListener('securitypolicyviolation', event =>
+      window.syntheticCspViolations.push({directive: event.effectiveDirective, blocked: event.blockedURI}));
+    const inline = document.createElement('script');
+    inline.textContent = 'window.syntheticCspInlineExecuted = true';
+    document.body.append(inline);
+    const remote = document.createElement('script');
+    remote.src = 'https://example.org/synthetic-csp.js';
+    document.body.append(remote);
+    const style = document.createElement('style');
+    style.textContent = '.synthetic-csp-probe { color: rgb(1, 2, 3) !important; }';
+    document.head.append(style);
+    const baseTag = document.createElement('base');
+    baseTag.href = 'https://example.org/';
+    document.head.append(baseTag);
+    const sameOrigin = document.createElement('script');
+    sameOrigin.src = '/synthetic-csp-same-origin.js';
+    document.body.append(sameOrigin);
+    fetch('https://example.org/synthetic-csp-fetch').catch(() => {});
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://example.org/synthetic-csp-frame';
+    document.body.append(iframe);
+    const form = document.createElement('form');
+    form.action = 'https://example.org/synthetic-csp-form';
+    form.method = 'post';
+    document.body.append(form);
+    form.submit();
+  });
+  await page.waitForFunction(() => window.syntheticCspSameOrigin &&
+    window.syntheticCspViolations.some(v => v.directive === 'script-src-elem' && v.blocked === 'inline') &&
+    window.syntheticCspViolations.some(v => v.directive === 'script-src-elem' && v.blocked.startsWith('https://example.org')) &&
+    window.syntheticCspViolations.some(v => v.directive === 'style-src-elem' && v.blocked === 'inline') &&
+    window.syntheticCspViolations.some(v => v.directive === 'base-uri') &&
+    ['connect-src', 'frame-src', 'form-action'].every(directive =>
+      window.syntheticCspViolations.some(v => v.directive === directive && v.blocked.startsWith('https://example.org'))),
+    null, {timeout: 5000});
+  assert.equal(await page.evaluate(() => Boolean(window.syntheticCspInlineExecuted)), false);
+  assert.equal(await page.evaluate(() => document.baseURI), base + '/');
+  // A cross-origin about:blank parent is a narrow framing check, not a full
+  // Arena proxy test. Development intentionally does not block embedding.
+  assert.equal(response.headers()['x-frame-options'], undefined);
+  const parent = await context.newPage();
+  await parent.setContent(`<iframe title="synthetic preview" src="${base}/"></iframe>`);
+  assert.equal(await parent.frameLocator('iframe').locator('html').getAttribute('lang'), 'fa');
+  await context.close();
+}
+
 async function checkLayout(page, label) {
   const state = await page.evaluate(() => ({
     width: document.documentElement.clientWidth,
@@ -38,7 +116,19 @@ async function checkLayout(page, label) {
     dir: document.documentElement.dir,
   }));
   assert.equal(state.dir, 'rtl', label + ': missing RTL');
-  assert(state.scrollWidth <= state.width, `${label}: horizontal overflow ${state.scrollWidth} > ${state.width}`);
+  if (state.scrollWidth > state.width) {
+    // Report geometry and selectors only; never print page content or form values.
+    const offenders = await page.evaluate(() => [...document.querySelectorAll('body *')].map(el => {
+      const r = el.getBoundingClientRect();
+      const style = getComputedStyle(el), parent = el.parentElement && getComputedStyle(el.parentElement);
+      return {tag: el.tagName, id: el.id.slice(0, 80), className: typeof el.className === 'string' ? el.className.slice(0, 120) : '',
+              left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width),
+              client: el.clientWidth, scroll: el.scrollWidth, cssWidth: style.width, cssMax: style.maxWidth,
+              parentDisplay: parent && parent.display, parentColumns: parent && parent.gridTemplateColumns};
+    }).filter(el => el.right > document.documentElement.clientWidth + 1 || el.left < -1)
+      .slice(0, 12));
+    assert.fail(`${label}: horizontal overflow ${state.scrollWidth} > ${state.width}; elements=${JSON.stringify(offenders)}`);
+  }
 }
 
 function rgb(value) {
@@ -128,6 +218,99 @@ async function checkStaffScanError(page, label, width) {
   assert.equal(await page.locator('#after').inputValue(), '0');
 }
 
+async function checkCandidateReviewScan(page, path, label, width) {
+  await page.getByRole('link', {name: 'بازرسی محدود بازبینی‌ها ←'}).click();
+  assert.equal(new URL(page.url()).pathname, path);
+  assert.match(await page.locator('main .staff-alert').innerText(), /فیلتر فقط بر همان بخش اعمال می‌شود/);
+  assert.match(await page.locator('main .staff-alert').innerText(), /وجود یا صلاحیت بازبین و هویت تاریخی بررسی نمی‌شود/);
+  await checkScanIdSyntax(page, label);
+  await submitLocalizedScan(page, '۰۰۰۰');
+  await checkStaffScanError(page, label, width);
+  await page.getByRole('link', {name: 'بازگشت به نامزد ←'}).focus();
+  await page.keyboard.press('Tab');
+  await checkKeyboardFocus(page, '#after', `${label} start`, '.staff-section');
+  await page.keyboard.press('Tab');
+  await checkKeyboardFocus(page, '#category', `${label} category`, '.staff-section');
+  await page.locator('#category').selectOption('invalid_record');
+  await page.keyboard.press('Tab');
+  await checkKeyboardFocus(page, '.staff-filter button', `${label} submit`, '.staff-section');
+  await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=invalid_record'), page.keyboard.press('Enter')]);
+  assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 3/);
+  assert.equal(await page.locator('.staff-candidate').count(), 1);
+  const content = await page.locator('main').innerText();
+  assert.match(content, /رکورد بازبینی ناسازگار/);
+  assert(!content.includes('browser-reviewer'));
+  assert(!content.includes('browser-history-reason-canary'));
+  assert(!content.includes('browser-product-history-reason-canary'));
+  await page.locator('#category').selectOption('oversized');
+  await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=oversized'),
+                     page.locator('.staff-filter button').click()]);
+  assert.equal(await page.locator('.staff-candidate').count(), 1);
+  const oversized = await page.locator('main').innerText();
+  assert.match(oversized, /داده بازبینی بیش از حد بازرسی است/);
+  assert.match(oversized, /مقایسه با نامزد فعلی نامشخص است/);
+  assert(!oversized.includes('browser-oversized-reason-canary'));
+  assert(!oversized.includes('browser-oversized-snapshot-canary'));
+  await checkLayout(page, `${label} ${width}`);
+  if (width === 390) await auditAccessibility(page, label);
+}
+
+// Reduce active-element diagnostics to fixed categories; never print page values or URLs.
+async function focusRegion(page, selector) {
+  return page.evaluate(selector => {
+    const active = document.activeElement;
+    if (!active) return 'none';
+    if (active.matches(selector)) return 'expected';
+    if (active.matches('.skip-link')) return 'skip';
+    if (active.matches('main#main')) return 'main';
+    if (active === document.body) return 'body';
+    if (active.closest('header')) return 'header';
+    if (active.closest('footer')) return 'footer';
+    if (active.closest('main#main')) return 'other-main';
+    return 'other';
+  }, selector);
+}
+
+// Exercise actual keyboard and same-document fragment navigation, not .focus().
+// Audit tools must not run between the keypresses; they may themselves move focus.
+async function checkSkipLink(page, label, selector, timeout = 5000) {
+  await page.keyboard.press('Tab');
+  assert(await page.locator('.skip-link').evaluate(el => el === document.activeElement), `${label}: initial focus`);
+  assert.equal(await page.locator('.skip-link').getAttribute('href'), '#main', `${label}: target`);
+  const visibility = await page.locator('.skip-link').evaluate(el => {
+    const rect = el.getBoundingClientRect(), css = getComputedStyle(el);
+    return {focusVisible: el.matches(':focus-visible'), visibility: css.visibility, display: css.display,
+      opacity: Number(css.opacity), width: rect.width, height: rect.height, top: rect.top, bottom: rect.bottom,
+      left: rect.left, right: rect.right, viewportWidth: innerWidth, viewportHeight: innerHeight};
+  });
+  assert(visibility.focusVisible && visibility.visibility === 'visible' && visibility.display !== 'none' &&
+      visibility.opacity > 0 && visibility.width > 0 && visibility.height > 0 && visibility.top >= 0 &&
+      visibility.bottom <= visibility.viewportHeight && visibility.left >= 0 && visibility.right <= visibility.viewportWidth,
+      `${label}: visible focus ${JSON.stringify(visibility)}`);
+  await checkKeyboardFocus(page, '.skip-link', label, '.skip-link');
+  const pathname = new URL(page.url()).pathname;
+  try {
+    // Waiting for the fragment avoids racing a following Tab against navigation.
+    await Promise.all([page.waitForURL(url => url.pathname === pathname && url.hash === '#main', {timeout}),
+                       page.keyboard.press('Enter')]);
+  } catch (error) {
+    if (error.name === 'TimeoutError') assert.fail(`${label}: fragment navigation`);
+    throw error;
+  }
+  try {
+    // Native fragment navigation must actually focus the target, not just update
+    // the address. Do not programmatically focus it on behalf of the user.
+    await page.waitForFunction(() => document.activeElement === document.querySelector('main#main'), null, {timeout});
+  } catch (error) {
+    if (error.name === 'TimeoutError') assert.fail(`${label}: main focus (${await focusRegion(page, selector)})`);
+    throw error;
+  }
+  await page.keyboard.press('Tab');
+  if (!(await page.locator(selector).evaluate(el => el === document.activeElement && !!el.closest('main#main')))) {
+    assert.fail(`${label}: next focus (${await focusRegion(page, selector)})`);
+  }
+}
+
 async function checkKeyboardFocus(page, selector, label, container) {
   const state = await page.locator(selector).evaluate((element, container) => {
     const style = getComputedStyle(element);
@@ -173,13 +356,38 @@ async function checkTextContrast(page, selector, containerSelector, label) {
 async function checkHeroContrast(page) {
   const values = await page.evaluate(() => {
     const style = selector => getComputedStyle(document.querySelector(selector));
-    return {
-      background: style('.hero').backgroundImage,
-      colors: ['.hero-lead', '.hint-label', '.search-hint', '.hero-status span:not(.status-icon)']
-        .map(selector => [selector, style(selector).color]),
-      placeholder: getComputedStyle(document.querySelector('#drug-search'), '::placeholder').color,
-      inputBackground: style('.search-form').backgroundColor,
-    };
+    function requirePlainLayers(selector, containerSelector) {
+      const element = document.querySelector(selector);
+      const container = element && element.closest(containerSelector);
+      if (!element || !container) throw new Error('Missing contrast element or container');
+      let node = element, reached = false;
+      while (node) {
+        const css = getComputedStyle(node);
+        if (css.opacity !== '1' || css.filter !== 'none' || css.mixBlendMode !== 'normal') {
+          throw new Error('Contrast needs review for opacity, filter or blending');
+        }
+        if (!reached && node !== container &&
+            (css.backgroundImage !== 'none' || css.backgroundColor !== 'rgba(0, 0, 0, 0)')) {
+          throw new Error('Contrast needs review for an intermediate background');
+        }
+        if (node === container) reached = true;
+        node = node.parentElement;
+      }
+    }
+    const colors = ['.hero-lead', '.hint-label', '.search-hint', '.hero-status span:not(.status-icon)']
+      .map(selector => {
+        requirePlainLayers(selector, '.hero');
+        return [selector, style(selector).color];
+      });
+    requirePlainLayers('#drug-search', '.search-form');
+    const placeholder = getComputedStyle(document.querySelector('#drug-search'), '::placeholder');
+    if (placeholder.opacity !== '1' || placeholder.filter !== 'none' || placeholder.mixBlendMode !== 'normal' ||
+        placeholder.backgroundImage !== 'none' || placeholder.backgroundColor !== 'rgba(0, 0, 0, 0)' ||
+        style('.search-form').backgroundImage !== 'none') {
+      throw new Error('Placeholder contrast needs review for composited layers');
+    }
+    return {background: style('.hero').backgroundImage, colors, placeholder: placeholder.color,
+            inputBackground: style('.search-form').backgroundColor};
   });
   assert.equal(ratio('rgb(0, 0, 0)', 'rgb(255, 255, 255)'), 21);
   const gradient = /^linear-gradient\([^,]+,\s*(rgb\(\d+,\s*\d+,\s*\d+\))\s+[\d.]+%,\s*(rgb\(\d+,\s*\d+,\s*\d+\))\s+[\d.]+%\)$/.exec(values.background);
@@ -266,19 +474,110 @@ async function run() {
     browser = await chromium.launch({executablePath: await packed.executablePath(), args, headless: true,
       env: {...process.env, LD_LIBRARY_PATH: [libraryPath, process.env.LD_LIBRARY_PATH || ''].filter(Boolean).join(':')}});
     const errors = [];
+    await checkCsp(browser, errors);
     for (const width of [320, 390, 768, 1440]) {
       const context = await contextFor(browser, width, errors);
       const page = await context.newPage();
       let response = await page.goto(base + '/');
       assert.equal(response.status(), 200);
       await checkLayout(page, `home ${width}`);
-      await page.keyboard.press('Tab');
-      assert.equal(await page.evaluate(() => document.activeElement.className), 'skip-link');
-      if (width === 390) { await auditAccessibility(page, 'home'); await checkHeroContrast(page); }
-      await page.keyboard.press('Enter');
-      await page.keyboard.press('Tab');
-      assert.equal(await page.evaluate(() => document.activeElement.id), 'drug-search', 'skip link must bypass navigation');
+      await checkSkipLink(page, `skip home ${width}`, '#drug-search');
       await checkKeyboardFocus(page, '#drug-search', `search ${width}`, '.search-form');
+      await checkHeroContrast(page);
+      // The header action now has an opaque surface for selected contrast checks.
+      // Check text and decorative arrow in both normal and pointer-hover states;
+      // this is a computed-style check, not a rendered-pixel audit.
+      for (const state of ['rest', 'hover']) {
+        if (state === 'hover') await page.locator('.header-cta').hover();
+        await checkTextContrast(page, '.header-cta > span:first-child', '.header-cta', `header label ${state} ${width}`);
+        await checkTextContrast(page, '.header-cta > span[aria-hidden="true"]', '.header-cta', `header arrow ${state} ${width}`);
+      }
+      if (width === 390) {
+        await auditAccessibility(page, 'home');
+        for (const [css, error] of [
+          ['.header-cta { background-image: linear-gradient(white, black) !important; }', /background images/],
+          ['.header-cta { opacity: 0.5 !important; }', /opacity, filter or blending/],
+          ['.header-cta { color: white !important; }', /text contrast below 4.5/],
+        ]) {
+          const mutation = await addTestStyles(page, css);
+          try {
+            await assert.rejects(checkTextContrast(page, '.header-cta > span:first-child', '.header-cta', 'mutated header'), error);
+          } finally {
+            await removeTestStyles(mutation);
+          }
+        }
+        const headerKeyboard = await context.newPage();
+        await headerKeyboard.goto(base + '/');
+        const headerAction = headerKeyboard.getByRole('link', {name: 'جست‌وجوی دارو', exact: true}).and(headerKeyboard.locator('.header-cta'));
+        assert.equal(await headerAction.count(), 1, 'header action accessible name');
+        assert.equal(await headerAction.getAttribute('href'), '/search/');
+        // Start at the browser document and reach the real link by Tab, rather
+        // than synthesizing focus or skipping over navigation.
+        let reachedHeader = false;
+        for (let i = 0; i < 8; i++) {
+          await headerKeyboard.keyboard.press('Tab');
+          if (await headerAction.evaluate(el => el === document.activeElement)) { reachedHeader = true; break; }
+        }
+        assert(reachedHeader, 'header action must be reachable by keyboard');
+        await checkKeyboardFocus(headerKeyboard, '.header-cta', 'header action', '.header-cta');
+        await Promise.all([headerKeyboard.waitForURL('**/search/'), headerKeyboard.keyboard.press('Enter')]);
+        await headerKeyboard.close();
+        for (const [css, error] of [
+          ['.hero-copy { opacity: 0.5 !important; }', /Contrast needs review/],
+          ['.hero-lead { background-image: linear-gradient(white, black) !important; }', /Contrast needs review/],
+          ['.hint-label { background-color: rgba(0, 0, 0, 0.1) !important; }', /Contrast needs review/],
+          ['#drug-search::placeholder { opacity: 0.4 !important; }', /contrast needs review/],
+          ['.hero-lead { color: white !important; }', /contrast below 4.5/],
+          ['#drug-search::placeholder { color: white !important; }', /contrast below 4.5/],
+        ]) {
+          const brokenLayer = await addTestStyles(page, css);
+          try {
+            await assert.rejects(checkHeroContrast(page), error);
+          } finally {
+            await removeTestStyles(brokenLayer);
+          }
+        }
+        await checkTextContrast(page, '.eyebrow', '.eyebrow', 'hero eyebrow');
+        await checkTextContrast(page, '.art-card-top small', '.art-card', 'art card caption');
+        await checkTextContrast(page, '.label-one small', '.float-label', 'first art label caption');
+        await checkTextContrast(page, '.label-two small', '.float-label', 'second art label caption');
+        const lowContrast = await addTestStyles(page, '.eyebrow { color: #e3f4eb !important; }');
+        await assert.rejects(checkTextContrast(page, '.eyebrow', '.eyebrow', 'mutated eyebrow'), /contrast below/);
+        await removeTestStyles(lowContrast);
+        const broken = await context.newPage();
+        await broken.goto(base + '/');
+        await broken.locator('.skip-link').evaluate(el => el.setAttribute('href', '#wrong'));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: target/);
+        await broken.goto(base + '/');
+        await broken.locator('.skip-link').evaluate(el => el.setAttribute('tabindex', '-1'));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: initial focus/);
+        await broken.goto(base + '/');
+        await addTestStyles(broken, '.skip-link:focus { transform: translateY(-200%) !important; }');
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: visible focus/);
+        await broken.goto(base + '/');
+        await broken.locator('#drug-search').evaluate(el => el.setAttribute('tabindex', '-1'));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search'), /skip home 390: next focus/);
+        await broken.goto(base + '/');
+        await broken.locator('main#main').evaluate(el => el.removeAttribute('tabindex'));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search', 250), /skip home 390: main focus/);
+        await broken.goto(base + '/');
+        await broken.locator('.skip-link').evaluate(el => el.addEventListener('click', e => e.preventDefault()));
+        await assert.rejects(checkSkipLink(broken, 'skip home 390', '#drug-search', 250), /skip home 390: fragment navigation/);
+        await broken.close();
+        const invalidLogin = await context.newPage();
+        await invalidLogin.goto(base + '/staff/login/');
+        await invalidLogin.locator('#id_username').fill('synthetic-invalid-user');
+        await invalidLogin.locator('#id_password').fill('synthetic-invalid-password');
+        const [invalidLoginResponse] = await Promise.all([
+          invalidLogin.waitForNavigation({waitUntil: 'load'}),
+          invalidLogin.locator('.staff-login-form button[type=submit]').click(),
+        ]);
+        assert.equal(invalidLoginResponse.status(), 200);
+        assert.match(invalidLoginResponse.headers()['cache-control'], /no-store/);
+        assert.equal(await invalidLogin.locator('.staff-alert-error').count(), 1);
+        await checkSkipLink(invalidLogin, 'skip login 390', '#id_username');
+        await invalidLogin.close();
+      }
       await page.locator('#drug-search').fill('Browser Synthetic Product');
       await Promise.all([page.waitForURL('**/search/?q=Browser*'), page.keyboard.press('Enter')]);
       assert.equal(page.url().includes('/search/'), true);
@@ -328,11 +627,13 @@ async function run() {
       response = await page.goto(base + '/about/');
       assert.equal(response.status(), 200);
       await checkLayout(page, `about ${width}`);
+      await checkSkipLink(page, `skip about ${width}`, 'main .breadcrumbs a');
       if (width === 390) await auditAccessibility(page, 'about');
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);
       assert.equal(response.status(), 200);
       assert(page.url().includes('/staff/login/'));
       assert.match(response.headers()['cache-control'], /no-store/);
+      await checkSkipLink(page, `skip login ${width}`, '#id_username');
       if (width === 390) await auditAccessibility(page, 'login');
       await login(page, author);
       assert.equal(new URL(page.url()).pathname, '/staff/');
@@ -349,14 +650,99 @@ async function run() {
       assert.equal(new URL(page.url()).pathname, '/staff/products/');
       assert.equal(new URL(page.url()).search, '?status=pending');
       assert.equal(await page.locator('#status').inputValue(), 'pending');
+      assert.match(await page.locator('main').innerText(), /مشخصات نامزد ناسازگار نمایش داده نمی‌شوند/);
+      assert(!(await page.locator('main').innerText()).includes('browser-product-hidden-canary'));
+      assert.match(await page.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ مشخصات بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-product-comparison-canary'));
+      await checkLayout(page, `product queue ${width}`);
+      if (width === 390) await auditAccessibility(page, 'product queue');
       await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       await page.getByRole('link', {name: 'ورود به ادعاهای منبع'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/sources/');
       assert.match(await page.locator('#date-summary-heading').innerText(), /خلاصه تاریخ در همین صفحه/);
       const summary = page.locator('section[aria-labelledby="date-summary-heading"]');
-      assert.match(await summary.innerText(), /فقط 1 ادعای نمایش‌داده‌شده/);
+      assert.match(await summary.innerText(), /فقط 2 ادعای نمایش‌داده‌شده/);
       assert.match(await summary.locator('.staff-stat-grid > div').first().locator('span').innerText(), /گذشته/);
       assert.equal((await summary.locator('.staff-stat-grid > div').first().locator('strong').innerText()).trim(), '1');
+      response = await page.goto(base + `/staff/sources/${ids.oversized_claim}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /شرح مدرک بیش از حد مجاز است؛ نمایش داده نمی‌شود/);
+      assert(!(await page.locator('main').innerText()).includes('browser-claim-note-canary'));
+      assert.equal(await page.locator('form[action$="/review/"]').count(), 0);
+      await checkLayout(page, `oversized source note ${width}`);
+      if (width === 390) await auditAccessibility(page, 'oversized source note');
+      await page.goto(base + `/staff/sources/${ids.claim}/`);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی منبع ساختگی برای مرورگر'}).innerText(), /بازبینی منبع ساختگی برای مرورگر/);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی منبع ساختگی برای مرورگر'}).innerText(), /اثر انگشت و شناسه ثبت‌کننده با وضعیت فعلی برابرند؛ این راستی‌آزمایی نیست/);
+      assert.match(await page.locator('.staff-review-block .staff-panel-note').innerText(), /خوانش‌های جداگانه‌اند، زمان تغییر را ثابت نمی‌کنند/);
+      assert.match(await page.locator('main').innerText(), /بازبینی بیش از حد نمایش/);
+      assert(!(await page.locator('main').innerText()).includes('browser-source-oversized-reason-canary'));
+      await checkLayout(page, `source review history ${width}`);
+      if (width === 390) await auditAccessibility(page, 'source review history');
+      await page.getByRole('link', {name: 'بازرسی فنی تاریخچه بازبینی‌ها ←'}).click();
+      const sourceReviewInspection = `/staff/sources/${ids.claim}/reviews/inspection/`;
+      assert.equal(new URL(page.url()).pathname, sourceReviewInspection);
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود حساب‌ها، حقوق منبع و اجازه استفاده را بررسی نمی‌کند/);
+      await checkScanIdSyntax(page, `source review scan ${width}`);
+      await submitLocalizedScan(page, '۰۰۰۰');
+      await checkStaffScanError(page, 'source review scan', width);
+      await page.getByRole('link', {name: 'بازگشت به ادعای منبع ←'}).focus();
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#after', `source review scan start ${width}`, '.staff-section');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#category', `source review scan category ${width}`, '.staff-section');
+      await page.locator('#category').selectOption('consistent');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '.staff-filter button', `source review scan submit ${width}`, '.staff-section');
+      await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=consistent'), page.keyboard.press('Enter')]);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 2/);
+      assert.equal(await page.locator('.staff-candidate').count(), 1);
+      assert(!(await page.locator('main').innerText()).includes('بازبینی منبع ساختگی برای مرورگر'));
+      assert(!(await page.locator('main').innerText()).includes('https://example.org/fixture'));
+      await checkLayout(page, `source review scan ${width}`);
+      if (width === 390) await auditAccessibility(page, 'source review scan');
+      await page.locator('#category').selectOption('oversized');
+      await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=oversized'), page.locator('.staff-filter button').click()]);
+      assert.equal(await page.locator('.staff-candidate').count(), 1);
+      assert.match(await page.locator('main').innerText(), /بیش از حد بازرسی؛ محتوا بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-source-oversized-snapshot-canary'));
+      response = await page.goto(base + `/staff/products/${ids.bad_candidate}/`);
+      assert.equal(response.status(), 200);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await page.locator('main').innerText(), /مشخصات ناسازگار نمایش داده نمی‌شوند/);
+      assert(!(await page.locator('main').innerText()).includes('browser-product-hidden-canary'));
+      assert.equal(await page.locator('form.staff-review-form').count(), 0);
+      await checkLayout(page, `invalid product detail ${width}`);
+      if (width === 390) await auditAccessibility(page, 'invalid product detail');
+      response = await page.goto(base + `/staff/products/${ids.oversized_candidate}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-product-comparison-canary'));
+      assert.equal(await page.locator('form[action$="/review/"]').count(), 0);
+      await checkLayout(page, `oversized current product ${width}`);
+      if (width === 390) await auditAccessibility(page, 'oversized current product');
+      await page.goto(base + `/staff/products/${ids.candidate}/`);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'بازبینی فرآورده ساختگی برای مرورگر'}).innerText(), /بازبینی فرآورده ساختگی برای مرورگر/);
+      assert.match(await page.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      const productHistory = await page.locator('main').innerText();
+      assert.match(productHistory, /رکورد بازبینی یا تصویر آن ناسازگار است/);
+      assert.match(productHistory, /بازبینی بیش از حد نمایش/);
+      assert(!productHistory.includes('browser-oversized-snapshot-canary'));
+      assert(!productHistory.includes('browser-oversized-reason-canary'));
+      assert.match(productHistory, /این مقایسه تأیید اصالت یا هویت نیست/);
+      assert(!productHistory.includes('browser-product-history-hidden-canary'));
+      assert(!productHistory.includes('browser-product-history-reason-canary'));
+      assert.match(await page.locator('#comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
+      assert.match(await page.locator('#comparison-heading').locator('..').innerText(), /نامزد بیش از حد بررسی است؛ مقایسه نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-product-comparison-canary'));
+      await checkLayout(page, `product review history ${width}`);
+      if (width === 390) await auditAccessibility(page, 'product review history');
+      await checkCandidateReviewScan(page, `/staff/products/${ids.candidate}/reviews/inspection/`, 'product review scan', width);
+      await page.goto(base + '/staff/sources/');
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود فعلی حساب ثبت‌کننده فقط برای ادعاهای همین صفحه/);
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود حساب به معنی فعال بودن یا احراز صلاحیت نیست/);
+      assert(!(await page.locator('main').innerText()).includes('حساب ثبت‌کننده در دسترس نیست'));
       await checkLayout(page, `source date summary ${width}`);
       if (width === 390) {
         await auditAccessibility(page, 'source date summary');
@@ -368,6 +754,7 @@ async function run() {
       assert.equal(new URL(page.url()).pathname, '/staff/sources/dates/');
       assert.equal(await page.getByLabel('بعد از شناسه داخلی').count(), 1);
       assert.equal(await page.getByLabel('وضعیت تاریخ در این بخش').count(), 1);
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود حساب ثبت‌کننده بررسی نمی‌شود/);
       await checkScanIdSyntax(page, `source scan ${width}`);
       await submitLocalizedScan(page, '۰۰۰۰');
       await checkStaffScanError(page, 'source scan', width);
@@ -377,16 +764,16 @@ async function run() {
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '#category', `scan category ${width}`, '.staff-section');
       if (width === 390) {
-        const mutation = await page.addStyleTag({content: '#category:focus-visible { outline: none !important; }'});
+        const mutation = await addTestStyles(page, '#category:focus-visible { outline: none !important; }');
         await assert.rejects(checkKeyboardFocus(page, '#category', 'mutated scan category', '.staff-section'), /missing focus outline/);
-        await mutation.evaluate(node => node.remove());
+        await removeTestStyles(mutation);
       }
       await page.locator('#category').selectOption('expired');
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '.staff-filter button', `scan submit ${width}`, '.staff-section');
       await Promise.all([page.waitForURL('**/staff/sources/dates/?after=0&category=expired'), page.keyboard.press('Enter')]);
       assert.equal(new URL(page.url()).searchParams.get('category'), 'expired');
-      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 2/);
       assert.match(await page.locator('main').innerText(), /مطابق فیلتر در همین بخش: 1/);
       assert.equal(await page.getByRole('link', {name: 'جزئیات ادعا'}).count(), 1);
       await checkLayout(page, `source date scan ${width}`);
@@ -400,13 +787,120 @@ async function run() {
         await checkTextContrast(page, '.staff-filter button', '.staff-filter button', 'scan submit text');
         await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'scan result status');
         await checkTextContrast(page, '.staff-candidate .staff-detail-link', '.staff-candidate', 'scan result link');
-        const mutation = await page.addStyleTag({content: '.staff-candidate p { color: #eee !important; }'});
+        const mutation = await addTestStyles(page, '.staff-candidate p { color: #eee !important; }');
         await assert.rejects(checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'mutated status'), /below 4.5:1/);
-        await mutation.evaluate(node => node.remove());
-        const backgroundMutation = await page.addStyleTag({content: '.staff-candidate { background-image: linear-gradient(white, black) !important; }'});
+        await removeTestStyles(mutation);
+        const backgroundMutation = await addTestStyles(page, '.staff-candidate { background-image: linear-gradient(white, black) !important; }');
         await assert.rejects(checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'mutated background'), /background images/);
-        await backgroundMutation.evaluate(node => node.remove());
+        await removeTestStyles(backgroundMutation);
       }
+      await page.goto(base + '/staff/clinical/');
+      assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
+      await checkLayout(page, `clinical oversized queue ${width}`);
+      await page.getByRole('link', {name: 'بازرسی فنی محدود پیش‌نویس‌ها ←'}).click();
+      assert.equal(new URL(page.url()).pathname, '/staff/clinical/inspection/');
+      assert.match(await page.locator('main .staff-alert').innerText(), /وجود فعلی حساب نویسنده همین نسخه/);
+      assert.match(await page.locator('main .staff-alert').innerText(), /حساب نویسنده والد، تاریخچه کامل و بازبینی‌ها بررسی نمی‌شوند/);
+      assert.equal(await page.locator('#category option[value="author_missing"]').count(), 1);
+      await checkScanIdSyntax(page, `clinical scan ${width}`);
+      await submitLocalizedScan(page, '۰۰۰۰');
+      await checkStaffScanError(page, 'clinical scan', width);
+      await page.getByRole('link', {name: 'صف پیش‌نویس‌ها ←'}).focus();
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#after', `clinical scan start ${width}`, '.staff-section');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#category', `clinical scan category ${width}`, '.staff-section');
+      await page.locator('#category').selectOption('available');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '.staff-filter button', `clinical scan submit ${width}`, '.staff-section');
+      await Promise.all([page.waitForURL('**/staff/clinical/inspection/?after=0&category=available'), page.keyboard.press('Enter')]);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 23/);
+      assert.equal(await page.getByRole('link', {name: 'جزئیات پیش‌نویس'}).count(), 22);
+      assert(!(await page.locator('main').innerText()).includes('عنوان خصوصی مرورگر'));
+      await checkLayout(page, `clinical scan ${width}`);
+      if (width === 390) {
+        await auditAccessibility(page, 'clinical scan');
+        await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical scan status');
+      }
+      await page.locator('#category').selectOption('oversized');
+      await Promise.all([page.waitForURL('**/staff/clinical/inspection/?after=0&category=oversized'), page.locator('.staff-filter button').click()]);
+      assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
+      await checkLayout(page, `clinical oversized scan ${width}`);
+      await page.goto(base + `/staff/clinical/${ids.oversized_draft}/`);
+      assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
+      assert.equal(await page.locator('.staff-review-form').count(), 0);
+      await checkLayout(page, `clinical oversized detail ${width}`);
+      await page.goto(base + `/staff/clinical/${ids.oversized_draft}/lineage/`);
+      assert.match(await page.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-draft-statement-canary'));
+      await checkLayout(page, `clinical oversized lineage ${width}`);
+      await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
+      const clinicalDetail = page.locator('main');
+      assert.match(await clinicalDetail.innerText(), /اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند/);
+      assert.match(await clinicalDetail.innerText(), /شناسه ارجاع‌های ثبت‌شده با فهرست فعلی برابر است/);
+      assert.match(await clinicalDetail.innerText(), /خوانش‌های جداگانه‌اند، زمان تغییر را ثابت نمی‌کنند/);
+      assert.match(await clinicalDetail.innerText(), /بازبینی بیش از حد نمایش/);
+      assert(!(await clinicalDetail.innerText()).includes('browser-clinical-oversized-reason-canary'));
+      await checkLayout(page, `clinical review detail ${width}`);
+      if (width === 390) await auditAccessibility(page, 'clinical review detail');
+      await page.getByRole('link', {name: 'بازرسی فنی تاریخچه بازبینی‌ها ←'}).click();
+      const reviewInspection = `/staff/clinical/${ids.clinical_leaf}/reviews/inspection/`;
+      assert.equal(new URL(page.url()).pathname, reviewInspection);
+      await checkScanIdSyntax(page, `clinical review scan ${width}`);
+      await submitLocalizedScan(page, '۰۰۰۰');
+      await checkStaffScanError(page, 'clinical review scan', width);
+      await page.getByRole('link', {name: 'بازگشت به پیش‌نویس ←'}).focus();
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#after', `review scan start ${width}`, '.staff-section');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '#category', `review scan category ${width}`, '.staff-section');
+      await page.locator('#category').selectOption('consistent');
+      await page.keyboard.press('Tab');
+      await checkKeyboardFocus(page, '.staff-filter button', `review scan submit ${width}`, '.staff-section');
+      await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=consistent'), page.keyboard.press('Enter')]);
+      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 2/);
+      assert.equal(await page.locator('.staff-candidate').count(), 1);
+      assert(!(await page.locator('main').innerText()).includes('دلیل خصوصی ساختگی بازبینی مرورگر'));
+      await checkLayout(page, `clinical review scan ${width}`);
+      if (width === 390) {
+        await auditAccessibility(page, 'clinical review scan');
+        await checkTextContrast(page, '.staff-candidate p', '.staff-candidate', 'clinical review scan status');
+      }
+      await page.locator('#category').selectOption('oversized');
+      await Promise.all([page.waitForURL('**/reviews/inspection/?after=0&category=oversized'), page.locator('.staff-filter button').click()]);
+      assert.equal(await page.locator('.staff-candidate').count(), 1);
+      assert.match(await page.locator('main').innerText(), /بیش از حد بازرسی؛ محتوا بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-clinical-oversized-snapshot-canary'));
+      await page.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
+      await page.getByRole('link', {name: 'بازرسی مسیر نسخه‌های پیشین ←'}).click();
+      const clinicalLineage = `/staff/clinical/${ids.clinical_leaf}/lineage/`;
+      assert.equal(new URL(page.url()).pathname, clinicalLineage);
+      assert.equal(await page.locator('.staff-panel').count(), 20);
+      assert(!(await page.locator('main').innerText()).includes('نسخه خصوصی مرورگر'));
+      await checkLayout(page, `clinical lineage ${width}`);
+      if (width === 390) await auditAccessibility(page, 'clinical lineage');
+      await page.getByRole('link', {name: 'بررسی بخش بعدی ←'}).focus();
+      await Promise.all([page.waitForURL('**/lineage/?cursor=*'), page.keyboard.press('Enter')]);
+      assert.equal(await page.locator('.staff-panel').count(), 1);
+      assert.match(await page.locator('main').innerText(), /گام 21/);
+      assert.match(await page.locator('main').innerText(), /والدی ثبت نشده/);
+      const lineageParams = new URLSearchParams({cursor: 'clinical-canary<script>'});
+      response = await page.goto(base + clinicalLineage + '?' + lineageParams);
+      assert.equal(response.status(), 400);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.equal(response.headers()['referrer-policy'], 'same-origin');
+      assert(!(await page.locator('body').innerText()).includes('clinical-canary'));
+      await checkLayout(page, `clinical lineage error ${width}`);
+      if (width === 390) await auditAccessibility(page, 'clinical lineage error');
+      const restartLineage = page.getByRole('link', {name: 'شروع دوباره بازرسی ←'});
+      assert.equal(await restartLineage.getAttribute('href'), clinicalLineage);
+      await restartLineage.focus();
+      await Promise.all([page.waitForURL(url => url.pathname === clinicalLineage && url.search === ''), page.keyboard.press('Enter')]);
+      assert.equal(await page.locator('.staff-panel').count(), 20);
+      await page.goto(base + '/staff/sources/dates/');
       await page.getByRole('link', {name: 'فضای کاری همکاران ←'}).click();
       await page.getByRole('link', {name: 'ورود به بازرسی کاتالوگ'}).click();
       assert.equal(new URL(page.url()).pathname, '/staff/catalog/quality/');
@@ -420,7 +914,11 @@ async function run() {
       await page.keyboard.press('Tab');
       await checkKeyboardFocus(page, '.staff-filter button', `quality submit ${width}`, '.staff-section');
       await Promise.all([page.waitForURL('**/staff/catalog/quality/?after=0'), page.keyboard.press('Enter')]);
-      assert.match(await page.locator('main').innerText(), /بررسی‌شده در این بخش: 1/);
+      const qualityText = await page.locator('main').innerText();
+      assert.match(qualityText, /بررسی‌شده در این بخش: 1/);
+      assert.match(qualityText, /شاخص جست‌وجو برای این بازرسی بیش از حد طولانی است/);
+      assert.match(qualityText, /فیلتر فنی عمومی: نامشخص/);
+      assert.doesNotMatch(qualityText, /browser-private-canary/);
       await checkLayout(page, `catalog quality ${width}`);
       if (width === 390) {
         await auditAccessibility(page, 'catalog quality');
@@ -435,25 +933,405 @@ async function run() {
       assert.equal(response.status(), 200);
       await checkLayout(page, `identity form ${width}`);
       if (width === 390) await auditAccessibility(page, 'identity form');
+      response = await page.goto(base + `/staff/catalog/identity/package/${ids.package}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /نمایش و بازرسی پیوندها آن را کنترل نمی‌کنند/);
+      assert.match(await page.locator('main').innerText(), /وجود فعلی حساب بازبین، هویت تاریخی یا صلاحیت او را اثبات نمی‌کند/);
+      assert.match(await page.locator('main').innerText(), /آخرین بازبینی موجود نیز قفل می‌شود/);
+      assert.match(await page.locator('main').innerText(), /این قفل مانع همه درج‌های جدید یا تغییر پس از تراکنش نیست/);
+      await checkLayout(page, `identity package detail ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity package detail');
+      response = await page.goto(base + `/staff/catalog/identity/package/${ids.oversized_package}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /بازبینی بیش از حد نمایش است؛ محتوا بررسی نشد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-oversized-graph-canary'));
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-oversized-reason-canary'));
+      await checkLayout(page, `identity oversized review ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity oversized review');
+      response = await page.goto(base + `/staff/catalog/identity/package/${ids.oversized_package}/revise/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /ثبت نسخه اصلاحی تا بررسی وضعیت آن غیرفعال است/);
+      assert.equal(await page.locator('form.staff-review-form').count(), 0);
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-oversized-reason-canary'));
+      await checkLayout(page, `identity oversized revision ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity oversized revision');
+      response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.oversized_ingredient}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /پیوند نسخه پیشین ناسازگار است؛ جزئیات پنهان شد/);
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-link-reason-canary'));
+      await checkLayout(page, `identity oversized revision link ${width}`);
+      if (width === 390) await auditAccessibility(page, 'identity oversized revision link');
+      response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.oversized_ingredient}/lineage/`);
+      assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /رکورد یا پیوند ناسازگار است/);
+      assert(!(await page.locator('main').innerText()).includes('browser-identity-link-reason-canary'));
+      await checkLayout(page, `identity oversized lineage ${width}`);
       response = await page.goto(base + `/staff/catalog/identity/ingredient/${ids.leaf}/lineage/`);
       assert.equal(response.status(), 200);
+      assert.match(await page.locator('main').innerText(), /وجود حساب ثبت‌کنندگان زنجیره و پیوندهای اصلاح در این بررسی کنترل نمی‌شود/);
       assert.match(response.headers()['x-robots-tag'], /noindex/);
       await checkLayout(page, `lineage ${width}`);
       if (width === 390) await auditAccessibility(page, 'lineage');
       await page.getByRole('link', {name: 'بررسی بخش بعدی'}).click();
       assert.match(await page.locator('body').innerText(), /گام ۲۱|گام 21/);
       await checkLayout(page, `lineage next ${width}`);
+      response = await page.goto(base + `/staff/operations/imports/${ids.receipt}/inspection/?after=bad-canary`);
+      assert.equal(response.status(), 404, 'a product-only viewer cannot inspect price receipts');
       await context.close();
+      const priceContext = await contextFor(browser, width, errors);
+      const pricePage = await priceContext.newPage();
+      await login(pricePage, 'browser-price-stager');
+      response = await pricePage.goto(base + '/staff/prices/');
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('main').innerText(), /مشخصات نامزد ناسازگار نمایش داده نمی‌شوند/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-price-hidden-canary'));
+      assert.match(await pricePage.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ مشخصات بررسی نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-price-comparison-canary'));
+      await checkLayout(pricePage, `price queue ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'price queue');
+      response = await pricePage.goto(base + '/staff/prices/import/');
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('.staff-panel-note').first().innerText(), /اولین نتیجه تطبیق/);
+      await checkLayout(pricePage, `price preview form ${width}`);
+      if (width === 390) {
+        await auditAccessibility(pricePage, 'price preview form');
+        const [sample] = await Promise.all([
+          pricePage.waitForEvent('download'),
+          pricePage.getByRole('link', {name: 'دریافت فایل نمونه ساختگی قیمت (CSV) ←'}).click(),
+        ]);
+        assert.equal(sample.suggestedFilename(), 'price_candidates.synthetic.csv');
+        assert.match(fs.readFileSync(await sample.path(), 'utf8'), /^source_record_id,irc,manufacturer,/);
+      }
+      if (width === 390) {
+        await pricePage.locator('#id_source_name').fill('منبع ساختگی مرورگر');
+        await pricePage.locator('#id_source_url').fill('https://example.org/browser-detail');
+        await pricePage.locator('#id_action').selectOption('stage');
+        await pricePage.locator('#id_rights_attested').check();
+        const duplicate = 'source_record_id,irc,manufacturer,strength,dosage_form,package_description,amount,currency,category,unit,effective_date,source_published_date\n' +
+          'browser-detail,001,سازنده فرضی,1 mg,قرص,10 عدد,200,RIAL,retail,package,,\n';
+        await pricePage.locator('#id_csv_file').setInputFiles({name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(duplicate)});
+        const [conflict] = await Promise.all([pricePage.waitForNavigation({waitUntil: 'load'}),
+          pricePage.locator('.staff-review-form button[type=submit]').click()]);
+        assert.equal(conflict.status(), 409);
+        assert.match(conflict.headers()['cache-control'], /no-store/);
+        assert.match(await pricePage.locator('main').innerText(), /ناسازگاری رکورد قبلی/);
+        assert(!(await pricePage.locator('main').innerText()).includes('browser-price-comparison-canary'));
+        await checkLayout(pricePage, 'oversized price staging conflict');
+        await auditAccessibility(pricePage, 'oversized price staging conflict');
+        await pricePage.goto(base + '/staff/prices/import/');
+      }
+      await pricePage.locator('#id_source_name').fill('منبع ساختگی مرورگر');
+      await pricePage.locator('#id_source_url').fill('https://example.org/browser-price');
+      const csv = 'source_record_id,irc,manufacturer,strength,dosage_form,package_description,amount,currency,category,unit,effective_date,source_published_date\n' +
+        'browser-1,001,سازنده فرضی,1 mg,قرص,10 عدد,100,RIAL,retail,package,,\n' +
+        'browser-2,۰۰۱,سازنده فرضی,1 mg,قرص,10 عدد,200,RIAL,retail,package,,\n' +
+        'browser-3,001,سازنده فرضی,2 mg,قرص,10 عدد,300,RIAL,retail,package,,\n';
+      await pricePage.locator('#id_csv_file').setInputFiles({name: 'synthetic-'.repeat(15) + '.csv', mimeType: 'text/csv', buffer: Buffer.from(csv)});
+      await checkLayout(pricePage, `price preview with selected file ${width}`);
+      let stylesheetRequests = 0;
+      if (width === 320) {
+        // Exercise a slow stylesheet on the POST response; main-document response
+        // alone does not mean layout styles have loaded.
+        await pricePage.route('**/static/css/staff.css', async route => {
+          stylesheetRequests++;
+          await new Promise(resolve => setTimeout(resolve, 250));
+          await route.continue();
+        });
+      }
+      const [preview] = await Promise.all([
+        pricePage.waitForResponse(r => r.url().endsWith('/staff/prices/import/') && r.request().method() === 'POST'),
+        pricePage.locator('.staff-review-form button[type=submit]').click(),
+      ]);
+      assert.equal(preview.status(), 200);
+      await pricePage.waitForLoadState('load');
+      if (width === 320) {
+        assert(stylesheetRequests > 0, 'slow stylesheet probe was not requested');
+        await pricePage.unroute('**/static/css/staff.css');
+      }
+      assert.equal(await pricePage.locator('.staff-review-form').evaluate(el => getComputedStyle(el).display), 'grid',
+                   'price result stylesheet must be loaded');
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /ردیف‌ها: 3/);
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /پیشنهاد تطبیق: 2/);
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /بدون تطبیق: 1/);
+      assert.match(await pricePage.locator('.staff-upload-result').innerText(), /هیچ قیمتی منتشر نشده/);
+      await checkLayout(pricePage, `price preview result ${width}`);
+      response = await pricePage.goto(base + `/staff/prices/${ids.bad_price}/`);
+      assert.equal(response.status(), 200);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      const invalidPriceText = await pricePage.locator('main').innerText();
+      assert.match(invalidPriceText, /مشخصات و مبلغ ناسازگار نمایش داده نمی‌شوند/);
+      assert(!invalidPriceText.includes('browser-price-hidden-canary'));
+      assert(!invalidPriceText.includes('browser-amount-hidden-canary'));
+      assert.equal(await pricePage.locator('form.staff-review-form').count(), 0);
+      await checkLayout(pricePage, `invalid price detail ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'invalid price detail');
+      response = await pricePage.goto(base + `/staff/prices/${ids.oversized_price}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ سازگاری بررسی نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-price-comparison-canary'));
+      assert.equal(await pricePage.locator('form[action$="/review/"]').count(), 0);
+      await checkLayout(pricePage, `oversized current price ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'oversized current price');
+      response = await pricePage.goto(base + `/staff/prices/${ids.price}/`);
+      assert.equal(response.status(), 200);
+      assert.equal(await pricePage.getByText('این بازبینی تضمین یکتایی نیست', {exact: false}).count(), 1);
+      assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'بازبینی قیمت ساختگی برای مرورگر'}).innerText(), /بازبینی قیمت ساختگی برای مرورگر/);
+      assert.match(await pricePage.locator('.staff-review-item').filter({hasText: 'browser-reviewer'}).innerText(), /browser-reviewer/);
+      const priceHistory = await pricePage.locator('main').innerText();
+      assert.match(priceHistory, /رکورد بازبینی یا تصویر آن ناسازگار است/);
+      assert.match(priceHistory, /بازبینی بیش از حد نمایش/);
+      assert(!priceHistory.includes('browser-oversized-snapshot-canary'));
+      assert(!priceHistory.includes('browser-oversized-reason-canary'));
+      assert.match(priceHistory, /این مقایسه تأیید اصالت یا قیمت نیست/);
+      assert(!priceHistory.includes('browser-history-hidden-canary'));
+      assert(!priceHistory.includes('browser-history-reason-canary'));
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await pricePage.locator('#price-comparison-heading').locator('..').innerText(), /وجود حساب ثبت‌کننده نامزدها در این مقایسه بررسی نمی‌شود/);
+      assert.match(await pricePage.locator('#price-comparison-heading').locator('..').innerText(), /نامزد بیش از حد بررسی است؛ مقایسه نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-price-comparison-canary'));
+      await checkLayout(pricePage, `price detail ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'price detail');
+      assert.match(await pricePage.locator('main').innerText(), /حساب ثبت‌کننده رسید در این فهرست بررسی نمی‌شود/);
+      await checkCandidateReviewScan(pricePage, `/staff/prices/${ids.price}/reviews/inspection/`, 'price review scan', width);
+      response = await pricePage.goto(base + '/staff/operations/imports/');
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('main').innerText(), /نمایش نام حساب فعلی، هویت تاریخی یا صلاحیت را اثبات نمی‌کند/);
+      await checkLayout(pricePage, `receipt list ${width}`);
+      response = await pricePage.goto(base + `/staff/operations/imports/${ids.receipt}/`);
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('main').innerText(), /نمایش نام حساب فعلی، هویت تاریخی یا صلاحیت را اثبات نمی‌کند/);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      await checkLayout(pricePage, `receipt detail ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'receipt detail');
+      const receiptInspection = `/staff/operations/imports/${ids.receipt}/inspection/`;
+      response = await pricePage.goto(base + receiptInspection);
+      assert.equal(response.status(), 200);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await pricePage.locator('main').innerText(), /ردیف داده 1/);
+      assert.match(await pricePage.locator('main').innerText(), /ردیف داده 2/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-detail'));
+      assert.match(await pricePage.locator('main').innerText(), /حساب ثبت‌کننده رسید در این بازرسی بررسی نمی‌شود/);
+      await checkLayout(pricePage, `receipt inspection ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'receipt inspection');
+      await pricePage.locator('#after').fill('۵۰۰۱');
+      const [invalidScan] = await Promise.all([
+        pricePage.waitForResponse(r => r.url().includes(receiptInspection) && r.request().method() === 'GET'),
+        pricePage.locator('.staff-filter button').click(),
+      ]);
+      assert.equal(invalidScan.status(), 400);
+      await pricePage.waitForLoadState('load');
+      assert.match(invalidScan.headers()['cache-control'], /no-store/);
+      assert(!(await pricePage.locator('main').innerText()).includes('۵۰۰۱'));
+      await checkLayout(pricePage, `receipt inspection error ${width}`);
+      await pricePage.getByRole('link', {name: 'شروع دوباره بازرسی ←'}).click();
+      assert.equal(new URL(pricePage.url()).pathname, receiptInspection);
+      response = await pricePage.goto(base + `/staff/operations/imports/${ids.oversized_receipt}/`);
+      assert.equal(response.status(), 200);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await pricePage.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ سازگاری بررسی نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-receipt-json-canary'));
+      await checkLayout(pricePage, `oversized receipt detail ${width}`);
+      response = await pricePage.goto(base + `/staff/operations/imports/${ids.oversized_receipt}/inspection/?category=oversized`);
+      assert.equal(response.status(), 200);
+      assert.match(await pricePage.locator('main').innerText(), /نامزد بیش از حد بررسی است؛ سازگاری آن بررسی نشد/);
+      assert(!(await pricePage.locator('main').innerText()).includes('browser-receipt-json-canary'));
+      await checkLayout(pricePage, `oversized receipt inspection ${width}`);
+      if (width === 390) await auditAccessibility(pricePage, 'oversized receipt inspection');
+      await priceContext.close();
     }
+    // A malformed hidden review version gets a private 400 and a safe GET
+    // recovery link, rather than requiring the user to resubmit the bad form.
+    const reviewContext = await contextFor(browser, 390, errors);
+    const reviewPage = await reviewContext.newPage();
+    await login(reviewPage, reviewer);
+    for (const [detailPath, domain, field] of [
+      [`/staff/products/${ids.candidate}/`, 'product', 'expected_hash'],
+      [`/staff/prices/${ids.price}/`, 'price', 'expected_product'],
+      [`/staff/sources/${ids.claim}/`, 'source', 'expected_review'],
+      [`/staff/clinical/${ids.clinical_leaf}/`, 'clinical', 'expected_evidence_hash'],
+      [`/staff/catalog/identity/package/${ids.package}/`, 'identity', 'expected_graph_hash'],
+    ]) {
+      let response = await reviewPage.goto(base + detailPath);
+      assert.equal(response.status(), 200);
+      const form = reviewPage.locator('form.staff-review-form');
+      const oldVersion = await form.locator(`#id_${field}`).inputValue();
+      await form.locator('#id_decision').selectOption('defer');
+      await form.locator('#id_reason').fill('بازبینی ساختگی برای آزمایش خطا');
+      await form.locator(`#id_${field}`).evaluate(el => { el.value = 'invalid-hidden-token'; });
+      [response] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
+                                     form.locator('button[type=submit]').click()]);
+      assert.equal(response.status(), 400);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(response.headers()['x-robots-tag'], /noindex/);
+      assert.equal(response.headers()['referrer-policy'], 'same-origin');
+      const alert = reviewPage.getByRole('alert').filter({hasText: 'اطلاعات پنهان بازبینی معتبر نیست'});
+      assert.equal(await alert.count(), 1);
+      const retry = alert.getByRole('link', {name: 'بازگشت به جزئیات و شروع دوباره ←'});
+      assert.equal(await retry.getAttribute('href'), detailPath);
+      await checkLayout(reviewPage, `${domain} invalid review 390`);
+      await auditAccessibility(reviewPage, `${domain} invalid review`);
+      await retry.focus();
+      await Promise.all([reviewPage.waitForURL(base + detailPath), reviewPage.keyboard.press('Enter')]);
+      assert.equal(await reviewPage.locator(`form.staff-review-form #id_${field}`).inputValue(), oldVersion);
+      assert.equal(await reviewPage.locator('form.staff-review-form #id_reason').inputValue(), '');
+      assert.equal(await reviewPage.locator('form.staff-review-form #id_decision').inputValue(), '');
+    }
+    // Selected detail POST errors retain the form; exercise visible field
+    // errors and native keyboard navigation to the summary link.
+    for (const [detailPath, reviewPath, domain] of [
+      [`/staff/products/${ids.candidate}/`, `/staff/products/${ids.candidate}/review/`, 'product'],
+      [`/staff/prices/${ids.price}/`, `/staff/prices/${ids.price}/review/`, 'price'],
+      [`/staff/sources/${ids.claim}/`, `/staff/sources/${ids.claim}/review/`, 'source'],
+      [`/staff/clinical/${ids.clinical_leaf}/`, `/staff/clinical/${ids.clinical_leaf}/review/`, 'clinical'],
+      [`/staff/catalog/identity/package/${ids.package}/`, `/staff/catalog/identity/package/${ids.package}/review/`, 'identity'],
+    ]) {
+      let response = await reviewPage.goto(base + detailPath);
+      assert.equal(response.status(), 200);
+      assert.equal(await reviewPage.locator('#staff-form-errors').count(), 0);
+      const form = reviewPage.locator('form.staff-review-form');
+      await form.locator('#id_decision').selectOption('defer');
+      await form.locator('#id_reason').fill('            ');
+      [response] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
+                                     form.locator('button[type=submit]').click()]);
+      assert.equal(response.status(), 400);
+      assert.match(response.headers()['cache-control'], /no-store/);
+      assert.match(await reviewPage.title(), /^خطا در فرم/);
+      const link = reviewPage.locator('#staff-form-errors a[href="#id_reason"]');
+      assert.equal(await link.count(), 1);
+      assert.equal(await reviewPage.locator('#id_reason').getAttribute('aria-invalid'), 'true');
+      assert.match(await reviewPage.locator('#id_reason').getAttribute('aria-describedby'), /id_reason_error/);
+      let reached = false;
+      for (let tab = 0; tab < 30 && !reached; tab++) {
+        await reviewPage.keyboard.press('Tab');
+        reached = await link.evaluate(el => document.activeElement === el);
+      }
+      assert(reached, `${domain} error summary reachable by Tab`);
+      await checkKeyboardFocus(reviewPage, '#staff-form-errors a[href="#id_reason"]', `${domain} error summary`, '#staff-form-errors');
+      await checkTextContrast(reviewPage, '#staff-form-errors a[href="#id_reason"]', '#staff-form-errors', `${domain} error summary link`);
+      await Promise.all([reviewPage.waitForURL(url => url.pathname === reviewPath && url.hash === '#id_reason'),
+                         reviewPage.keyboard.press('Enter')]);
+      assert(await reviewPage.locator('#id_reason').evaluate(el => document.activeElement === el));
+      await checkLayout(reviewPage, `${domain} review errors 390`);
+      await auditAccessibility(reviewPage, `${domain} review errors`);
+      // A raw control that Python would otherwise strip must not be saved.
+      await reviewPage.goto(base + detailPath);
+      const rawForm = reviewPage.locator('form.staff-review-form');
+      await rawForm.locator('#id_decision').selectOption('defer');
+      await rawForm.locator('#id_reason').fill('\u001cتوضیح ساختگی برای بازبینی مرورگر');
+      [response] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
+                                     rawForm.locator('button[type=submit]').click()]);
+      assert.equal(response.status(), 400);
+      assert.equal(await reviewPage.locator('#id_reason').getAttribute('aria-invalid'), 'true');
+      assert.match(await reviewPage.locator('#id_reason_error').innerText(), /نویسه کنترلی نامعتبر/);
+      assert.equal(await reviewPage.locator('#staff-form-errors a[href="#id_reason"]').count(), 1);
+    }
+    // A stale valid form sent to a now-uninspected draft must conflict without
+    // disclosing the draft. This deliberately targets only the disposable DB.
+    await reviewPage.goto(base + `/staff/clinical/${ids.clinical_leaf}/`);
+    const oversizedReviewForm = reviewPage.locator('form.staff-review-form');
+    await oversizedReviewForm.locator('#id_decision').selectOption('defer');
+    await oversizedReviewForm.locator('#id_reason').fill('بازبینی ساختگی برای بررسی بیشتر');
+    await oversizedReviewForm.evaluate((form, id) => { form.action = `/staff/clinical/${id}/review/`; }, ids.oversized_draft);
+    const [oversizedReviewConflict] = await Promise.all([reviewPage.waitForNavigation({waitUntil: 'load'}),
+      oversizedReviewForm.locator('button[type=submit]').click()]);
+    assert.equal(oversizedReviewConflict.status(), 409);
+    assert.match(oversizedReviewConflict.headers()['cache-control'], /no-store/);
+    assert.match(await reviewPage.locator('main').innerText(), /نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد/);
+    assert(!(await reviewPage.locator('main').innerText()).includes('browser-draft-statement-canary'));
+    assert.equal(await reviewPage.locator('form.staff-review-form').count(), 0);
+    await checkLayout(reviewPage, 'oversized clinical review conflict');
+    await auditAccessibility(reviewPage, 'oversized clinical review conflict');
+    await reviewContext.close();
     const authorContext = await contextFor(browser, 390, errors);
     const page = await authorContext.newPage();
     await login(page, author);
+    // The offline time-window form reports a bad boundary as a field error.
+    await page.goto(base + '/staff/operations/window/?start=25%3A00&end=10%3A00&zone=UTC');
+    assert.match(await page.title(), /^خطا در فرم/);
+    assert.equal(await page.locator('#id_start').getAttribute('aria-invalid'), 'true');
+    assert.match(await page.locator('#id_start').getAttribute('aria-describedby'), /id_start_error/);
+    const windowErrorLink = page.locator('#staff-form-errors a[href="#id_start"]');
+    let windowLinkReached = false;
+    for (let tab = 0; tab < 30 && !windowLinkReached; tab++) {
+      await page.keyboard.press('Tab');
+      windowLinkReached = await windowErrorLink.evaluate(el => document.activeElement === el);
+    }
+    assert(windowLinkReached, 'window error link reachable by Tab');
+    await Promise.all([page.waitForURL(url => url.hash === '#id_start'), page.keyboard.press('Enter')]);
+    await page.waitForFunction(() => document.activeElement === document.getElementById('id_start'));
+    await checkLayout(page, 'window form error 390');
+    await auditAccessibility(page, 'window form error');
+    await page.locator('#id_start').fill('09:00');
+    await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      page.locator('form.staff-review-form button[type=submit]').click()]);
+    assert.equal(await page.locator('#staff-form-errors').count(), 0);
+    assert.match(await page.locator('body').innerText(), /نتیجه محاسبه/);
+    // A forged date input can contain controls that the native date picker
+    // normally prevents; the server must report the raw value as invalid.
+    await page.goto(base + '/staff/sources/new/');
+    await page.locator('#id_source_name').fill('منبع ساختگی آزمون تاریخ');
+    await page.locator('#id_source_url').fill('https://example.org/date-check');
+    await page.locator('#id_owner').fill('مالک فرضی');
+    await page.locator('#id_evidence_url').fill('https://example.org/evidence');
+    await page.locator('#id_claims_collection').check();
+    await page.locator('#id_attestation').check();
+    const rawDateForm = page.locator('form.staff-review-form');
+    await rawDateForm.evaluate(el => { el.noValidate = true; });
+    await rawDateForm.locator('#id_starts_on').evaluate(el => { el.type = 'text'; el.value = '\t2026-01-02'; });
+    const [rawDateResponse] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      rawDateForm.locator('button[type=submit]').click()]);
+    assert.equal(rawDateResponse.status(), 200);
+    assert.match(rawDateResponse.headers()['cache-control'], /no-store/);
+    assert.match(await page.locator('main').innerText(), /نویسه کنترلی نامعتبر است/);
+    assert.equal(await page.locator('#staff-form-errors a[href="#id_starts_on"]').count(), 1);
+    assert.equal(await page.locator('#id_starts_on').getAttribute('aria-invalid'), 'true');
+    await checkLayout(page, 'raw date error');
+    await auditAccessibility(page, 'raw date error');
+    await page.goto(base + '/staff/sources/new/');
+    await page.locator('#id_source_name').fill('ادعای ساختگی طولانی مرورگر');
+    await page.locator('#id_source_url').fill('https://example.org/oversized-claim');
+    await page.locator('#id_owner').fill('مالک فرضی');
+    await page.locator('#id_evidence_url').fill('https://example.org/evidence');
+    await page.locator('#id_claims_collection').check();
+    await page.locator('#id_attestation').check();
+    const [claimConflict] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      page.locator('.staff-review-form button[type=submit]').click()]);
+    assert.equal(claimConflict.status(), 409);
+    assert.match(claimConflict.headers()['cache-control'], /no-store/);
+    assert(!(await page.locator('main').innerText()).includes('browser-claim-note-canary'));
+    assert.match(await page.locator('main').innerText(), /ادعای قبلی در دسترس نیست یا تغییر کرده است/);
+    await checkLayout(page, 'oversized claim replay conflict');
+    await auditAccessibility(page, 'oversized claim replay conflict');
+    await page.goto(base + '/staff/products/import/');
+    const [productSample] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('link', {name: 'دریافت فایل نمونه ساختگی فرآورده (CSV) ←'}).click(),
+    ]);
+    assert.equal(productSample.suggestedFilename(), 'product_candidates.synthetic.csv');
+    assert.match(fs.readFileSync(await productSample.path(), 'utf8'), /^source_record_id,name_fa,name_en,/);
+    await page.locator('#id_source_name').fill('منبع ساختگی مرورگر');
+    await page.locator('#id_source_url').fill('https://example.org/browser-product');
+    await page.locator('#id_action').selectOption('stage');
+    await page.locator('#id_rights_attested').check();
+    const duplicateProduct = 'source_record_id,name_fa,name_en,manufacturer,strength,dosage_form,package_description,irc\n' +
+      'browser-product,فرآورده ساختگی مرورگر,,سازنده فرضی,2 mg,قرص,10 عدد,001\n';
+    await page.locator('#id_csv_file').setInputFiles({name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(duplicateProduct)});
+    const [productConflict] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      page.locator('.staff-review-form button[type=submit]').click()]);
+    assert.equal(productConflict.status(), 409);
+    assert.match(productConflict.headers()['cache-control'], /no-store/);
+    assert.match(await page.locator('main').innerText(), /ناسازگاری رکورد قبلی/);
+    assert(!(await page.locator('main').innerText()).includes('browser-product-comparison-canary'));
+    await checkLayout(page, 'oversized product staging conflict');
+    await auditAccessibility(page, 'oversized product staging conflict');
     // A valid session must still be unable to submit a POST without a CSRF token.
     const rejected = await page.evaluate(async () => (await fetch('/staff/catalog/identity/new/ingredient/', {
       method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'name_fa=csrf-canary',
     })).status);
     assert.equal(rejected, 403, 'missing CSRF token must be rejected');
     await page.goto(base + '/staff/catalog/identity/new/ingredient/');
+    assert.equal(await page.locator('#staff-form-errors').count(), 0);
+    assert.doesNotMatch(await page.title(), /^خطا در فرم/);
     await page.locator('#id_source_name').fill('   ');
     await page.locator('#id_source_url').fill('https://example.org/fixture');
     await page.locator('#id_name_fa').fill('ماده تازه ساختگی مرورگر');
@@ -468,11 +1346,122 @@ async function run() {
     const describedBy = await sourceField.getAttribute('aria-describedby');
     assert(describedBy && describedBy.split(/\s+/).includes('id_source_name_error'));
     assert((await page.locator('#id_source_name_error').innerText()).trim());
+    assert.match(await page.title(), /^خطا در فرم/);
+    const summary = page.locator('#staff-form-errors');
+    const summaryLink = summary.locator('a[href="#id_source_name"]');
+    assert.equal(await summaryLink.count(), 1);
+    let summaryReached = false;
+    for (let tab = 0; tab < 30 && !summaryReached; tab++) {
+      await page.keyboard.press('Tab');
+      summaryReached = await summaryLink.evaluate(el => document.activeElement === el);
+    }
+    assert(summaryReached, 'error summary link reachable by Tab');
+    await checkKeyboardFocus(page, '#staff-form-errors a[href="#id_source_name"]', 'error summary link', '#staff-form-errors');
+    await checkTextContrast(page, '#staff-form-errors a[href="#id_source_name"]', '#staff-form-errors', 'error summary link');
+    // Fragment navigation and its native focus update can finish after key dispatch.
+    await Promise.all([page.waitForURL(url => url.hash === '#id_source_name', {timeout: 5000}),
+                       page.keyboard.press('Enter')]);
+    await page.waitForFunction(() => document.activeElement === document.getElementById('id_source_name'),
+                               null, {timeout: 5000});
+    await checkLayout(page, 'invalid identity form 390');
     await auditAccessibility(page, 'invalid identity form');
     await sourceField.fill('منبع ساختگی');
     await Promise.all([page.waitForURL(/\/staff\/catalog\/identity\/ingredient\/\d+\/$/),
       page.locator('form.staff-review-form button[type=submit]').click()]);
     assert.match(await page.locator('body').innerText(), /ماده تازه ساختگی مرورگر/);
+    // Error links must point to rendered revision fields, including a formset row.
+    for (const [path, selector, value] of [
+      [`/staff/catalog/identity/ingredient/${ids.ingredient}/correction/`, '#id_change_reason', 'short'],
+      [`/staff/catalog/identity/formulation/${ids.formulation}/correction/`, '#id_parts-0-numerator', ''],
+    ]) {
+      await page.goto(base + path);
+      const form = page.locator('form.staff-review-form');
+      await form.evaluate(el => { el.noValidate = true; });
+      await form.locator('#id_synthetic_ack').check();
+      await form.locator('#id_change_reason').fill('دلیل اصلاح ساختگی برای مرورگر');
+      await form.locator(selector).fill(value);
+      const [response] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+        form.locator('button[type=submit]').click()]);
+      assert.equal(response.status(), 200);
+      assert.match(await page.title(), /^خطا در فرم/);
+      const link = page.locator(`#staff-form-errors a[href="${selector}"]`);
+      assert.equal(await link.count(), 1);
+      assert.equal(await page.locator(selector).getAttribute('aria-invalid'), 'true');
+      assert.match(await page.locator(selector).getAttribute('aria-describedby'), /_error/);
+      let reached = false;
+      for (let tab = 0; tab < 30 && !reached; tab++) {
+        await page.keyboard.press('Tab');
+        reached = await link.evaluate(el => document.activeElement === el);
+      }
+      assert(reached, `revision error link ${selector} reachable by Tab`);
+      await Promise.all([page.waitForURL(url => url.hash === selector), page.keyboard.press('Enter')]);
+      await page.waitForFunction(id => document.activeElement === document.getElementById(id), selector.slice(1));
+      await checkLayout(page, `revision error ${selector}`);
+      await auditAccessibility(page, `revision error ${selector}`);
+    }
+    // Exercise a crafted raw numeric value; number inputs normally sanitize it
+    // in the browser, but an HTTP client can still send boundary controls.
+    await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
+    const rawNumericForm = page.locator('form.staff-review-form');
+    await rawNumericForm.evaluate(el => { el.noValidate = true; });
+    await rawNumericForm.locator('#id_synthetic_ack').check();
+    await rawNumericForm.locator('#id_change_reason').fill('دلیل اصلاح ساختگی برای مرورگر');
+    await rawNumericForm.locator('#id_parts-0-numerator').evaluate(el => { el.type = 'text'; el.value = '\t1'; });
+    const [rawNumericResponse] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      rawNumericForm.locator('button[type=submit]').click()]);
+    assert.equal(rawNumericResponse.status(), 200);
+    assert.match(rawNumericResponse.headers()['cache-control'], /no-store/);
+    assert.match(await page.locator('main').innerText(), /نویسه کنترلی نامعتبر است/);
+    assert.equal(await page.locator('#staff-form-errors a[href="#id_parts-0-numerator"]').count(), 1);
+    assert.equal(await page.locator('#id_parts-0-numerator').getAttribute('aria-invalid'), 'true');
+    await checkLayout(page, 'raw numeric revision error');
+    await auditAccessibility(page, 'raw numeric revision error');
+    // Hidden management fields can be tampered with outside ordinary UI. A
+    // duplicate must be rejected without creating the otherwise-valid revision.
+    await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
+    const managementForm = page.locator('form.staff-review-form');
+    await managementForm.locator('#id_synthetic_ack').check();
+    await managementForm.locator('#id_change_reason').fill('دلیل اصلاح ساختگی برای مرورگر');
+    await managementForm.locator('#id_name').fill('فرمول اصلاحی ساختگی مرورگر');
+    await managementForm.evaluate(el => {
+      const duplicate = document.createElement('input');
+      duplicate.type = 'hidden'; duplicate.name = 'parts-TOTAL_FORMS'; duplicate.value = '5';
+      el.appendChild(duplicate);
+    });
+    const [managementResponse] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      managementForm.locator('button[type=submit]').click()]);
+    assert.equal(managementResponse.status(), 200);
+    assert.match(managementResponse.headers()['cache-control'], /no-store/);
+    assert.match(await page.title(), /^خطا در فرم/);
+    assert.match(await page.locator('#staff-form-errors').innerText(), /ساختار فرم را بررسی کنید/);
+    assert.match(await page.locator('main').innerText(), /صفحه را دوباره باز کنید/);
+    await checkLayout(page, 'invalid management form');
+    await auditAccessibility(page, 'invalid management form');
+    // Even when the final duplicate value is blank, an extra component row
+    // must not be silently treated as unchanged.
+    await page.goto(base + `/staff/catalog/identity/formulation/${ids.formulation}/correction/`);
+    const duplicateForm = page.locator('form.staff-review-form');
+    await duplicateForm.evaluate(el => { el.noValidate = true; });
+    await duplicateForm.locator('#id_synthetic_ack').check();
+    await duplicateForm.locator('#id_change_reason').fill('دلیل اصلاح ساختگی برای مرورگر');
+    await duplicateForm.locator('#id_name').fill('فرمول اصلاحی ساختگی مرورگر');
+    await duplicateForm.evaluate(el => {
+      for (const value of ['2', '']) {
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = 'parts-1-numerator'; input.value = value;
+        el.appendChild(input);
+      }
+    });
+    const [duplicateResponse] = await Promise.all([page.waitForNavigation({waitUntil: 'load'}),
+      duplicateForm.locator('button[type=submit]').click()]);
+    assert.equal(duplicateResponse.status(), 200);
+    assert.match(duplicateResponse.headers()['cache-control'], /no-store/);
+    assert.match(await page.title(), /^خطا در فرم/);
+    assert.equal(await page.locator('#staff-form-errors a[href="#id_parts-1-numerator"]').count(), 1);
+    assert.equal(await page.locator('#id_parts-1-numerator').getAttribute('aria-invalid'), 'true');
+    assert.match(await page.locator('main').innerText(), /بیش از یک بار ارسال شده است/);
+    await checkLayout(page, 'duplicate optional component');
+    await auditAccessibility(page, 'duplicate optional component');
     let child = await revision(page, `/staff/catalog/identity/ingredient/${ids.ingredient}/correction/`, '#id_name_fa', 'ماده اصلاحی ساختگی مرورگر');
     assert.match(child, /\/ingredient\/\d+\/$/);
     assert.match(await page.locator('body').innerText(), /ماده اصلاحی ساختگی مرورگر/);
@@ -521,14 +1510,26 @@ async function run() {
     assert(await accessiblePage.evaluate(() => matchMedia('(forced-colors: active)').matches &&
       matchMedia('(prefers-reduced-motion: reduce)').matches));
     assert.equal(await accessiblePage.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior), 'auto');
-    await accessiblePage.keyboard.press('Tab');
-    await accessiblePage.keyboard.press('Enter');
-    await accessiblePage.keyboard.press('Tab');
+    const checkReducedTiming = async selector => {
+      const timing = await accessiblePage.locator(selector).first().evaluate(el => ({
+        transition: getComputedStyle(el).transitionDuration, animation: getComputedStyle(el).animationDuration,
+      }));
+      assert.deepEqual(timing, {transition: '0s', animation: '0s'}, `${selector}: reduced motion timing`);
+    };
+    await checkReducedTiming('.skip-link');
+    await checkReducedTiming('.service-card');
+    const brokenTiming = await addTestStyles(accessiblePage,
+      '.skip-link { transition-duration: 1ms !important; animation-duration: 1ms !important; }');
+    await assert.rejects(checkReducedTiming('.skip-link'), /reduced motion timing/);
+    await removeTestStyles(brokenTiming);
+    await checkSkipLink(accessiblePage, 'skip forced-home 390', '#drug-search');
     await checkKeyboardFocus(accessiblePage, '#drug-search', 'forced-colors search', '.search-form');
     await accessiblePage.locator('#drug-search').fill('Browser Synthetic Product');
     await Promise.all([accessiblePage.waitForURL('**/search/?q=Browser*'), accessiblePage.keyboard.press('Enter')]);
     assert.equal(await accessiblePage.locator('.result-card').count(), 1);
     await checkLayout(accessiblePage, 'forced-colors search results');
+    await accessiblePage.goto(base + '/staff/login/');
+    await checkSkipLink(accessiblePage, 'skip forced-login 390', '#id_username');
     await login(accessiblePage, author);
     await accessiblePage.goto(base + '/staff/sources/dates/');
     await accessiblePage.getByRole('link', {name: 'فهرست ادعاهای منبع ←'}).focus();

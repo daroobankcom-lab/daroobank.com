@@ -5,6 +5,9 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.account_checks import current_accounts
+from daroobank.review_content_bounds import bounded_review_fields, materialize_review_fields
+
 from .identity import (
     ADD, VIEW, REVIEW, MAX_ID, INGREDIENT_FIELDS, FORMULATION_FIELDS, PRODUCT_FIELDS, PACKAGE_FIELDS, COMPONENT_FIELDS,
     IdentityConflict, IdentityError, create_ingredient, create_formulation, create_product, create_package,
@@ -13,6 +16,7 @@ from .identity import (
     review_package, safe_snapshot,
 )
 from .identity_lineage import inspect_lineage, InvalidLineageCursor, LineageNotFound
+from .revision_read import bounded_revision_reasons, materialize_revision_reason
 from .identity_forms import (
     ComponentFormSet, FormulationForm, IngredientForm, PackageForm, ProductForm, IdentityReviewForm,
     PackageRevisionForm, IngredientRevisionForm, FormulationRevisionForm, ProductRevisionForm, RevisionComponentFormSet,
@@ -111,7 +115,8 @@ def _cursor(request, name):
 
 
 def _check_review(review, package_id, graph_hash):
-    review.safe = review_is_consistent(review, package_id)
+    materialize_review_fields(review, snapshot_field='graph_snapshot')
+    review.safe = not review.content_oversized and review_is_consistent(review, package_id)
     review.is_current = review.safe and review.graph_sha256 == graph_hash
     return review
 
@@ -132,8 +137,10 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
         else:
             links = COMPONENT_LINKS[kind].objects.select_related('parent', 'child')
             if kind == 'product': links = links.select_related('parent__formulation', 'child__formulation')
+        links = bounded_revision_reasons(links)
         parent_link = links.filter(child_id=obj.pk).first()
         if parent_link:
+            materialize_revision_reason(parent_link)
             parent_link.safe = (valid_package_revision(parent_link, obj.pk) if kind == 'package'
                                 else valid_identity_revision(kind, parent_link, obj.pk))
         children = links.filter(parent_id=obj.pk).order_by('-pk')
@@ -144,13 +151,14 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
         if len(child_rows) > REVISION_PAGE_SIZE:
             next_revision_before = child_links[-1].pk
         for link in child_links:
+            materialize_revision_reason(link)
             link.safe = (valid_package_revision(link, link.child_id) if kind == 'package'
                          else valid_identity_revision(kind, link, link.child_id))
     if kind == 'package' and snapshot:
         queryset = obj.reviews.order_by('-pk')
         if before is not None:
             queryset = queryset.filter(pk__lt=before)
-        rows = list(queryset[:REVIEW_PAGE_SIZE + 1])
+        rows = list(bounded_review_fields(queryset, snapshot_field='graph_snapshot')[:REVIEW_PAGE_SIZE + 1])
         reviews = rows[:REVIEW_PAGE_SIZE]
         if len(rows) > REVIEW_PAGE_SIZE:
             next_before = reviews[-1].pk
@@ -160,7 +168,9 @@ def _detail(request, kind, obj, *, review_form=None, status=200):
             # Use the newest review actually rendered, never a later unseen insert.
             latest_shown = reviews[0].pk if reviews else 0
             review_form = IdentityReviewForm(initial={'expected_review': latest_shown, 'expected_graph_hash': graph_hash})
+        reviewers = current_accounts([review.reviewer_id for review in reviews], using=queryset.db)
         for review in reviews:
+            review.display_reviewer = reviewers.get(review.reviewer_id)
             _check_review(review, obj.pk, graph_hash)
     return render(request, 'staff/identity_detail.html', {'page_title': 'جزئیات هویت ساختگی | داروبانک',
         'description': 'زنجیره ادعایی کاتالوگ.', 'private_staff': True, 'noindex': True, 'kind': kind,
@@ -230,8 +240,9 @@ def revise_component(request, kind, pk):
 
 
 def _latest_review_for_revision(package, graph_hash):
-    item = package.reviews.order_by('-pk').first()
+    item = bounded_review_fields(package.reviews.order_by('-pk'), snapshot_field='graph_snapshot').first()
     if item:
+        item.display_reviewer = current_accounts([item.reviewer_id], using=item._state.db).get(item.reviewer_id)
         _check_review(item, package.pk, graph_hash)
     return item
 

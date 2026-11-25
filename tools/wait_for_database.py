@@ -1,4 +1,4 @@
-"""Bounded startup wait used by the development container; no schema changes."""
+"""Development startup retry window; not a hard timeout for connection or query."""
 import os
 import sys
 import time
@@ -12,7 +12,9 @@ from django.db import OperationalError, connections
 
 def wait_for_database(timeout=60, interval=2):
     deadline = time.monotonic() + timeout
-    while True:
+    first_attempt = True
+    while first_attempt or time.monotonic() < deadline:
+        first_attempt = False
         try:
             with connections['default'].cursor() as cursor:
                 cursor.execute('SELECT 1')
@@ -24,10 +26,11 @@ def wait_for_database(timeout=60, interval=2):
             if remaining <= 0:
                 return False
             time.sleep(min(interval, remaining))
+    return False
 
 
 if __name__ == '__main__':
     if not wait_for_database():
-        print('PostgreSQL did not become ready within 60 seconds.', file=sys.stderr)
+        print('PostgreSQL did not become ready during the retry window.', file=sys.stderr)
         sys.exit(1)
     print('PostgreSQL is ready.')

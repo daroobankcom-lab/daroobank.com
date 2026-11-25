@@ -53,6 +53,48 @@ class PublicReadPrivacyTests(TestCase):
                     self.assertNotIn(b'synthetic-canary', response.content)
             client.cookies.clear()
 
+    @override_settings(APPEND_SLASH=True)
+    def test_slashless_redirects_keep_public_privacy_policy(self):
+        for path in ('/search', '/api/v1/search', '/products/123', '/api/v1/products/123'):
+            for method in (self.client.get, self.client.head):
+                with self.subTest(path=path, method=method.__name__), self.assertNumQueries(0):
+                    response = method(path, {'q': 'synthetic-canary'})
+                    self.assertEqual(response.status_code, 301)
+                    self.assertEqual(response['Location'], path + '/?q=synthetic-canary')
+                    self.assert_privacy_headers(response)
+                    self.assertNotIn(b'synthetic-canary', response.content)
+
+    @override_settings(APPEND_SLASH=False)
+    def test_slashless_missing_routes_keep_policy_without_redirect(self):
+        for path in ('/search', '/api/v1/search', '/products/123', '/api/v1/products/123'):
+            with self.subTest(path=path), self.assertNumQueries(0):
+                response = self.client.get(path, {'q': 'synthetic-canary'})
+                self.assertEqual(response.status_code, 404)
+                self.assert_privacy_headers(response)
+
+    def test_unresolvable_large_product_ids_keep_known_path_policy(self):
+        # Python's integer conversion rejects very long IDs before resolver_match
+        # exists, even though the URL has the public product path shape.
+        for prefix in ('/products/', '/api/v1/products/'):
+            for suffix in ('', '/'):
+                path = prefix + '9' * 5000 + suffix
+                for method in (self.client.get, self.client.head):
+                    with self.subTest(prefix=prefix, suffix=suffix, method=method.__name__), self.assertNumQueries(0):
+                        response = method(path, {'q': 'synthetic-canary'})
+                        self.assertEqual(response.status_code, 404)
+                        self.assert_privacy_headers(response)
+                        self.assertNotIn(b'synthetic-canary', response.content)
+
+    def test_slashless_lookalikes_do_not_acquire_public_policy(self):
+        for path in ('/searches', '/api/v1/search-other', '/products/123extra',
+                     '/products/-1', '/products/123/extra', '/staff/products/123'):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                if path.startswith('/staff/'):
+                    self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                else:
+                    self.assertNotEqual(response.get('Referrer-Policy'), 'no-referrer')
+
     def test_resolved_unhandled_error_is_covered_without_exposing_details(self):
         client = Client(raise_request_exception=False)
         with patch('catalog.views.search_product_page', side_effect=RuntimeError('synthetic-secret')):

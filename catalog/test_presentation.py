@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from .models import ProductPresentation
 from .services import MAX_SEARCH_CANDIDATES
+from .test_constraint_helpers import omit_publication_date_constraint_for_test
 
 
 class PresentationDetailTests(TestCase):
@@ -64,6 +65,8 @@ class PresentationDetailTests(TestCase):
         self.assertNotContains(self.client.get(reverse('sitemap')), '/products/')
 
     def test_unpublished_or_metadata_removed_disappears_immediately(self):
+        # Keep the read-side defense test for a missing/bypassed DB constraint.
+        omit_publication_date_constraint_for_test()
         html_url, api_url = self.urls(self.product.pk)
         for change in [dict(published=False), dict(verified_at=None), dict(source_name=''), dict(source_name='   '),
                        dict(source_url='http://example.org'), dict(source_url='https://'),
@@ -81,6 +84,47 @@ class PresentationDetailTests(TestCase):
                     source_url='https://example.org/item', name_fa='فرآورده ساختگی', manufacturer='سازنده فرضی',
                     strength='۵ میلی‌گرم', dosage_form='قرص', package_description='۱۰ عدد',
                 )
+
+    def test_control_characters_in_public_fields_are_not_disclosed(self):
+        # Direct SQL/ORM updates bypass model validation and leave the search
+        # projection unchanged; both public reads must still fail closed.
+        fields = ('name_fa', 'name_en', 'manufacturer', 'strength', 'dosage_form',
+                  'package_description', 'irc', 'source_name', 'source_url')
+        for field in fields:
+            with self.subTest(field=field):
+                original = getattr(self.product, field)
+                corrupted = original + '\x01private-canary'
+                ProductPresentation.objects.filter(pk=self.product.pk).update(**{field: corrupted})
+                html, api = (self.client.get(url) for url in self.urls(self.product.pk))
+                self.assertEqual(html.status_code, 404)
+                self.assertEqual(api.status_code, 404)
+                self.assert_private_read_headers(html)
+                self.assert_private_read_headers(api)
+                self.assertNotIn(b'private-canary', html.content)
+                self.assertNotIn(b'private-canary', api.content)
+                search = self.client.get(reverse('search'), {'q': '001234'})
+                search_api = self.client.get(reverse('search_api'), {'q': '001234'})
+                self.assertNotContains(search, 'private-canary')
+                self.assertNotContains(search, f'/products/{self.product.pk}/')
+                self.assertEqual(search_api.json()['data'], [])
+                ProductPresentation.objects.filter(pk=self.product.pk).update(**{field: original})
+        # An optional blank field and the Persian zero-width non-joiner stay valid.
+        self.assertEqual(self.client.get(self.urls(self.product.pk)[1]).status_code, 200)
+        ProductPresentation.objects.filter(pk=self.product.pk).update(name_en='', irc='')
+        self.assertEqual(self.client.get(self.urls(self.product.pk)[1]).status_code, 200)
+
+    def test_invalid_python_text_types_and_surrogates_are_rejected(self):
+        from .services import is_public_presentation
+        for field in ('name_fa', 'name_en', 'manufacturer', 'strength', 'dosage_form',
+                      'package_description', 'irc', 'source_name', 'source_url'):
+            for value in (None, 123, '\ud800', 'bad\x7ftext', 'bad\x85text'):
+                with self.subTest(field=field, value=ascii(value)):
+                    original = getattr(self.product, field)
+                    try:
+                        setattr(self.product, field, value)
+                        self.assertFalse(is_public_presentation(self.product))
+                    finally:
+                        setattr(self.product, field, original)
 
     def test_escaping_and_optional_irc(self):
         ProductPresentation.objects.filter(pk=self.product.pk).update(

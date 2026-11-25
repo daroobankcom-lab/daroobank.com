@@ -1,13 +1,15 @@
 """Atomic web intake receipts and row outcomes. Never fetch or publish."""
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Count, Max, Min, Q
 
+from daroobank.write_conflict_boundary import write_conflict_boundary
 from catalog.comparisons import valid_candidate as valid_product
-from catalog.intake import stage_products
+from catalog.intake import MAX_ROWS as MAX_PRODUCT_ROWS, stage_products
 from pricing.comparisons import valid_candidate as valid_price
-from pricing.importer import stage_csv, validate_source
+from pricing.importer import MAX_ROWS as MAX_PRICE_ROWS, stage_csv, validate_source
+from .exceptions import StagingConflict
+from .candidate_reads import bounded_manifest_candidates, materialize_manifest_candidate
 from .models import ImportReceipt, ImportReceiptItem
 
 PRODUCT_VIEW = 'catalog.view_productcandidate'
@@ -46,7 +48,7 @@ def stage_product_with_receipt(file, source_name, source_url, *, actor, rights_a
     if not actor:
         raise PermissionDenied
     outcomes = []
-    with transaction.atomic():
+    with write_conflict_boundary(StagingConflict):
         counts = stage_products(file, source_name, source_url, actor=actor, commit=True, rights_attested=rights_attested,
                                 on_staged=lambda *item: outcomes.append(item))
         receipt = ImportReceipt.objects.create(kind=ImportReceipt.PRODUCT, source_name=source_name,
@@ -62,7 +64,7 @@ def stage_price_with_receipt(file, source_name, source_url, *, actor, rights_att
         raise PermissionDenied
     source_name, source_url = validate_source(source_name, source_url)
     outcomes = []
-    with transaction.atomic():
+    with write_conflict_boundary(StagingConflict):
         counts = stage_csv(file, source_name, source_url, commit=True, rights_attested=rights_attested, staged_by=actor,
                            on_staged=lambda *item: outcomes.append(item))
         receipt = ImportReceipt.objects.create(kind=ImportReceipt.PRICE, source_name=source_name, source_url=source_url,
@@ -72,21 +74,36 @@ def stage_price_with_receipt(file, source_name, source_url, *, actor, rights_att
     return counts, receipt
 
 
-def manifest_context(receipt, page_number):
-    """Check structural counts and bounded row/candidate consistency, not authenticity."""
+def manifest_structure(receipt):
+    """Check manifest aggregate structure; this is not proof of authenticity."""
     if receipt.manifest_version is None:
-        return {'status': 'legacy'}
-    if receipt.manifest_version != MANIFEST_VERSION:
-        return {'status': 'invalid'}
+        return 'legacy'
+    if type(receipt.manifest_version) is not int or receipt.manifest_version != MANIFEST_VERSION:
+        return 'invalid'
+    limits = {ImportReceipt.PRODUCT: MAX_PRODUCT_ROWS, ImportReceipt.PRICE: MAX_PRICE_ROWS}
+    maximum = limits.get(receipt.kind)
+    counts = (receipt.rows, receipt.created, receipt.duplicates)
+    if (maximum is None or any(type(value) is not int or value < 0 for value in counts)
+            or not 1 <= receipt.rows <= maximum or receipt.created + receipt.duplicates != receipt.rows):
+        return 'invalid'
+    matches = (receipt.suggested, receipt.ambiguous, receipt.unmatched)
+    if receipt.kind == ImportReceipt.PRODUCT:
+        if any(value is not None for value in matches):
+            return 'invalid'
+    elif (any(type(value) is not int or value < 0 for value in matches)
+          or sum(matches) != receipt.rows):
+        return 'invalid'
     rows = receipt.items.all()
-    totals = rows.aggregate(total=Count('pk'), first=Min('ordinal'), last=Max('ordinal'),
+    totals = rows.aggregate(total=Count('pk'), distinct_ordinals=Count('ordinal', distinct=True),
+        first=Min('ordinal'), last=Max('ordinal'),
         created=Count('pk', filter=Q(was_created=True)),
         products=Count('pk', filter=Q(product_candidate__isnull=False, price_candidate__isnull=True, match_status='')),
         prices=Count('pk', filter=Q(price_candidate__isnull=False, product_candidate__isnull=True)),
         suggested=Count('pk', filter=Q(match_status='suggested')),
         ambiguous=Count('pk', filter=Q(match_status='ambiguous')),
         unmatched=Count('pk', filter=Q(match_status='unmatched')))
-    valid = (totals['total'] == receipt.rows and totals['first'] == 1 and totals['last'] == receipt.rows
+    valid = (totals['total'] == receipt.rows and totals['distinct_ordinals'] == receipt.rows
+             and totals['first'] == 1 and totals['last'] == receipt.rows
              and totals['created'] == receipt.created and totals['total'] - totals['created'] == receipt.duplicates)
     if receipt.kind == ImportReceipt.PRODUCT:
         valid = valid and totals['products'] == receipt.rows
@@ -95,19 +112,47 @@ def manifest_context(receipt, page_number):
                  and totals['ambiguous'] == receipt.ambiguous and totals['unmatched'] == receipt.unmatched)
     else:
         valid = False
-    if not valid:
-        return {'status': 'invalid'}
+    return 'available' if valid else 'invalid'
+
+
+def manifest_item_safe(receipt, item, *, _candidate_cache=None):
+    """Compare each item; cache only pure candidate checks within one joined read."""
+    if receipt.kind not in (ImportReceipt.PRODUCT, ImportReceipt.PRICE):
+        return False
     candidate_field = 'product_candidate' if receipt.kind == ImportReceipt.PRODUCT else 'price_candidate'
-    page = Paginator(rows.select_related(candidate_field).order_by('ordinal'), PAGE_SIZE).get_page(page_number)
-    for item in page.object_list:
+    try:
         candidate = getattr(item, candidate_field)
-        try:
-            item.safe = bool(candidate and candidate.source_name == receipt.source_name
+        if not (candidate and candidate.pk and candidate.source_name == receipt.source_name
                 and candidate.source_url == receipt.source_url and candidate.source_record_id == item.source_record_id
-                and candidate.payload_sha256 == item.payload_sha256
-                and (valid_product(candidate) if receipt.kind == ImportReceipt.PRODUCT else valid_price(candidate)))
-        except (ValueError, TypeError, AttributeError, OverflowError):
-            item.safe = False
+                and candidate.payload_sha256 == item.payload_sha256):
+            return False
+    except (ValueError, TypeError, AttributeError, OverflowError, ObjectDoesNotExist):
+        return False
+    if _candidate_cache is not None and candidate.pk in _candidate_cache:
+        return _candidate_cache[candidate.pk]
+    try:
+        valid = bool(valid_product(candidate) if receipt.kind == ImportReceipt.PRODUCT else valid_price(candidate))
+    except (ValueError, TypeError, AttributeError, OverflowError, ObjectDoesNotExist):
+        valid = False
+    if _candidate_cache is not None:
+        _candidate_cache[candidate.pk] = valid
+    return valid
+
+
+def manifest_context(receipt, page_number):
+    """Check structural counts and bounded row/candidate consistency, not authenticity."""
+    status = manifest_structure(receipt)
+    if status != 'available':
+        return {'status': status}
+    candidate_field = 'product_candidate' if receipt.kind == ImportReceipt.PRODUCT else 'price_candidate'
+    rows = bounded_manifest_candidates(receipt.items.order_by('ordinal'), candidate_field)
+    page = Paginator(rows, PAGE_SIZE).get_page(page_number)
+    # All candidates came from the same joined SELECT. Never share this cache
+    # across pages or requests, and always compare each item's own fields.
+    candidate_cache = {}
+    for item in page.object_list:
+        materialize_manifest_candidate(item, candidate_field)
+        item.safe = not item.candidate_oversized and manifest_item_safe(receipt, item, _candidate_cache=candidate_cache)
     return {'status': 'available', 'page': page}
 
 

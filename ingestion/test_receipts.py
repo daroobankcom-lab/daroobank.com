@@ -11,8 +11,10 @@ from django.db import IntegrityError, transaction
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from catalog import intake as product_intake
 from catalog.intake import stage_products
 from catalog.models import ProductCandidate, ProductPresentation
+from pricing import importer as price_importer
 from pricing.importer import stage_csv
 from pricing.models import PriceCandidate
 from .models import ImportReceipt
@@ -118,13 +120,14 @@ class ReceiptTests(TestCase):
                     with self.assertRaises(RuntimeError):
                         service(io.BytesIO(file), 'نمونه', 'https://example.org', actor=author, rights_attested=True)
                 self.assertEqual(model.objects.count(), 0); self.assertEqual(ImportReceipt.objects.count(), 0)
-                original = model.objects.get_or_create
+                module = product_intake if kind == 'product' else price_importer
+                original = module._find_or_create_candidate
                 counter = [0]
                 def fail_second(*args, **kwargs):
                     counter[0] += 1
                     if counter[0] == 2: raise RuntimeError('synthetic row error')
                     return original(*args, **kwargs)
-                with patch.object(model.objects, 'get_or_create', side_effect=fail_second):
+                with patch.object(module, '_find_or_create_candidate', side_effect=fail_second):
                     with self.assertRaises(RuntimeError):
                         service(io.BytesIO(file), 'نمونه', 'https://example.org', actor=author, rights_attested=True)
                 self.assertEqual(model.objects.count(), 0); self.assertEqual(ImportReceipt.objects.count(), 0)

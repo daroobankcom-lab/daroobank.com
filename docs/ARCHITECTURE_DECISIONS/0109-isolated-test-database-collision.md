@@ -1,0 +1,15 @@
+# ADR 0109: fail closed on isolated test-database creation collisions
+
+Status: development-only implementation, 24 November 2026. Supersedes the collision-deletion limitation in [ADR 0071](0071-isolated-general-tests.md) for the three isolated test settings only.
+
+## Decision
+
+The general synthetic, optional restore and optional browser test settings now use a small subclass of Django's PostgreSQL backend. Its test-database creation accepts only the three scoped lowercase-hex test name patterns and refuses reuse. It attempts `CREATE DATABASE` once, without a prior existence check, and on a PostgreSQL duplicate-database error fails instead of asking for or performing a drop/recreate. This applies with and without `--noinput`. Direct cloning is rejected; the existing isolated test runner continues to reject `--keepdb` and `--parallel`. The underlying database vendor and ordinary PostgreSQL behavior remain PostgreSQL. Base development settings and the default Django test runner are unchanged.
+
+The atomic CREATE is intentional: checking for absence first would have a check/use race. A collision is an error, not a reason to pick another name automatically or use the existing data. Other creation errors are not retried or deliberately turned into collisions. Full exception chains and Django/driver logs can reveal database details; this is local synthetic tooling, not a privacy boundary. The backend depends on Django's test-creation API and PostgreSQL driver behavior; revalidate it when upgrading Django or the driver.
+
+## Evidence and limits
+
+Before the change, a real synthetic canary database was created on an isolated PostgreSQL cluster, and a subprocess was forced to use its randomly generated name. With `--noinput`, the old runner dropped it, recreated it, ran a test and removed the replacement; the regression test failed. With the new backend, real canaries for all three settings, tested with and without `--noinput`, retain their original database OID and marker row after the refused creation. A focused test checks invalid names, reuse and cloning fail before database access, and a simulated unrelated creation error is not retried. Those tests do not prove all failure modes, PostgreSQL versions or distributed races.
+
+This protects an existing database **at initial creation**, not all subsequent actions. Django normally drops its own test database during teardown. Another privileged process could remove or replace it between creation and teardown; crashes, interruption, migration failure or ambiguous connection loss can leave a database behind. The role retains CREATEDB/drop privileges, and settings, backend or runner can be bypassed or changed. Names alone do not establish synthetic provenance. This does not protect the base configured database, cluster-wide resources or an actual production system; never use these settings on a valuable server. Use a separate disposable authorized cluster with synthetic data and independently verify any cleanup target. No cluster-wide cleanup is added.

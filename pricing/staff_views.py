@@ -10,18 +10,26 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.account_checks import current_accounts
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
+from daroobank.candidate_review_scan_views import scan_response
+from daroobank.review_history import recent_reviews_with_reviewers
+from daroobank.sample_downloads import synthetic_sample_response
 from sources.services import related_claims
+from ingestion.exceptions import StagingConflict
 from ingestion.receipts import related_receipts, stage_price_with_receipt
+from daroobank.forms import StaffAuthenticationForm
 
-from .comparisons import price_revision_context
+from .comparisons import price_revision_context, valid_candidate
 from .forms import PriceReviewForm, PriceUploadForm
 from .importer import ImportValidationError, match_fields_valid, stage_csv, suggest_product
 from .models import PriceCandidate, PriceCandidateReview
-from .reviews import ReviewConflict, product_fingerprint, record_preliminary_review
+from .review_inspection import classify_review
+from .reviews import ReviewConflict, ensure_candidate_integrity, product_fingerprint, record_preliminary_review
 
 STATUS_LABELS = {
     'suggested': 'پیشنهاد تطبیق', 'ambiguous': 'تطبیق مبهم یا بیش از سقف بررسی',
-    'unmatched': 'بدون تطبیق', 'invalid': 'اطلاعات نامعتبر',
+    'unmatched': 'بدون تطبیق', 'invalid': 'اطلاعات نامعتبر', 'oversized': 'بررسی‌نشده به دلیل اندازه',
 }
 CATEGORY_LABELS = {
     'official_consumer': 'مصرف‌کننده اعلام‌شده', 'retail': 'خرده‌فروشی',
@@ -32,6 +40,7 @@ DECISION_LABELS = {'accept_suggestion': 'پذیرش اولیه پیشنهاد ت
 
 
 class StaffLoginView(LoginView):
+    authentication_form = StaffAuthenticationForm
     template_name = 'staff/login.html'
     extra_context = {'page_title': 'ورود همکاران | داروبانک', 'description': 'ورود به بخش داخلی داروبانک.', 'noindex': True, 'private_staff': True}
 
@@ -62,6 +71,12 @@ def _display_source_fields(fields):
 
 
 def _current_suggestion(candidate):
+    if getattr(candidate, 'content_oversized', False):
+        return 'oversized', None
+    try:
+        ensure_candidate_integrity(candidate)
+    except ReviewConflict:
+        return 'invalid', None
     fields = candidate.source_fields
     if not match_fields_valid(fields):
         return 'invalid', None
@@ -70,9 +85,17 @@ def _current_suggestion(candidate):
 
 def _detail_response(request, candidate, *, form=None, status=200):
     current_status, current_product = _current_suggestion(candidate)
-    reviews = list(candidate.reviews.select_related('reviewer', 'reviewed_product').order_by('-pk')[:25])
-    can_review = bool(request.user.has_perm('pricing.review_pricecandidate') and candidate.staged_by_id
-                      and candidate.source_rights_attested and candidate.staged_by_id != request.user.pk)
+    reviews = recent_reviews_with_reviewers(candidate.reviews.all())
+    candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
+    for review in reviews:
+        if review.content_oversized:
+            review.technical_status, review.candidate_comparison = 'oversized', 'unknown'
+            continue
+        review.technical_status, review.candidate_comparison = classify_review(
+            review, candidate, current_status not in ('invalid', 'oversized') and candidate.display_stager is not None)
+    can_review = bool(current_status not in ('invalid', 'oversized') and request.user.has_perm('pricing.review_pricecandidate')
+                      and candidate.display_stager is not None and candidate.source_rights_attested
+                      and candidate.staged_by_id != request.user.pk)
     if form is None and can_review:
         form = PriceReviewForm(initial={
             'expected_review': reviews[0].pk if reviews else 0,
@@ -82,7 +105,9 @@ def _detail_response(request, candidate, *, form=None, status=200):
     return render(request, 'staff/price_detail.html', {
         'page_title': 'جزئیات نامزد قیمت | داروبانک', 'description': 'جزئیات داده قیمت برای بررسی داخلی.',
         'noindex': True, 'private_staff': True, 'candidate': candidate, 'source_fields': _display_source_fields(candidate.source_fields), 'current_product': current_product,
-        'current_label': STATUS_LABELS[current_status], 'snapshot_label': STATUS_LABELS.get(candidate.match_status, STATUS_LABELS['invalid']),
+        'current_label': STATUS_LABELS[current_status], 'payload_invalid': current_status == 'invalid',
+        'payload_unavailable': current_status in ('invalid', 'oversized'),
+        'snapshot_label': STATUS_LABELS.get(candidate.match_status, STATUS_LABELS['invalid']),
         'category_label': CATEGORY_LABELS.get(candidate.price_category, 'نامشخص'),
         'unit_label': UNIT_LABELS.get(candidate.unit, 'نامشخص'), 'reviews': reviews,
         'review_form': form, 'can_review': can_review, 'comparison': price_revision_context(candidate),
@@ -101,16 +126,18 @@ def price_candidates(request):
         return HttpResponseBadRequest('Invalid filter.')
     stats = {item['match_status']: item['count'] for item in PriceCandidate.objects.values('match_status').annotate(count=Count('id'))}
     latest = PriceCandidateReview.objects.filter(candidate_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
-    rows = PriceCandidate.objects.select_related('suggested_product').annotate(latest_decision=Subquery(latest)).order_by('-collected_at', '-pk')
+    rows = PriceCandidate.objects.annotate(latest_decision=Subquery(latest)).order_by('-collected_at', '-pk')
     if status:
         rows = rows.filter(match_status=status)
     if review_status == 'pending':
         rows = rows.filter(latest_decision__isnull=True)
     elif review_status:
         rows = rows.filter(latest_decision=review_status)
-    page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    page = Paginator(bounded_candidates(rows), 20).get_page(request.GET.get('page', 1))
     for item in page.object_list:
-        item.display_fields = _display_source_fields(item.source_fields)
+        materialize_candidate(item)
+        item.display_consistent = not item.content_oversized and valid_candidate(item)
+        item.display_fields = _display_source_fields(item.source_fields) if item.display_consistent else {}
     return render(request, 'staff/prices.html', {
         'page_title': 'نامزدهای قیمت | داروبانک', 'description': 'بخش داخلی بررسی داده‌های قیمت.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status, 'review_status': review_status, 'stats': stats,
@@ -122,11 +149,20 @@ def price_candidates(request):
 
 
 @login_required(login_url='staff_login')
+@require_safe
+def sample_download(request):
+    _require_permission(request.user, 'pricing.add_pricecandidate')
+    return synthetic_sample_response('price')
+
+
+@login_required(login_url='staff_login')
 @require_http_methods(['GET', 'POST'])
 def price_upload(request):
     _require_permission(request.user, 'pricing.add_pricecandidate')
-    form = PriceUploadForm(request.POST or None, request.FILES or None)
+    form = PriceUploadForm(request.POST if request.method == 'POST' else None,
+                           request.FILES if request.method == 'POST' else None)
     result = None
+    status = 200
     if request.method == 'POST' and form.is_valid():
         data = form.cleaned_data
         try:
@@ -139,16 +175,27 @@ def price_upload(request):
             result['mode'] = data['action']
         except ImportValidationError as exc:
             form.add_error(None, 'فایل معتبر نیست؛ هیچ داده‌ای ثبت نشد. ' + str(exc))
+        except StagingConflict:
+            form.add_error(None, 'ثبت به دلیل تداخل هم‌زمان یا ناسازگاری رکورد قبلی متوقف شد؛ وضعیت داده را بررسی و برای تلاش دوباره فایل را دوباره انتخاب کنید.')
+            status = 409
     return render(request, 'staff/upload.html', {
         'page_title': 'ورود فایل قیمت | داروبانک', 'description': 'ورود مرحله‌ای فایل قیمت.',
         'noindex': True, 'private_staff': True, 'form': form, 'result': result,
-    })
+    }, status=status)
 
 
 def _get_candidate(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Candidate not found')
-    return get_object_or_404(PriceCandidate.objects.select_related('suggested_product', 'staged_by'), pk=pk)
+    candidate = get_object_or_404(bounded_candidates(PriceCandidate.objects.all()), pk=pk)
+    materialize_candidate(candidate)
+    return candidate
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def review_inspection(request, pk):
+    return scan_response(request, pk, 'price')
 
 
 @login_required(login_url='staff_login')
@@ -171,7 +218,7 @@ def price_review(request, pk):
         record_preliminary_review(candidate_id=pk, actor=request.user, **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
-        candidate.refresh_from_db()
+        candidate = _get_candidate(pk)
         return _detail_response(request, candidate, form=form, status=409)
     except PriceCandidate.DoesNotExist:
         return HttpResponseBadRequest('Candidate no longer exists.')

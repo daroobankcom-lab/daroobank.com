@@ -1,10 +1,16 @@
 from django import forms
 
+from daroobank.forms import ExplicitBooleanField, RawControlsMixin, RawMultilineControlsMixin
+
 from .models import ClinicalDraft, ClinicalDraftReview
-from .services import FIELDS, HASH, DraftError, validate_data
+from .services import FIELDS, HASH, MAX_PK, DraftError, validate_data
 
 
-class DraftForm(forms.Form):
+class DraftForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
+    raw_multiline_control_fields = ('statement',)
+    # Statement remains multiline; tabs and line breaks are allowed.
+    raw_control_fields = ('subject', 'audience', 'title', 'reference_title', 'reference_url', 'reference_location',
+                          'reference_author', 'reference_version', 'reference_published_on', 'reference_accessed_on')
     subject = forms.CharField(label='موضوع ساختگی (بدون ارتباط خودکار با کاتالوگ)', max_length=200)
     audience = forms.ChoiceField(label='مخاطب', choices=[('', 'انتخاب کنید')] + ClinicalDraft.AUDIENCES)
     title = forms.CharField(label='عنوان پیش‌نویس', max_length=200)
@@ -18,7 +24,7 @@ class DraftForm(forms.Form):
                                              widget=forms.DateInput(attrs={'type': 'date'}))
     reference_accessed_on = forms.DateField(label='تاریخ دسترسی اعلام‌شده (میلادی)', input_formats=['%Y-%m-%d'], required=False,
                                             widget=forms.DateInput(attrs={'type': 'date'}))
-    synthetic_ack = forms.BooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
+    synthetic_ack = ExplicitBooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
 
     def clean(self):
         data = super().clean()
@@ -31,6 +37,8 @@ class DraftForm(forms.Form):
 
 
 class RevisionForm(DraftForm):
+    raw_control_fields = DraftForm.raw_control_fields + ('expected_parent_hash',)
+    raw_multiline_control_fields = ('statement', 'change_reason')
     expected_parent_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
     change_reason = forms.CharField(label='دلیل ایجاد نسخه جدید', min_length=12, max_length=1000,
                                     widget=forms.Textarea(attrs={'rows': 3}))
@@ -42,12 +50,14 @@ class RevisionForm(DraftForm):
         return value
 
 
-class ReviewForm(forms.Form):
+class ReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
+    raw_control_fields = ('decision', 'expected_review', 'expected_hash', 'expected_evidence_hash')
+    raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[('', 'انتخاب کنید'),
         (ClinicalDraftReview.FURTHER_REVIEW, 'ارجاع برای بررسی بیشتر'), (ClinicalDraftReview.REJECT, 'رد پیش‌نویس'),
         (ClinicalDraftReview.DEFER, 'نیاز به بررسی یا مدرک بیشتر')])
     reason = forms.CharField(label='دلیل', min_length=12, max_length=1000, widget=forms.Textarea(attrs={'rows': 4}))
-    expected_review = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
+    expected_review = forms.IntegerField(min_value=0, max_value=MAX_PK, widget=forms.HiddenInput)
     expected_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
     expected_evidence_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
 
@@ -64,7 +74,9 @@ class ReviewForm(forms.Form):
         return value
 
 
-class ReferenceForm(forms.Form):
+class ReferenceForm(RawControlsMixin, forms.Form):
+    raw_control_fields = ('reference_title', 'reference_url', 'reference_location', 'reference_author', 'reference_version',
+                          'reference_published_on', 'reference_accessed_on', 'relation', 'expected_draft_hash', 'expected_evidence_hash')
     reference_title = forms.CharField(label='عنوان ارجاع ساختگی', max_length=300)
     reference_url = forms.URLField(label='نشانی HTTPS ارجاع', max_length=200)
     reference_location = forms.CharField(label='محل دقیق در ارجاع', max_length=300)
@@ -77,7 +89,7 @@ class ReferenceForm(forms.Form):
     relation = forms.ChoiceField(label='رابطه ادعایی با گزاره', choices=[('', 'انتخاب کنید'),
         ('supports', 'پشتیبان ادعایی'), ('contradicts', 'متناقض ادعایی'),
         ('context', 'زمینه ادعایی'), ('unclear', 'رابطه نامشخص')])
-    synthetic_ack = forms.BooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
+    synthetic_ack = ExplicitBooleanField(label='فقط اطلاعات ساختگی، غیرمحرمانه و بدون اطلاعات بیمار وارد می‌کنم.')
     expected_draft_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
     expected_evidence_hash = forms.CharField(max_length=64, widget=forms.HiddenInput)
 

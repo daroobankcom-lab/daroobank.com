@@ -1,4 +1,5 @@
 """Bounded public catalog reads; flags and source checks are not approval."""
+import unicodedata
 from urllib.parse import urlsplit
 
 from django.core import signing
@@ -8,7 +9,9 @@ from django.db.models import Q
 from django.http import Http404
 from django.utils.crypto import constant_time_compare, salted_hmac
 
-from .models import ProductPresentation
+from daroobank.signed_cursors import loads_nonfuture
+
+from .models import PRESENTATION_SEARCH_FIELDS, ProductPresentation
 from .normalization import normalize_search
 
 MAX_QUERY_LENGTH = 120
@@ -21,7 +24,7 @@ CURSOR_SALT = 'catalog.search.cursor.v1'
 
 
 class InvalidSearchQuery(ValueError):
-    """The bounded search query contains characters PostgreSQL cannot store."""
+    """The bounded search query contains unsupported control or surrogate characters."""
 
 
 class InvalidSearchCursor(ValueError):
@@ -45,7 +48,7 @@ def _decode_cursor(token, query, candidates):
     if len(token) > MAX_CURSOR_LENGTH or token.startswith('.') or not query:
         raise InvalidSearchCursor
     try:
-        data = signing.loads(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
+        data = loads_nonfuture(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
         if (not isinstance(data, dict) or set(data) != {'query', 'pk', 'name'}
                 or type(data['pk']) is not int or not 1 <= data['pk'] <= 9_223_372_036_854_775_807
                 or not isinstance(data['query'], str) or not isinstance(data['name'], str)
@@ -66,8 +69,17 @@ def public_candidates():
 
 
 def is_public_presentation(product):
-    """Fail closed on malformed source metadata, even after bypassed model validation."""
-    if not product.published or not product.verified_at or not product.source_name.strip():
+    """Reject selected malformed display data, even after bypassed validation."""
+    if not product.published or not product.verified_at:
+        return False
+    # Do not emit control characters from corrupted direct writes in HTML or
+    # JSON. Unicode format characters (including Persian ZWNJ) are intentionally
+    # not prohibited by this limited check; it is not a spoofing defense.
+    for field in (*PRESENTATION_SEARCH_FIELDS, 'source_name', 'source_url'):
+        value = getattr(product, field)
+        if not isinstance(value, str) or any(unicodedata.category(ch) in ('Cc', 'Cs') for ch in value):
+            return False
+    if not product.source_name.strip():
         return False
     if not product.source_url or product.source_url != product.source_url.strip():
         return False
@@ -86,9 +98,10 @@ def is_public_presentation(product):
 def search_product_page(query, cursor=''):
     """Return one bounded, forward-only page; no consistent snapshot is promised."""
     bounded = (query or '')[:MAX_QUERY_LENGTH]
-    # PostgreSQL text rejects NUL; surrogate code points cannot be encoded as UTF-8.
-    # Fail before querying or encoding a cursor, without echoing the bad input.
-    if any(char == '\x00' or '\ud800' <= char <= '\udfff' for char in bounded):
+    # Reject control and surrogate characters in the retained query, before
+    # querying, cursor parsing or echoing it in HTML. Format characters such
+    # as Persian ZWNJ remain supported by lookup normalization.
+    if any(unicodedata.category(char) in ('Cc', 'Cs') for char in bounded):
         raise InvalidSearchQuery
     normalized = normalize_search(bounded)
     if not normalized:
@@ -100,12 +113,20 @@ def search_product_page(query, cursor=''):
         anchor = _decode_cursor(cursor, normalized, candidates)
         candidates = candidates.filter(Q(name_fa__gt=anchor.name_fa) | Q(name_fa=anchor.name_fa, pk__gt=anchor.pk))
     # One extra row is fetched only to know whether any subsequent candidate exists.
-    batch = list(candidates.order_by('name_fa', 'pk')[:MAX_SEARCH_CANDIDATES + 1])
+    # The stored projection is needed by SQL for matching, not by the public
+    # serializer. Avoid transferring potentially oversized bypass-written text.
+    batch = list(candidates.defer('search_text', 'irc_normalized').order_by('name_fa', 'pk')[:MAX_SEARCH_CANDIDATES + 1])
     results = []
     scanned = 0
     for product in batch[:MAX_SEARCH_CANDIDATES]:
         scanned += 1
         if is_public_presentation(product):
+            # A bulk update or direct SQL can leave the stored projection stale.
+            # Recheck the current fetched fields before presenting a SQL match.
+            # This cannot find candidates omitted by a stale projection.
+            current_text = normalize_search(' '.join(getattr(product, field) for field in PRESENTATION_SEARCH_FIELDS))
+            if normalized not in current_text:
+                continue
             results.append(product)
             if len(results) == MAX_RESULTS:
                 break
@@ -119,9 +140,10 @@ def search_products(query):
 
 
 def get_public_presentation(pk):
-    if not 1 <= pk <= 9_223_372_036_854_775_807:
+    # Avoid Python/Django coercions such as True or 1.0 becoming primary key 1.
+    if type(pk) is not int or not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Presentation not found')
-    product = public_candidates().filter(pk=pk).first()
+    product = public_candidates().filter(pk=pk).defer('search_text', 'irc_normalized').first()
     if product is None or not is_public_presentation(product):
         raise Http404('Presentation not found')
     return product

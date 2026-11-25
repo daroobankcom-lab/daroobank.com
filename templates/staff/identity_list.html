@@ -2,7 +2,7 @@
 {% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
 {% block content %}<section class="staff-section"><div class="container">
 <div class="staff-topline"><div><div class="kicker"><span></span> کاتالوگ خصوصی · داده ساختگی</div><h1>پیش‌نویس هویت کاتالوگ</h1></div><form method="post" action="{% url 'staff_logout' %}">{% csrf_token %}<button class="staff-logout">خروج</button></form></div>
-<div class="staff-alert">فقط داده ساختگی و غیرمحرمانه. منبع و هویت بررسی نشده‌اند؛ این بخش تأیید بالینی، معادل‌سازی یا انتشار نیست و به کاتالوگ عمومی متصل نیست.</div>
+<div class="staff-alert">فقط داده ساختگی و غیرمحرمانه. منبع و هویت بررسی نشده‌اند؛ این بخش تأیید بالینی، معادل‌سازی یا انتشار نیست و به کاتالوگ عمومی متصل نیست. در ثبت وابسته، بازبینی و اصلاح، وجود فعلی حساب ثبت‌کنندگان زنجیره بررسی می‌شود؛ نمایش و بازرسی پیوندها آن را کنترل نمی‌کنند.</div>
 <p><a href="?kind=ingredient">مواد</a> · <a href="?kind=formulation">فرمولاسیون‌ها</a> · <a href="?kind=product">فرآورده‌ها</a> · <a href="?kind=package">بسته‌ها</a></p>
 <h2>{{ label }}</h2>{% if can_add %}<p><a class="staff-detail-link" href="{% url 'staff_identity_create' kind %}">ثبت {{ label }} ساختگی ←</a></p>{% endif %}
 <div class="staff-candidate-list">{% for item in page %}<article class="staff-candidate"><div><h2>شناسه {{ item.pk }}</h2>{% if item.snapshot %}<p>{{ item.title }}</p>{% else %}<p>رکورد ناسازگار است؛ جزئیات پنهان شد.</p>{% endif %}</div><a class="staff-detail-link" href="{% url 'staff_identity_detail' kind item.pk %}">جزئیات ←</a></article>{% empty %}<p>رکوردی وجود ندارد.</p>{% endfor %}</div>

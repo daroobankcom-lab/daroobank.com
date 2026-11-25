@@ -3,12 +3,16 @@ import hashlib
 import json
 import re
 import unicodedata
+from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import DatabaseError, transaction
+from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
+from daroobank.account_checks import current_accounts
+from daroobank.review_content_bounds import bounded_review_fields, materialize_review_fields
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import (IngredientDraft, FormulationDraft, FormulationComponent,
                      IdentityProductDraft, IdentityPackageDraft, IdentityPackageReview, IdentityPackageRevision,
@@ -39,6 +43,24 @@ class IdentityError(ValueError):
 
 class IdentityConflict(ValueError):
     pass
+
+
+@contextmanager
+def _identity_atomic():
+    """Translate selected PostgreSQL concurrency failures after atomic rollback.
+
+    No timeout is set and no retry is attempted. When nested, a later failure
+    at the outermost commit is outside this boundary.
+    """
+    try:
+        with transaction.atomic():
+            yield
+    except DatabaseError as exc:
+        cause = exc.__cause__
+        code = getattr(cause, 'sqlstate', None) or getattr(cause, 'pgcode', None)
+        if code in {'55P03', '40P01', '40001'}:
+            raise IdentityConflict('ثبت به دلیل تداخل هم‌زمان انجام نشد؛ دوباره تلاش کنید.') from exc
+        raise
 
 
 def require_staff(actor, *permissions):
@@ -201,13 +223,15 @@ def create_formulation(*, actor, data, components):
     for row in components: validate_data(row, COMPONENT_FIELDS)
     ids = [row['ingredient_id'] for row in components]
     if len(set(ids)) != len(ids): raise IdentityError('هر ماده فقط یک بار مجاز است.')
-    with transaction.atomic():
+    with _identity_atomic():
         ingredients = {item.pk: item for item in IngredientDraft.objects.select_for_update().filter(pk__in=ids).order_by('pk')}
         if set(ids) != set(ingredients): raise IdentityConflict('ماده انتخاب‌شده در دسترس نیست.')
         try:
             snapshots = {key: ingredient_snapshot(item) for key, item in ingredients.items()}
         except IdentityError as exc:
             raise IdentityConflict('ماده انتخاب‌شده ناسازگار است.') from exc
+        _require_creator_accounts({snapshot['recorded_by_id'] for snapshot in snapshots.values()},
+                                  using=next(iter(ingredients.values()))._state.db)
         parts = [{**canonical(row), 'ingredient_sha256': snapshots[row['ingredient_id']]['payload_sha256']} for row in components]
         payload = {**data, 'recorded_by_id': actor.pk, 'components': parts}
         formulation = FormulationDraft.objects.create(**data, recorded_by=actor, payload_sha256=digest(payload))
@@ -221,9 +245,13 @@ def create_product(*, actor, data, formulation_id):
     require_staff(actor, VIEW, ADD)
     validate_data(data, PRODUCT_FIELDS)
     if not _valid_id(formulation_id): raise IdentityError('شناسه فرمولاسیون معتبر نیست.')
-    with transaction.atomic():
+    with _identity_atomic():
         form = FormulationDraft.objects.select_for_update().filter(pk=formulation_id).first()
-        if not form or not safe_snapshot(form, formulation_snapshot): raise IdentityConflict('فرمولاسیون در دسترس یا سازگار نیست.')
+        if not form: raise IdentityConflict('فرمولاسیون در دسترس یا سازگار نیست.')
+        _lock_formulation_components(form)
+        graph = safe_snapshot(form, formulation_snapshot)
+        if not graph: raise IdentityConflict('فرمولاسیون در دسترس یا سازگار نیست.')
+        _require_creator_accounts(identity_graph_authors('formulation', graph), using=form._state.db)
         payload = {**data, 'recorded_by_id': actor.pk, 'formulation_id': form.pk, 'formulation_sha256': form.payload_sha256}
         return IdentityProductDraft.objects.create(**data, recorded_by=actor, formulation=form,
             formulation_sha256=form.payload_sha256, payload_sha256=digest(payload))
@@ -233,19 +261,103 @@ def create_package(*, actor, data, product_id):
     require_staff(actor, VIEW, ADD)
     validate_data(data, PACKAGE_FIELDS)
     if not _valid_id(product_id): raise IdentityError('شناسه فرآورده معتبر نیست.')
-    with transaction.atomic():
+    with _identity_atomic():
         product = IdentityProductDraft.objects.select_for_update().filter(pk=product_id).first()
-        if not product or not safe_snapshot(product, product_snapshot): raise IdentityConflict('فرآورده در دسترس یا سازگار نیست.')
+        if not product: raise IdentityConflict('فرآورده در دسترس یا سازگار نیست.')
+        formulation = _lock_product_formulation(product)
+        _lock_formulation_components(formulation)
+        graph = safe_snapshot(product, product_snapshot)
+        if not graph: raise IdentityConflict('فرآورده در دسترس یا سازگار نیست.')
+        _require_creator_accounts(identity_graph_authors('product', graph), using=product._state.db)
         payload = {**canonical(data), 'recorded_by_id': actor.pk, 'product_id': product.pk, 'product_sha256': product.payload_sha256}
         return IdentityPackageDraft.objects.create(**data, recorded_by=actor, product=product,
             product_sha256=product.payload_sha256, payload_sha256=digest(payload))
 
 
+def identity_graph_authors(kind, graph):
+    """Extract creators from a previously validated current graph."""
+    authors = {graph['recorded_by_id']}
+    if kind == 'package':
+        graph = graph['product']
+        authors.add(graph['recorded_by_id'])
+        kind = 'product'
+    if kind == 'product':
+        graph = graph['formulation']
+        authors.add(graph['recorded_by_id'])
+        kind = 'formulation'
+    if kind == 'formulation':
+        authors.update(item['recorded_by_id'] for item in graph['ingredients'])
+    return authors
+
+
 def graph_authors(graph):
-    product = graph['product']
-    form = product['formulation']
-    return {graph['recorded_by_id'], product['recorded_by_id'], form['recorded_by_id'],
-            *(item['recorded_by_id'] for item in form['ingredients'])}
+    return identity_graph_authors('package', graph)
+
+
+def _require_creator_accounts(ids, *, using):
+    # Existence only, separate unlocked read; not identity or qualification proof.
+    if set(current_accounts(ids, using=using)) != set(ids):
+        raise IdentityConflict('حساب ثبت‌کننده زنجیره در دسترس نیست؛ عملیات متوقف شد.')
+
+
+def _lock_package_product(package):
+    """Re-read and lock the immediate product after locking a package in a writer."""
+    using = package._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Identity product locking requires an atomic writer transaction.')
+    product = IdentityProductDraft.objects.using(using).select_for_update().filter(pk=package.product_id).first()
+    if product is None:
+        raise IdentityConflict('فرآورده زنجیره در دسترس نیست.')
+    # Replace any cached pre-lock relationship with the locked current row.
+    package.product = product
+    return product
+
+
+def _lock_product_formulation(product):
+    """Re-read and lock the formulation after locking the immediate product."""
+    using = product._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Identity formulation locking requires an atomic writer transaction.')
+    formulation = FormulationDraft.objects.using(using).select_for_update().filter(pk=product.formulation_id).first()
+    if formulation is None:
+        raise IdentityConflict('فرمولاسیون زنجیره در دسترس نیست.')
+    product.formulation = formulation  # Discard any stale joined or cached formulation.
+    return formulation
+
+
+def _lock_formulation_components(formulation):
+    """Lock bounded existing components, then their ingredients, in PK order.
+
+    Caller holds the formulation lock inside the same transaction. This does
+    not lock absent rows, account rows, or prevent later nonparticipating writes.
+    Graph reconstruction must query again after these locks are acquired.
+    """
+    using = formulation._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Identity component locking requires an atomic writer transaction.')
+    rows = list(FormulationComponent.objects.using(using).filter(formulation_id=formulation.pk)
+                .order_by('pk').select_for_update().values_list('pk', 'ingredient_id')[:MAX_COMPONENTS + 1])
+    if not 1 <= len(rows) <= MAX_COMPONENTS:
+        raise IdentityConflict('اجزای فرمولاسیون در دسترس یا سازگار نیستند.')
+    ids = {ingredient_id for _, ingredient_id in rows}
+    ingredients = list(IngredientDraft.objects.using(using).filter(pk__in=ids)
+                       .order_by('pk').select_for_update().values_list('pk', flat=True))
+    if set(ingredients) != ids:
+        raise IdentityConflict('ماده زنجیره در دسترس نیست.')
+    return rows
+
+
+def _lock_latest_package_review(package):
+    """Lock the latest existing review; absent or future rows are not locked."""
+    using = package._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest identity review locking requires an atomic writer transaction.')
+    queryset = (IdentityPackageReview.objects.using(using).filter(package_id=package.pk)
+                .order_by('-pk').select_for_update())
+    review = bounded_review_fields(queryset, snapshot_field='graph_snapshot').first()
+    if review is not None:
+        materialize_review_fields(review, snapshot_field='graph_snapshot')
+    return review
 
 
 def _revision_payload(parent_id, child_id, recorded_by_id, change_reason, parent_graph_sha256, child_graph_sha256):
@@ -262,18 +374,21 @@ def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash
             not _is_hash(expected_graph_hash) or type(expected_review) is not int or not 0 <= expected_review <= MAX_ID):
         raise IdentityConflict('اطلاعات نسخه جدید معتبر نیست.')
     change_reason = change_reason.strip()
-    with transaction.atomic():
-        parent = (IdentityPackageDraft.objects.select_for_update(of=('self',))
-                  .select_related('product__formulation').filter(pk=parent_id).first())
+    with _identity_atomic():
+        parent = IdentityPackageDraft.objects.select_for_update().filter(pk=parent_id).first()
         if parent is None: raise IdentityConflict('بسته پیشین در دسترس نیست.')
+        product = _lock_package_product(parent)
+        formulation = _lock_product_formulation(product)
+        _lock_formulation_components(formulation)
         parent_graph = safe_snapshot(parent, package_snapshot)
         if not parent_graph or digest(parent_graph) != expected_graph_hash:
             raise IdentityConflict('بسته پیشین یا وابستگی آن تغییر کرده یا ناسازگار است.')
-        latest = parent.reviews.order_by('-pk').first()
+        _require_creator_accounts(graph_authors(parent_graph), using=parent._state.db)
+        latest = _lock_latest_package_review(parent)
         if (latest.pk if latest else 0) != expected_review:
             raise IdentityConflict('بازبینی جدیدی برای بسته پیشین ثبت شده است.')
-        if latest and not review_is_consistent(latest, parent.pk):
-            raise IdentityConflict('بازبینی اخیر بسته پیشین ناسازگار است.')
+        if latest and (latest.content_oversized or not review_is_consistent(latest, parent.pk)):
+            raise IdentityConflict('بازبینی اخیر بسته پیشین بررسی‌پذیر یا سازگار نیست.')
         if canonical(data) == {key: parent_graph[key] for key in PACKAGE_FIELDS}:
             raise IdentityError('حداقل یکی از داده‌های بسته یا منبع باید تغییر کند.')
         child = create_package(actor=actor, data=data, product_id=parent.product_id)
@@ -335,14 +450,19 @@ def revise_identity(*, actor, kind, parent_id, data, change_reason, expected_gra
     elif components is not None:
         raise IdentityError('اجزا برای این نوع رکورد مجاز نیست.')
     change_reason = change_reason.strip()
-    with transaction.atomic():
+    with _identity_atomic():
         parents = model.objects.select_for_update(of=('self',))
-        if kind == 'product': parents = parents.select_related('formulation')
         parent = parents.filter(pk=parent_id).first()
         if parent is None: raise IdentityConflict('رکورد پیشین در دسترس نیست.')
+        if kind == 'product':
+            formulation = _lock_product_formulation(parent)
+            _lock_formulation_components(formulation)
+        elif kind == 'formulation':
+            _lock_formulation_components(parent)
         old = safe_snapshot(parent, snapshot_fn)
         if not old or digest(old) != expected_graph_hash:
             raise IdentityConflict('رکورد پیشین یا وابستگی آن تغییر کرده یا ناسازگار است.')
+        _require_creator_accounts(identity_graph_authors(kind, old), using=parent._state.db)
         equal_fields = canonical(data) == {key: old[key] for key in fields}
         if kind == 'formulation':
             parts = [canonical(part) for part in components]
@@ -405,17 +525,21 @@ def valid_identity_revision(kind, link, child_id):
 
 def review_package(*, actor, package_id, decision, reason, expected_review, expected_graph_hash):
     require_staff(actor, VIEW, REVIEW)
-    if (not _valid_id(package_id) or decision not in dict(IdentityPackageReview.DECISIONS)
+    if (not _valid_id(package_id) or not isinstance(decision, str) or decision not in dict(IdentityPackageReview.DECISIONS)
             or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_ID
             or not _is_hash(expected_graph_hash)):
         raise IdentityConflict('اطلاعات بازبینی معتبر نیست.')
-    with transaction.atomic():
-        package = IdentityPackageDraft.objects.select_for_update(of=('self',)).select_related('product__formulation').filter(pk=package_id).first()
+    with _identity_atomic():
+        package = IdentityPackageDraft.objects.select_for_update().filter(pk=package_id).first()
         if not package: raise IdentityConflict('بسته در دسترس نیست.')
+        product = _lock_package_product(package)
+        formulation = _lock_product_formulation(product)
+        _lock_formulation_components(formulation)
         graph = safe_snapshot(package, package_snapshot)
         if not graph or digest(graph) != expected_graph_hash: raise IdentityConflict('اطلاعات زنجیره تغییر کرده یا ناسازگار است.')
         if actor.pk in graph_authors(graph): raise PermissionDenied
-        latest = package.reviews.order_by('-pk').first()
+        _require_creator_accounts(graph_authors(graph), using=package._state.db)
+        latest = _lock_latest_package_review(package)
         if (latest.pk if latest else 0) != expected_review: raise IdentityConflict('بازبینی جدیدی ثبت شده است.')
         return IdentityPackageReview.objects.create(package=package, reviewer=actor, decision=decision, reason=reason.strip(),
                                                     graph_sha256=expected_graph_hash, graph_snapshot=graph)

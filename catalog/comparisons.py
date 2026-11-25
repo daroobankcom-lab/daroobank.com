@@ -1,4 +1,6 @@
 """Bounded, advisory-only comparisons; never assert identity or change records."""
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
+
 from .intake import IntakeError, fingerprint, valid_fields, valid_source
 from .models import ProductCandidate
 from .normalization import normalize_search
@@ -38,33 +40,40 @@ def differences(left, right, keys):
 def product_comparison_context(candidate):
     context = {'available': False, 'has_irc': False, 'revisions': [], 'candidate_matches': [],
                'public_matches': [], 'revisions_limited': False, 'candidate_matches_limited': False,
-               'public_matches_limited': False, 'candidate_skipped': 0, 'public_skipped': 0}
-    if not valid_candidate(candidate):
+               'public_matches_limited': False, 'candidate_skipped': 0, 'candidate_oversized': 0, 'public_skipped': 0,
+               'current_oversized': getattr(candidate, 'content_oversized', False)}
+    if context['current_oversized'] or not valid_candidate(candidate):
         return context
     context['available'] = True
     fields = candidate.source_fields
-    revisions = list(ProductCandidate.objects.filter(source_url=candidate.source_url,
-                     source_record_id=candidate.source_record_id).exclude(pk=candidate.pk).order_by('-pk')[:MAX_COMPARISONS + 1])
+    revisions = list(bounded_candidates(ProductCandidate.objects.filter(source_url=candidate.source_url,
+                     source_record_id=candidate.source_record_id).exclude(pk=candidate.pk).order_by('-pk'))[:MAX_COMPARISONS + 1])
     context['revisions_limited'] = len(revisions) > MAX_COMPARISONS
     for other in revisions[:MAX_COMPARISONS]:
-        valid = valid_candidate(other)
+        materialize_candidate(other)
+        valid = not other.content_oversized and valid_candidate(other)
         context['revisions'].append({'candidate': other, 'valid': valid,
+            'status': 'oversized' if other.content_oversized else 'valid' if valid else 'invalid',
             'source_name_changed': valid and candidate.source_name != other.source_name,
             'changes': differences(fields, other.source_fields, tuple(FIELD_LABELS)) if valid else []})
     if not candidate.irc_normalized:
         return context
     context['has_irc'] = True
-    others = list(ProductCandidate.objects.filter(irc_normalized=candidate.irc_normalized)
-                  .exclude(pk=candidate.pk).order_by('-pk')[:MAX_COMPARISONS + 1])
+    others = list(bounded_candidates(ProductCandidate.objects.filter(irc_normalized=candidate.irc_normalized)
+                  .exclude(pk=candidate.pk).order_by('-pk'))[:MAX_COMPARISONS + 1])
     context['candidate_matches_limited'] = len(others) > MAX_COMPARISONS
     for other in others[:MAX_COMPARISONS]:
-        if valid_candidate(other) and normalize_search(other.source_fields['irc']) == candidate.irc_normalized:
+        materialize_candidate(other)
+        if other.content_oversized:
+            context['candidate_oversized'] += 1
+        elif valid_candidate(other) and normalize_search(other.source_fields['irc']) == candidate.irc_normalized:
             context['candidate_matches'].append({'candidate': other,
                 'changes': differences(fields, other.source_fields, IDENTITY_FIELDS)})
         else:
             context['candidate_skipped'] += 1
+    # The stored search projection is not part of these display comparisons.
     products = list(public_candidates().filter(irc_normalized=candidate.irc_normalized)
-                    .order_by('pk')[:MAX_COMPARISONS + 1])
+                    .defer('search_text').order_by('pk')[:MAX_COMPARISONS + 1])
     context['public_matches_limited'] = len(products) > MAX_COMPARISONS
     for product in products[:MAX_COMPARISONS]:
         if is_public_presentation(product) and normalize_search(product.irc) == candidate.irc_normalized:

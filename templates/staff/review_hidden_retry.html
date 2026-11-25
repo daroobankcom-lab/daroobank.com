@@ -1,0 +1,3 @@
+{% if review_form.expected_review.errors or review_form.expected_hash.errors or review_form.expected_product.errors or review_form.expected_product_hash.errors or review_form.expected_evidence_hash.errors or review_form.expected_graph_hash.errors %}
+  {% include 'staff/review_retry_error.html' with review_retry_url=review_retry_url only %}
+{% endif %}

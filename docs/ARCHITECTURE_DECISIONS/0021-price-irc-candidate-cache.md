@@ -1,0 +1,17 @@
+# ADR 0021: bounded request-local IRC candidate indexes
+
+Status: development-only implementation, 22 November 2026; extends [ADR 0020](0020-price-staging-match-cache.md) and the matching rules in [ADR 0004](0004-intake-row-manifest.md). Matching is narrowed by [ADR 0064](0064-price-matching-unsafe-presentation.md).
+
+## Decision
+
+When price CSV staging encounters a previously unseen normalized identity, reuse a request-local index for its normalized IRC if available. An index contains the normalized identity keys and matching presentation objects from at most 100 rows fetched in internal-ID order. An IRC with more than 100 indexed presentations is represented by an over-limit marker and every identity for it remains ambiguous, even if some rows have stale IRC projections. For a bounded group, candidates whose actual IRC normalizes differently from the stored index are excluded, and zero, one or multiple exact normalized identity matches produce unmatched, suggested or ambiguous respectively. Unpublished presentations are still eligible for a suggestion, exactly as before; a suggestion is not approval.
+
+Share this matching/index logic with the standalone `suggest_product`, which continues to query afresh, respects `lock=True`, and returns the same product object needed by detail and accept-suggestion review. A regression test compares results against the earlier matching algorithm on static synthetic data, including duplicates and stale index entries. Input validation, staging permissions, source-rights attestation, transaction boundaries, per-source staging locks, row counts, receipt outcomes and deduplication are unchanged.
+
+The per-call IRC index is least-recently-used and holds at most eight groups (each at most 100 presentation objects or one over-limit marker). Fetching a group temporarily reads at most 101 rows. Access to a cached IRC is recorded when a previously unseen identity requires its index; an identity-result hit does not touch IRC recency. Eviction occurs before loading another group. The existing separate per-identity result cache can retain up to 5,000 status/ID entries until the call ends. Neither cache is shared across calls, users or processes. Other objects and the validated file also occupy memory; row and group limits do not bound bytes or total database work.
+
+## Consequences and limits
+
+A synthetic preview with 5,000 distinct identity tuples sharing one IRC performs one catalog SELECT, not 5,000; this is an operation-count test, not a production benchmark. Many different IRCs or eviction and revisits can still cause up to one query per input row, while match normalization and database scan/sort costs remain unbounded by the cache. Rows are never automatically approved or published.
+
+The observed candidate set for an IRC is reused even for different identities while its group remains cached. Concurrent catalog edits may therefore be missed across identities sharing that IRC. After eviction, a new identity for that IRC can load a later candidate set, while an already-seen identity retains its first result; even rows for one IRC can reflect different times. There is no consistent snapshot, and transaction failure remains possible if a suggested presentation disappears. The web form and CLI warn about reuse. Tests simulate changes during a call but do not prove concurrent or crash behavior. This development-only diagnostic does not verify source rights, product identity, safety, prices or clinical correctness. Use synthetic, non-sensitive data only.

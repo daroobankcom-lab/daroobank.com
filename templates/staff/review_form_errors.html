@@ -1,0 +1,10 @@
+{% if review_form.errors %}
+  {% if can_review %}
+    {% include 'staff/form_error_summary.html' with form=review_form %}
+  {% else %}
+    <section id="staff-form-errors" class="staff-alert staff-alert-error" aria-labelledby="staff-form-errors-title">
+      <h2 id="staff-form-errors-title">درخواست انجام نشد؛ فرم بازبینی اکنون در دسترس نیست</h2>
+      <p>وضعیت و مجوز بازبینی را بررسی کنید و در صورت نیاز صفحه را دوباره باز کنید.</p>
+    </section>
+  {% endif %}
+{% endif %}

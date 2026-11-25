@@ -362,9 +362,10 @@
 }
 .staff-review-block, .staff-upload-result { margin-top: 20px; }
 .staff-review-block h3 { margin: 28px 0 12px; font-size: 16px; }
-.staff-review-form { display: grid; gap: 10px; margin-top: 22px; max-width: 700px; }
+.staff-review-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 22px; max-width: 700px; min-width: 0; }
 .staff-review-form label { font-size: 13px; font-weight: 700; }
 .staff-review-form input:not([type=hidden]), .staff-review-form select, .staff-review-form textarea { width: 100%; border: 1px solid #cfdfd7; border-radius: 9px; background: white; color: var(--ink); padding: 11px 12px; font: inherit; }
+.staff-review-form input[type=file] { min-width: 0; max-width: 100%; }
 .staff-review-form input[type=checkbox] { width: auto; }
 .staff-review-form .staff-button { justify-self: start; }
 .staff-checkbox { display: flex; gap: 9px; align-items: center; }
@@ -384,3 +385,7 @@
 .comparison-differences small {
   color: #526e68;
 }
+
+.staff-form-errors h2 { font-size: 17px; margin: 0 0 6px; }
+.staff-form-errors ul { margin: 6px 0 0; padding-inline-start: 24px; }
+.staff-form-errors a { color: #73212a; text-decoration: underline; font-weight: 700; }

@@ -8,8 +8,14 @@ import unicodedata
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.transaction import TransactionManagementError
 
-from daroobank.validation import valid_private_source_url, valid_review_reason
+from daroobank.account_checks import current_account_exists
+from daroobank.bounded_read import read_bounded_bytes
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
+from daroobank.write_conflict_boundary import write_conflict_boundary
+from daroobank.validation import has_control_or_surrogate, valid_private_source_url, valid_review_reason
+from ingestion.exceptions import StagingConflict
 from ingestion.locks import lock_source_stage
 
 from .models import ProductCandidate, ProductCandidateReview
@@ -17,6 +23,7 @@ from .normalization import normalize_search
 
 MAX_FILE_BYTES = 1024 * 1024
 MAX_ROWS = 1000
+MAX_PK = 9_223_372_036_854_775_807
 FIELDS = ('source_record_id', 'name_fa', 'name_en', 'manufacturer', 'strength', 'dosage_form', 'package_description', 'irc')
 LIMITS = {'source_record_id': 160, 'name_fa': 200, 'name_en': 200, 'manufacturer': 200,
           'strength': 100, 'dosage_form': 100, 'package_description': 200, 'irc': 80}
@@ -60,7 +67,7 @@ def valid_fields(row):
 
 def parse_product_csv(file):
     try:
-        data = file.read(MAX_FILE_BYTES + 1)
+        data = read_bounded_bytes(file, limit=MAX_FILE_BYTES)
     except OSError as exc:
         raise IntakeError('خواندن فایل ممکن نیست.') from exc
     if len(data) > MAX_FILE_BYTES:
@@ -76,6 +83,10 @@ def parse_product_csv(file):
                 raise IntakeError('فایل بیش از ۱۰۰۰ ردیف دارد.')
             if None in row or any(value is None for value in row.values()):
                 raise IntakeError(f'تعداد ستون‌های ردیف {line} معتبر نیست.')
+            # Do not erase controls at cell boundaries before field validation.
+            for key in FIELDS:
+                if has_control_or_surrogate(row[key]):
+                    raise IntakeError(f'ردیف {line}: مقدار ستون {key} معتبر نیست.')
             row = {key: value.strip() for key, value in row.items()}
             try:
                 valid_fields(row)
@@ -95,9 +106,16 @@ def fingerprint(source_name, source_url, fields):
     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
 
+def _find_or_create_candidate(**kwargs):
+    # Existing rows only need an ID before the authoritative locked read.
+    return ProductCandidate.objects.only('pk').get_or_create(**kwargs)
+
+
 def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False, on_staged=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.add_productcandidate')
+    if type(commit) is not bool:
+        raise IntakeError('حالت ثبت باید مقدار بولی صریح باشد.')
     if on_staged is not None and (not commit or not callable(on_staged)):
         raise IntakeError('ثبت جزئیات ردیف فقط در حالت ثبت مرحله‌ای ممکن است.')
     if commit and rights_attested is not True:
@@ -105,34 +123,64 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
     valid_source(source_name, source_url)
     rows = parse_product_csv(file)
     counts = {'rows': len(rows), 'created': 0, 'duplicates': 0}
-    with transaction.atomic():
+    with write_conflict_boundary(StagingConflict):
         if commit:
             lock_source_stage('product', source_url)
             for row in rows:
                 digest = fingerprint(source_name, source_url, row)
-                candidate, created = ProductCandidate.objects.get_or_create(
+                candidate, created = _find_or_create_candidate(
                     source_url=source_url, source_record_id=row['source_record_id'],
                     payload_sha256=digest,
                     defaults={'source_name': source_name, 'source_fields': row, 'staged_by': actor,
                               'source_rights_attested': True, 'irc_normalized': normalize_search(row['irc'])},
                 )
+                if not created:
+                    try:
+                        candidate = bounded_candidates(ProductCandidate.objects.using(candidate._state.db)
+                            .select_for_update()).get(pk=candidate.pk)
+                    except ProductCandidate.DoesNotExist as exc:
+                        raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
+                    materialize_candidate(candidate)
+                    if (candidate.content_oversized or candidate.source_name != source_name or candidate.source_url != source_url
+                            or candidate.source_record_id != row['source_record_id'] or candidate.source_fields != row
+                            or candidate.payload_sha256 != digest or candidate.irc_normalized != normalize_search(row['irc'])
+                            or candidate.source_rights_attested is not True
+                            or not current_account_exists(candidate.staged_by_id, using=candidate._state.db)):
+                        raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.')
                 counts['created' if created else 'duplicates'] += 1
                 if on_staged is not None:
                     on_staged(candidate.pk, row['source_record_id'], digest, created, None)
     return counts
 
 
+def _lock_latest_review(candidate):
+    """Lock the latest existing review ID; absent and future rows remain unlocked."""
+    using = candidate._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest-review locking requires an atomic writer transaction.')
+    return (ProductCandidateReview.objects.using(using).filter(candidate_id=candidate.pk)
+            .order_by('-pk').select_for_update().only('pk').first())
+
+
 def review_product(*, candidate_id, actor, decision, reason, expected_review, expected_hash):
+    if actor is None:
+        raise PermissionDenied
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.review_productcandidate')
-    if (decision not in dict(ProductCandidateReview.DECISIONS) or not valid_review_reason(reason) or type(expected_review) is not int or expected_review < 0
+    if (type(candidate_id) is not int or not 1 <= candidate_id <= MAX_PK
+            or not isinstance(decision, str) or decision not in dict(ProductCandidateReview.DECISIONS)
+            or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
-    with transaction.atomic():
-        candidate = ProductCandidate.objects.select_for_update().get(pk=candidate_id)
+    with write_conflict_boundary(ReviewConflict):
+        candidate = bounded_candidates(ProductCandidate.objects.select_for_update()).get(pk=candidate_id)
+        materialize_candidate(candidate)
         if candidate.staged_by_id == actor.pk:
             raise PermissionDenied
-        if not candidate.staged_by_id or not candidate.source_rights_attested:
+        if (not candidate.staged_by_id or not candidate.source_rights_attested
+                or not current_account_exists(candidate.staged_by_id, using=candidate._state.db)):
             raise ReviewConflict('اظهار مجوز یا ثبت‌کننده در دسترس نیست.')
+        if candidate.content_oversized:
+            raise ReviewConflict('داده نامزد بیش از حد بررسی است؛ بازبینی متوقف شد.')
         try:
             valid_source(candidate.source_name, candidate.source_url)
             valid_fields(candidate.source_fields)
@@ -143,7 +191,7 @@ def review_product(*, candidate_id, actor, decision, reason, expected_review, ex
                 or candidate.irc_normalized != normalize_search(candidate.source_fields['irc'])
                 or candidate.payload_sha256 != digest or expected_hash != digest):
             raise ReviewConflict('اطلاعات رکورد تغییر کرده است؛ صفحه را تازه کنید.')
-        latest = candidate.reviews.order_by('-pk').first()
+        latest = _lock_latest_review(candidate)
         if (latest.pk if latest else 0) != expected_review:
             raise ReviewConflict('بازبینی جدیدی ثبت شده است؛ صفحه را تازه کنید.')
         snapshot = {'source_name': candidate.source_name, 'source_url': candidate.source_url,

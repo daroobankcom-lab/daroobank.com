@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+  <p><a class="staff-detail-link" href="{% url 'staff_clinical_detail' report.anchor_id %}">بازگشت به پیش‌نویس ←</a></p>
+  <h1>بازرسی نسخه‌های پیشین · شناسه {{ report.anchor_id }}</h1>
+  <div class="staff-alert">در هر بخش حداکثر ۲۰ پیوند والد ثبت‌شده با کنترل‌های فعلی بررسی می‌شود. این مسیر تصویر ثابت نیست؛ تغییر داده‌ها ممکن است نتیجه را تغییر دهد و پیوندهای بخش‌های قبلی دوباره بررسی نمی‌شوند. سازگاری نشانه اصالت، کامل بودن تاریخچه، اعتبار ارجاع، تأیید بالینی یا مجوز انتشار نیست. فقط داده ساختگی استفاده کنید.</div>
+  {% for row in report.rows %}<article class="staff-panel"><p>گام {{ row.depth }}: پیش‌نویس {{ row.child_id }} ← نسخه پیشین <a class="staff-detail-link" href="{% url 'staff_clinical_detail' row.parent_id %}">شناسه {{ row.parent_id }}</a></p></article>{% empty %}<p>در این بخش پیوند سازگاری نمایش داده نشد.</p>{% endfor %}
+  {% if report.status == 'oversized' %}<div class="staff-empty">نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد و ادامه متوقف شد.</div>{% elif report.status == 'inconsistent' %}<div class="staff-empty">نسخه یا پیوند ناسازگار است؛ بازرسی متوقف و جزئیات ناسازگار پنهان شد.</div>{% elif report.status == 'no_parent' %}<p>در انتهای مسیر والدی ثبت نشده است؛ این اثبات منشأ یا کامل بودن تاریخچه نیست.</p>{% endif %}
+  {% if report.next_cursor %}<nav class="staff-pagination" aria-label="بخش‌های نسخه‌های پیشین"><a href="?cursor={{ report.next_cursor|urlencode }}">بررسی بخش بعدی ←</a></nav>{% endif %}
+</div></section>{% endblock %}

@@ -49,6 +49,8 @@ class BrowserFailureAnnotationTests(SimpleTestCase):
             ('quality submit 1440', 'outline contrast below 3:1 against container', 'outline contrast below 3:1'),
             ('forced-colors acknowledgment', 'missing focus outline', 'outline missing'),
             ('login password', 'missing focus outline', 'outline missing'),
+            ('skip forced-home 390', 'not keyboard-focused', 'not keyboard-focused'),
+            ('skip login 320', 'missing focus outline', 'outline missing'),
         ]:
             with self.subTest(label=label, detail=detail):
                 stderr = f'AssertionError [ERR_ASSERTION]: {label}: {detail}\n    at run (/tmp/smoke.cjs:71:3)\n'
@@ -66,6 +68,62 @@ class BrowserFailureAnnotationTests(SimpleTestCase):
                 self.assertNotIn('Focus check:', annotation)
                 self.assertNotIn('SECRET', annotation)
                 self.assertNotIn('391', annotation)
+
+    def test_skip_summary_accepts_only_fixed_page_width_and_phase(self):
+        for page in ('home', 'about', 'login', 'forced-home', 'forced-login'):
+            for width in (320, 390, 768, 1440):
+                for phase in ('initial focus', 'target', 'visible focus', 'fragment navigation', 'next focus'):
+                    message = f'skip {page} {width}: {phase}'
+                    annotation = browser_failure_annotation(1, f'AssertionError [ERR_ASSERTION]: {message}\n')
+                    self.assertIn(f'Skip link: {page} {width} ({phase}).', annotation)
+        for phase in ('main focus', 'next focus'):
+            for region in ('none', 'expected', 'skip', 'main', 'body', 'header', 'footer', 'other-main', 'other'):
+                annotation = browser_failure_annotation(1,
+                    f'AssertionError [ERR_ASSERTION]: skip login 1440: {phase} ({region})\n')
+                self.assertIn(f'Skip link: login 1440 ({phase}: {region}).', annotation)
+        for message in ('skip login 1440: next focus (SECRET)', 'skip home 391: target', 'skip home 390: target SECRET',
+                        'skip login 390: next focus::error::SECRET', 'skip SECRET 390: next focus'):
+            annotation = browser_failure_annotation(1, f'AssertionError [ERR_ASSERTION]: {message}\n')
+            self.assertNotIn('Skip link:', annotation)
+            self.assertNotIn('SECRET', annotation)
+            self.assertNotIn('391', annotation)
+
+    def test_skip_visibility_geometry_is_summarized_without_copying_values(self):
+        import json
+        state = {'focusVisible': True, 'visibility': 'visible', 'display': 'inline', 'opacity': 1,
+                 'width': 100, 'height': 40, 'top': 8, 'bottom': 48, 'left': 270, 'right': 370,
+                 'viewportWidth': 390, 'viewportHeight': 900}
+        for changes, expected in [({'focusVisible': False}, 'focus indicator'),
+                                  ({'visibility': 'hidden'}, 'hidden style'),
+                                  ({'display': 'none'}, 'hidden style'),
+                                  ({'opacity': 0}, 'transparent'),
+                                  ({'width': 0}, 'empty bounds'),
+                                  ({'right': 390.25}, 'outside viewport: right <1px'),
+                                  ({'right': 391}, 'outside viewport: right 1–8px'),
+                                  ({'top': -2, 'focusVisible': False}, 'focus indicator, outside viewport: top 1–8px'),
+                                  ({'bottom': 910, 'left': -0.5}, 'outside viewport: bottom >8px, left <1px')]:
+            with self.subTest(changes=changes):
+                payload = json.dumps({**state, **changes}, separators=(',', ':'))
+                message = f'AssertionError [ERR_ASSERTION]: skip forced-home 390: visible focus {payload}\n'
+                annotation = browser_failure_annotation(1, message)
+                self.assertIn(f'Skip link: forced-home 390 (visible focus: {expected}).', annotation)
+                self.assertNotIn(payload, annotation)
+                self.assertNotIn('viewportWidth', annotation)
+        # Without a failed check, or with extra or malformed data, classify nothing.
+        for suffix in (json.dumps(state), json.dumps({**state, 'secret': 'SECRET'}),
+                       json.dumps({**state, 'display': 'SECRET'}), '{bad SECRET}',
+                       json.dumps({**state, 'right': 'SECRET'}), json.dumps({**state, 'right': True}),
+                       json.dumps({**state, 'right': float('nan')}), json.dumps({**state, 'right': 10 ** 400}),
+                       json.dumps({**state, 'viewportWidth': None}), json.dumps({**state, 'visibility': []}),
+                       json.dumps({**state, 'focusVisible': 'false'})):
+            annotation = browser_failure_annotation(1,
+                f'AssertionError [ERR_ASSERTION]: skip forced-home 390: visible focus {suffix}\n')
+            self.assertNotIn('Skip link:', annotation)
+            self.assertNotIn('SECRET', annotation)
+        annotation = browser_failure_annotation(1,
+            f'AssertionError [ERR_ASSERTION]: skip SECRET 390: visible focus {json.dumps(state)}\n')
+        self.assertNotIn('Skip link:', annotation)
+        self.assertNotIn('SECRET', annotation)
 
     def test_browser_closed_and_windows_stack(self):
         annotation = browser_failure_annotation(1, 'TargetClosedError\n    at run (C:\\work\\smoke.cjs:12:9)\n')

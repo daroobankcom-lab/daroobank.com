@@ -1,0 +1,9 @@
+# ADR 0138: accept either real PostgreSQL deadlock victim in the source probe
+
+Status: synthetic test correction, 24 November 2026.
+
+An optimized full-suite run (seed 8931302) failed the source latest-review deadlock test because the service returned successfully rather than raising `ReviewConflict`. The test required the service connection specifically to be selected as the deadlock victim, even though PostgreSQL may select either connection; its assertion occurred before collecting the manual worker result, so that failed run alone did not establish the worker's SQLSTATE. This is a test failure, not evidence that production is safe or unsafe.
+
+The synthetic probe still arranges and observes the service waiting on the manual holder before requesting the reverse lock. It now collects both outcomes and requires exactly one failure with the driver's actual `40P01`: if the service is the victim, it must have translated a Django `DatabaseError` into `ReviewConflict` and its insert must be absent; if the manual transaction is the victim, the service must succeed with one additional review. Timeouts, unknown SQL errors, two failures and two successes do not satisfy this probe. No elevated privilege or server-wide timeout change is used. Separate injected tests in `daroobank/test_review_write_boundary.py` continue to check selected SQLSTATE translation and rollback for the source writer, but injection is not a real deadlock.
+
+A run where the manual worker is the victim does not demonstrate translation of a real `40P01` through the service. Neither outcome proves the victim choice, all schedules, production concurrency behavior, retries or safety of outer transaction commits. The distinct identity deadlock probe and its own victim-choice limitation remain as described in ADR 0132.

@@ -1,0 +1,17 @@
+# ADR 0026: receipt candidate validation reuse and product triage boundaries
+
+Status: development-only, 22 November 2026. Extends [ADR 0025](0025-manifest-consistency-inspection.md) and the product intake/review flow.
+
+## Decision
+
+For receipt detail and per-receipt inspection only, reuse the domain-specific candidate integrity check within the joined candidate rows fetched by that single page/batch SELECT, keyed by candidate primary key. Every item still independently compares its source record ID and payload fingerprint and its candidate's source fields to the receipt, before looking in the cache. Invalid results, including previously handled validation exceptions, are reusable too. The cache never outlives the page/batch, is not shared between domains or requests and contains at most 25 or 50 entries respectively; inspection does not validate the lookahead. Standalone validation has no implicit cache. This relies on the current integrity validators being pure functions of fields returned in that joined read; if they acquire database reads, time-dependent behavior, or side effects, revisit the design. The query count and privacy/permission rules remain unchanged.
+
+Synthetic operation-count tests show 50 repeated rows referencing one candidate cause one candidate integrity validation instead of 50; 50 distinct candidates still cause 50. The row checks still run 50 times. This is not a latency, memory-bytes or database-work benchmark. Structural aggregation and the page query remain separate non-snapshot reads; subsequent pages can see changes. Candidate data already present in the page remains in memory and may be large. Nothing here validates file origin, identity, source rights, authenticity or historical price match.
+
+Do not cache or skip staging `get_or_create` calls: row callbacks execute inside the transaction and can alter or delete candidates between rows; advisory source locks are cooperative, and other writers may bypass them. Reuse there could change created/duplicate counts, candidate references, callback order, constraints or rollback behavior. No staging throughput improvement is claimed.
+
+Harden product triage inputs to reject non-integer, boolean, negative or out-of-PostgreSQL-bigint-range identifiers before querying; expected review may be zero but candidate ID must be positive. Reject non-string decisions and a missing actor in the normal authorization path. The hidden form bounds expected review too. Staff permissions remain checked before input validation. Tests on separate PostgreSQL connections exercise two simultaneous reviewers with one stale result, a competing candidate update, and lock holding through the review write; self-review stays forbidden. These are selected test interleavings, not proof of every schedule or database deployment.
+
+## Consequences and limits
+
+Product triage still serializes participating reviewers on the candidate row and compares the expected last review and candidate fingerprint; it creates an internal review, not a product or publication. Direct review inserts or privileged/bulk/database writes can bypass the protocol; even a successful review can later become stale. Locks can wait or time out, with no retry policy introduced. The snapshot and hash are not signatures or immutable audit. No access controls or user-facing semantics are expanded, and only synthetic data is suitable for this development system.

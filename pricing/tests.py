@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import importlib
 import io
 import json
@@ -10,7 +11,7 @@ from types import SimpleNamespace
 from django.apps import apps
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection
+from django.db import connection, transaction
 from django.test import TestCase
 from django.urls import reverse
 
@@ -52,10 +53,33 @@ class PriceImportTests(TestCase):
         output = io.StringIO()
         call_command('stage_price_csv', str(self.path), source_name='Synthetic', source_url='https://example.org', stdout=output)
         self.assertIn('DRY RUN', output.getvalue())
+        self.assertIn('Repeated identities and IRC candidate sets may reuse earlier observations', output.getvalue())
         self.assertEqual(PriceCandidate.objects.count(), 0)
         with self.assertRaises(CommandError):
             call_command('stage_price_csv', str(self.path), source_name='Synthetic', source_url='https://example.org', commit=True, stdout=io.StringIO())
         self.assertEqual(PriceCandidate.objects.count(), 0)
+
+    def test_commit_must_be_a_real_boolean_before_read_or_write(self):
+        self.write_csv([self.row])
+        data = self.path.read_bytes()
+        for value in (0, 1, None, 'False', 'True', [], {}):
+            for with_callback in (False, True):
+                with self.subTest(commit=value, callback=with_callback), transaction.atomic():
+                    stream = io.BytesIO(data)
+                    outcomes = []
+                    callback = (lambda *item: outcomes.append(item)) if with_callback else None
+                    with self.assertRaises(ImportValidationError):
+                        stage_csv(stream, 'منبع', 'https://example.org', commit=value,
+                                  rights_attested=True, on_staged=callback)
+                    self.assertEqual(stream.tell(), 0)
+                    self.assertEqual(outcomes, [])
+                    self.assertEqual(PriceCandidate.objects.count(), 0)
+                    transaction.set_rollback(True)
+        preview = stage_csv(io.BytesIO(data), 'منبع', 'https://example.org')
+        self.assertEqual(preview['rows'], 1)
+        self.assertEqual(PriceCandidate.objects.count(), 0)
+        staged = stage_csv(io.BytesIO(data), 'منبع', 'https://example.org', commit=True, rights_attested=True)
+        self.assertEqual(staged['created'], 1)
 
     def test_attested_staging_is_review_only_and_replay_is_idempotent(self):
         self.write_csv([self.row])
@@ -150,6 +174,77 @@ class PriceImportTests(TestCase):
         ]:
             with self.subTest(amount=amount, currency=currency), self.assertRaises(ImportValidationError):
                 amount_to_rial(amount, currency)
+
+    def test_csv_and_source_reject_controls_before_stripping(self):
+        examples = (('source_record_id', '\tother'), ('manufacturer', '\nشرکت'),
+                    ('irc', '۰۰۱۲۳۴\r'), ('currency', '\tTOMAN'), ('unit', 'package\n'),
+                    ('effective_date', '\t2026-01-02'))
+        for field, value in examples:
+            for commit in (False, True):
+                with self.subTest(field=field, commit=commit), transaction.atomic():
+                    self.write_csv([self.row, {**self.row, 'source_record_id': 'second', field: value}])
+                    with self.assertRaises(ImportValidationError) as error:
+                        self.stage(commit=commit)
+                    self.assertNotIn(value, str(error.exception))
+                    self.assertEqual(PriceCandidate.objects.count(), 0)
+                    transaction.set_rollback(True)
+        self.write_csv([self.row])
+        for name, url in (('\tمنبع', 'https://example.org'), ('منبع', 'https://example.org\n')):
+            with self.subTest(source=True), transaction.atomic():
+                with self.assertRaises(ImportValidationError):
+                    stage_csv(self.path, name, url, commit=True, rights_attested=True)
+                self.assertEqual(PriceCandidate.objects.count(), 0)
+                transaction.set_rollback(True)
+        result = stage_csv(self.path, ' منبع ', ' https://example.org ', commit=True, rights_attested=True)
+        self.assertEqual(result['created'], 1)
+
+    def test_hidden_or_control_characters_in_amount_reject_the_whole_csv(self):
+        for amount in ('1\u200b2', '1\u202e2', '1\u0301', '1\u20dd', '1\ufe0f', '\t1', '\n1', '1\u2028', '\u00a81'):
+            with self.subTest(amount=repr(amount)), transaction.atomic():
+                self.write_csv([self.row, {**self.row, 'source_record_id': 'bad', 'amount': amount}])
+                with self.assertRaises(ImportValidationError) as error:
+                    self.stage(commit=True)
+                self.assertNotIn(amount, str(error.exception))
+                self.assertEqual(PriceCandidate.objects.count(), 0)
+                transaction.set_rollback(True)
+        self.write_csv([{**self.row, 'amount': ' ۱۲۳ '}])
+        self.stage(commit=True)
+        self.assertEqual(PriceCandidate.objects.get().amount_rial, 1230)
+
+    def test_legacy_candidate_with_hidden_amount_is_withheld_from_comparison(self):
+        from .comparisons import price_revision_context
+        from .reviews import ReviewConflict, ensure_candidate_integrity
+
+        self.write_csv([self.row])
+        self.stage(commit=True)
+        candidate = PriceCandidate.objects.get()
+        fields = dict(candidate.source_fields)
+        fields['amount'] = '1\u200b2'
+        payload = json.dumps({'source_name': candidate.source_name, 'fields': fields},
+                             sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+        digest = hashlib.sha256(payload.encode('utf-8')).hexdigest()
+        # Simulate a coherent historical row accepted by the old normalizer.
+        PriceCandidate.objects.filter(pk=candidate.pk).update(
+            source_fields=fields, original_amount=fields['amount'], amount_rial=120, payload_sha256=digest)
+        candidate.refresh_from_db()
+        with self.assertRaises(ReviewConflict):
+            ensure_candidate_integrity(candidate)
+        self.assertFalse(price_revision_context(candidate)['available'])
+        self.assertEqual(PriceCandidate.objects.count(), 1)
+
+    def test_compatibility_digit_amount_staging_and_invalid_file_is_atomic(self):
+        self.write_csv([{**self.row, 'amount': '⑩.0', 'currency': 'RIAL'},
+                        {**self.row, 'source_record_id': 'bad', 'amount': '1.' + '⑩' * 48, 'currency': 'RIAL'}])
+        with self.assertRaises(ImportValidationError):
+            self.stage(commit=True)
+        self.assertEqual(PriceCandidate.objects.count(), 0)
+        self.write_csv([{**self.row, 'amount': '⑩.0', 'currency': 'RIAL'}])
+        self.stage(commit=True)
+        candidate = PriceCandidate.objects.get()
+        self.assertEqual((candidate.original_amount, candidate.amount_rial), ('⑩.0', 10))
+        self.assertEqual(candidate.source_fields['amount'], '⑩.0')
+        self.assertEqual(self.stage(commit=True)['duplicates'], 1)
+        self.assertEqual(PriceCandidate.objects.count(), 1)
 
     def test_partial_updates_keep_irc_and_search_projection_in_sync(self):
         self.product.irc = '9999'  # not included in partial save; must not leak into derived fields

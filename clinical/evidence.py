@@ -4,14 +4,19 @@ import json
 from datetime import date
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db.models import Prefetch, prefetch_related_objects
 
+from daroobank.account_checks import current_account_ids
+from daroobank.write_conflict_boundary import write_conflict_boundary
+
+from .draft_reads import bounded_draft_own_text, materialize_draft_own_text
 from .models import ClinicalDraft, ClinicalReferenceAssertion
 from .services import (ADD, HASH, REFERENCE_FIELDS, VIEW, DraftConflict, DraftError, require_staff,
-                       valid_draft, validate_reference_data)
+                       _valid_draft_for_update, validate_reference_data)
 
 ASSERTION_FIELDS = REFERENCE_FIELDS + ('relation',)
 MAX_REFERENCES = 10
+MAX_INSPECTION_DRAFTS = 50
 
 
 def validate_reference(data):
@@ -49,15 +54,27 @@ def valid_reference(item, draft):
         return False
 
 
-def evidence_state(draft):
-    """Return at most ten validated assertions, not evidence verification."""
-    # Do not use an inner join: a corrupted missing recorder must not hide an assertion.
-    items = list(draft.additional_references.order_by('pk')[:MAX_REFERENCES + 1])
+def _check_assertions(draft, items):
+    """Apply the shared cap and per-assertion checks before looking up recorders."""
     if len(items) > MAX_REFERENCES:
-        return {'status': 'over_limit'}
+        return 'over_limit', set()
     if any(not valid_reference(item, draft) or type(item.recorded_by_id) is not int or item.recorded_by_id <= 0 for item in items):
-        return {'status': 'invalid'}
-    recorder_ids = {item.recorded_by_id for item in items}
+        return 'invalid', set()
+    return 'available', {item.recorded_by_id for item in items}
+
+
+def evidence_state(draft, *, lock=False):
+    """Return a bounded assertion state; lock only for the transactional writers."""
+    # Do not use an inner join: a corrupted missing recorder must not hide an assertion.
+    # Writers already hold the draft lock, then lock existing assertions in PK
+    # order; this locks neither absent rows nor unrelated users/parent drafts.
+    queryset = draft.additional_references.order_by('pk')
+    if lock:
+        queryset = queryset.select_for_update()
+    items = list(queryset[:MAX_REFERENCES + 1])
+    status, recorder_ids = _check_assertions(draft, items)
+    if status != 'available':
+        return {'status': status}
     recorders = get_user_model().objects.in_bulk(recorder_ids) if recorder_ids else {}
     if set(recorders) != recorder_ids:
         return {'status': 'invalid'}
@@ -71,6 +88,40 @@ def evidence_state(draft):
     return {'status': 'available', 'items': items, 'fingerprint': fingerprint, 'snapshot': snapshots}
 
 
+def inspection_evidence_statuses(drafts):
+    """Batch status-only checks for at most 50 already-valid, distinct drafts.
+
+    Per-parent sliced prefetch uses a PostgreSQL window: at most 11 assertions
+    per draft reach Python, including the over-limit sentinel. Do not join to
+    recorders: an absent recorder must remain visible as an invalid assertion.
+    This diagnostic is read-only and is not a replacement for evidence_state
+    in write/review workflows.
+    """
+    if (len(drafts) > MAX_INSPECTION_DRAFTS or any(draft.pk is None or draft._state.adding for draft in drafts)
+            or len({draft.pk for draft in drafts}) != len(drafts)):
+        raise ValueError('Expected at most 50 distinct persisted drafts')
+    if not drafts:
+        return {}
+    # prefetch_related_objects skips an existing to_attr; never reuse stale rows
+    # if the same model instances happen to be passed to a later inspection.
+    for draft in drafts:
+        if hasattr(draft, '_inspection_references'):
+            del draft._inspection_references
+    prefetch_related_objects(drafts, Prefetch(
+        'additional_references',
+        queryset=ClinicalReferenceAssertion.objects.order_by('pk')[:MAX_REFERENCES + 1],
+        to_attr='_inspection_references',
+    ))
+    results, needed = {}, set()
+    for draft in drafts:
+        status, recorder_ids = _check_assertions(draft, draft._inspection_references)
+        results[draft.pk] = (status, recorder_ids)
+        needed.update(recorder_ids)
+    recorders = current_account_ids(needed, using=drafts[0]._state.db)
+    return {pk: ('invalid' if status == 'available' and not ids.issubset(recorders) else status)
+            for pk, (status, ids) in results.items()}
+
+
 def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_evidence_hash):
     require_staff(actor, VIEW, ADD)
     validate_reference(data)
@@ -78,14 +129,18 @@ def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_eviden
             or not isinstance(expected_draft_hash, str) or not HASH.fullmatch(expected_draft_hash)
             or not isinstance(expected_evidence_hash, str) or not HASH.fullmatch(expected_evidence_hash)):
         raise DraftError('شناسه پیش‌نویس یا فهرست ارجاع معتبر نیست.')
-    with transaction.atomic():
+    with write_conflict_boundary(DraftConflict):
         try:
-            draft = ClinicalDraft.objects.select_for_update(of=('self',)).select_related('parent').get(pk=draft_id)
+            draft = bounded_draft_own_text(ClinicalDraft.objects.select_for_update(of=('self',))).get(pk=draft_id)
         except ClinicalDraft.DoesNotExist as exc:
             raise DraftConflict('پیش‌نویس در دسترس نیست.') from exc
-        if not valid_draft(draft) or draft.payload_sha256 != expected_draft_hash:
+        materialize_draft_own_text(draft)
+        valid = _valid_draft_for_update(draft)
+        if draft.writer_text_uninspected:
+            raise DraftConflict('نسخه یا والد بیش از حد بازرسی است؛ سازگاری بررسی نشد و عملیات متوقف شد.')
+        if not valid or draft.payload_sha256 != expected_draft_hash:
             raise DraftConflict('پیش‌نویس تغییر کرده یا ناسازگار است.')
-        state = evidence_state(draft)
+        state = evidence_state(draft, lock=True)
         if state['status'] != 'available' or state['fingerprint'] != expected_evidence_hash:
             raise DraftConflict('ارجاع‌ها تغییر کرده یا ناسازگارند؛ صفحه را تازه کنید.')
         fingerprint = reference_fingerprint(data, draft.pk, draft.payload_sha256)

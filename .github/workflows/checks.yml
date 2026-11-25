@@ -60,8 +60,54 @@ jobs:
           python manage.py migrate --noinput
           python manage.py check
           python manage.py makemigrations --check --dry-run
+          python manage.py inspect_postgresql_schema
       - name: Run synthetic tests on PostgreSQL
-        run: python manage.py test -v 1 --noinput
+        run: python manage.py test --settings=daroobank.synthetic_test_settings -v 1 --noinput
+      - name: Prepare matching PostgreSQL clients for isolated restore drill
+        run: |
+          mkdir -p "$RUNNER_TEMP/pg16-tools"
+          for tool in pg_dump pg_restore; do
+            cat > "$RUNNER_TEMP/pg16-tools/$tool" <<EOF
+          #!/bin/sh
+          exec docker run --rm --network host -v /tmp:/tmp -v "$RUNNER_TEMP:$RUNNER_TEMP" -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE --entrypoint $tool postgres:16 "\$@"
+          EOF
+            chmod 700 "$RUNNER_TEMP/pg16-tools/$tool"
+          done
+          echo "$RUNNER_TEMP/pg16-tools" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pg16-tools/pg_dump" --version
+          "$RUNNER_TEMP/pg16-tools/pg_restore" --version
+      - name: Run isolated synthetic restore drill
+        env:
+          DAROOBANK_RESTORE_TESTS: '1'
+        run: |
+          set +e
+          python manage.py test daroobank.test_synthetic_restore --settings=daroobank.restore_test_settings -v 1 --noinput > "$RUNNER_TEMP/synthetic-restore-test.log" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/synthetic-restore-test.log"
+          if [ "$result" -ne 0 ]; then
+            # Fixed allowlisted categories only; no captured command output or credentials in annotations.
+            if grep -Fq 'Synthetic pg_dump failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at dump.'
+            elif grep -Fq 'Synthetic archive listing failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at archive listing.'
+            elif grep -Fq 'Synthetic restore failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at valid archive restore.'
+            elif grep -Fq 'Restored synthetic database check failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at Django check or migrations.'
+            elif grep -Fq 'Restored synthetic ORM graph verification failed' "$RUNNER_TEMP/synthetic-restore-test.log"; then
+              echo '::error::Synthetic restore drill failed at ORM verification.'
+            else
+              echo '::error::Synthetic restore drill failed in another phase; inspect the job log.'
+            fi
+            exit "$result"
+          fi
+      - name: Run isolated synthetic encrypted restore probe
+        env:
+          DAROOBANK_ENCRYPTED_RESTORE_TESTS: '1'
+        run: |
+          openssl version
+          python manage.py test daroobank.test_synthetic_encrypted_restore daroobank.test_synthetic_restore_guard --settings=daroobank.restore_test_settings -v 1 --noinput
       - name: Audit resolved Python application dependencies
         run: |
           python -m venv "$RUNNER_TEMP/dependency-audit"

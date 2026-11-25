@@ -8,11 +8,14 @@ import re
 from django.core import signing
 from django.utils.crypto import constant_time_compare, salted_hmac
 
+from daroobank.signed_cursors import loads_nonfuture
+
 from .identity import (MAX_ID, VIEW, digest, require_staff, safe_snapshot, ingredient_snapshot,
                        formulation_snapshot, product_snapshot, package_snapshot,
                        valid_identity_revision, valid_package_revision)
 from .models import (IngredientDraft, FormulationDraft, IdentityProductDraft, IdentityPackageDraft,
                      IngredientRevision, FormulationRevision, ProductRevision, IdentityPackageRevision)
+from .revision_read import bounded_revision_reasons, materialize_revision_reason
 
 PAGE_SIZE = 20
 CURSOR_SALT = 'catalog.identity.lineage.v1'
@@ -55,12 +58,14 @@ def _decode(token, kind, anchor_id, anchor_hash):
     if not isinstance(token, str) or not token or len(token) > MAX_CURSOR_LENGTH or token.startswith('.'):
         raise InvalidLineageCursor
     try:
-        data = signing.loads(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
+        data = loads_nonfuture(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
         if (not isinstance(data, dict) or set(data) != {'kind', 'anchor', 'anchor_graph', 'current', 'current_graph', 'depth'}
                 or data['kind'] != kind or type(data['anchor']) is not int or data['anchor'] != anchor_id
                 or not _id(data['current']) or data['current'] >= anchor_id
                 or type(data['depth']) is not int or not PAGE_SIZE <= data['depth'] <= MAX_ID
-                or data['depth'] % PAGE_SIZE != 0
+                # Every valid parent ID is strictly less than its child ID.
+                # This necessary bound does not prove the skipped path exists.
+                or data['depth'] > anchor_id - data['current'] or data['depth'] % PAGE_SIZE != 0
                 or not isinstance(data['anchor_graph'], str) or not _HASH.fullmatch(data['anchor_graph'])
                 or not isinstance(data['current_graph'], str) or not _HASH.fullmatch(data['current_graph'])
                 or not constant_time_compare(data['anchor_graph'], _fingerprint(anchor_hash))):
@@ -102,11 +107,12 @@ def inspect_lineage(*, actor, kind, anchor_id, cursor=''):
     rows = []
     # Do not inner-join links to related records: a dangling parent created by
     # privileged out-of-band writes must be flagged, not treated as no link.
-    links = link_model.objects.all()
+    links = bounded_revision_reasons(link_model.objects.all())
     for _ in range(PAGE_SIZE):
         link = links.filter(child_id=current_id).first()
         if link is None:
             return {'kind': kind, 'anchor_id': anchor_id, 'status': 'no_parent', 'rows': rows, 'next_cursor': None}
+        materialize_revision_reason(link)
         valid = valid_package_revision(link, current_id) if kind == 'package' else valid_identity_revision(kind, link, current_id)
         if not valid or not constant_time_compare(link.child_graph_sha256, current_hash):
             return {'kind': kind, 'anchor_id': anchor_id, 'status': 'inconsistent', 'rows': rows, 'next_cursor': None}

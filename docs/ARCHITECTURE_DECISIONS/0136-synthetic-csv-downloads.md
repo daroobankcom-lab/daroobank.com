@@ -1,0 +1,9 @@
+# ADR 0136: download the existing synthetic CSV examples
+
+Status: development-only staff workflow improvement, 24 November 2026.
+
+The product and price upload pages now link to the corresponding existing repository example, so a permitted operator can download and preview the expected columns without constructing a file from scratch. Both links and filenames say the data are synthetic; the price figures, product names, sources and IDs are not real. The screen recommends UTF-8 and remains clear that preview and preliminary staging do not publish or verify data.
+
+Two fixed staff URLs return only the respective files under `examples/`, with `text/csv; charset=utf-8`, attachment disposition, `nosniff`, and the staff privacy headers. They require the same active staff view-and-add permissions as the corresponding upload, honor the existing development portal gate, and support GET/HEAD only. No request parameter selects a file. These examples are already public in the repository; the permission check is consistent navigation, not confidentiality or source-rights control. The files are trusted deployment artifacts, not user uploads; changing the files on disk changes the download, and there is no signature or general-purpose file service.
+
+Synthetic HTTP tests exercise authentication, domain-scoped direct and group permissions, disabled portal, methods, privacy headers, fixed filenames, ignored path-like query arguments, HEAD, and previewing the exact downloaded bytes with zero candidate or receipt writes. They also check that the current sample cells do not start with common spreadsheet formula prefixes. Chromium exercises each download; these examples and checks do not make arbitrary CSV or spreadsheet imports safe, certify usability of every spreadsheet application, validate real source rights or approve prices.

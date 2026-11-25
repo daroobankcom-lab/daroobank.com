@@ -10,6 +10,8 @@ class CandidateIndexMigrationTests(TransactionTestCase):
 
     def setUp(self):
         super().setUp()
+        # Register before changing schema: unittest runs this even if setup fails.
+        self.addCleanup(self.restore_migrations)
         executor = MigrationExecutor(connection)
         executor.migrate(self.migrate_from)
         old_apps = executor.loader.project_state(self.migrate_from).apps
@@ -26,10 +28,9 @@ class CandidateIndexMigrationTests(TransactionTestCase):
         executor.migrate(self.migrate_to)
         self.new_apps = executor.loader.project_state(self.migrate_to).apps
 
-    def tearDown(self):
+    def restore_migrations(self):
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
-        super().tearDown()
 
     def test_existing_rows_are_backfilled_and_invalid_inputs_fail_closed(self):
         Candidate = self.new_apps.get_model('catalog', 'ProductCandidate')

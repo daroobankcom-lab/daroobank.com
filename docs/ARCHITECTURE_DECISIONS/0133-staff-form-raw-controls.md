@@ -1,0 +1,11 @@
+# ADR 0133: raw control checks for selected staff assertion forms
+
+Status: development-only input hardening, 24 November 2026. Extends ADR 0118.
+
+Django's single-line `CharField` and `URLField` trim whitespace before their cleaned values reach the source-claim, clinical and identity assertion services. A tab or newline on either boundary could therefore disappear and the cleaned value be accepted, despite these services rejecting controls in the values they receive. Selected authenticated create requests demonstrated writes before this change.
+
+The existing upload-form guard is factored into a shared mixin. It inspects the original widget value using the form prefix and adds a field error for Unicode `Cc` or `Cs`, even if field cleanup already removed it. It is applied to the source-claim text and URLs, clinical draft/revision and reference single-line text and URLs, and identity assertion/revision text and component-unit fields. Normal surrounding spaces remain trimmed; Persian ZWNJ remains allowed. This deliberately does not change the clinical multiline statement, review/change reasons, numeric/date/choice/token fields, other forms, service interfaces or CSV rules. Such text remains subject to its existing policy. It is a compatibility change for clients submitting boundary control characters to these selected form fields.
+
+Django skips cleaning an unchanged, empty-permitted extra component form: an otherwise blank extra row containing only a tab in a unit is ignored, rather than rejected or saved. Populated component rows are checked. The guard is not a complete Unicode spoofing policy, request-size limit, log redaction, URL fetch safety guarantee, data authenticity, or protection from direct service, bulk ORM or SQL writes. Form fields may still render submitted invalid text; no secrecy or log guarantee is claimed.
+
+Synthetic tests cover every listed form family, prefixes, six selected controls at both ends including a surrogate, normal spaces, ZWNJ, multiline text, populated and empty component formsets, and selected authenticated create, revision and reference POSTs with no write on rejection. These examples do not exhaust all encodings, widgets, routes or deployment configurations.

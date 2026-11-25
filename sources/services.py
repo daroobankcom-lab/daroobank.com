@@ -8,11 +8,15 @@ from datetime import date
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
+from django.db.transaction import TransactionManagementError
 from django.utils import timezone
 
 from catalog.normalization import normalize_search
+from daroobank.account_checks import current_account_exists
+from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import SourceClaim, SourceClaimReview
+from .claim_reads import bounded_claim_notes, materialize_claim_note
 
 FIELDS = ('source_name', 'source_url', 'owner', 'evidence_url', 'evidence_note', 'claims_collection',
           'claims_storage', 'claims_publication', 'starts_on', 'expires_on')
@@ -20,10 +24,15 @@ VIEW = 'sources.view_sourceclaim'
 ADD = 'sources.add_sourceclaim'
 REVIEW = 'sources.review_sourceclaim'
 SUMMARY_LIMIT = 5
+MAX_PK = 9_223_372_036_854_775_807
 
 
 class ClaimError(ValueError):
     pass
+
+
+class ClaimConflict(ClaimError):
+    """A selected transactional conflict while recording a claim."""
 
 
 class ReviewConflict(ValueError):
@@ -31,7 +40,7 @@ class ReviewConflict(ValueError):
 
 
 def require_staff(user, *perms):
-    if not user.is_authenticated or not user.is_active or not user.is_staff or any(not user.has_perm(p) for p in perms):
+    if user is None or not user.is_authenticated or not user.is_active or not user.is_staff or any(not user.has_perm(p) for p in perms):
         raise PermissionDenied
 
 
@@ -77,6 +86,8 @@ def claim_data(claim):
 
 
 def valid_claim(claim):
+    if getattr(claim, 'note_oversized', False):
+        return False
     try:
         data = claim_data(claim)
         validate_data(data)
@@ -85,28 +96,58 @@ def valid_claim(claim):
         return False
 
 
+def _find_or_create_claim(**kwargs):
+    # The replay pre-lookup needs only the ID before its authoritative lock.
+    return SourceClaim.objects.only('pk').get_or_create(**kwargs)
+
+
 def record_claim(*, actor, data):
     require_staff(actor, VIEW, ADD)
     validate_data(data)
     digest = fingerprint(data)
-    with transaction.atomic():
-        return SourceClaim.objects.get_or_create(source_url=data['source_url'], payload_sha256=digest,
-                                                  defaults={**data, 'recorded_by': actor})
+    with write_conflict_boundary(ClaimConflict):
+        claim, created = _find_or_create_claim(source_url=data['source_url'], payload_sha256=digest,
+                                                             defaults={**data, 'recorded_by': actor})
+        if not created:
+            # Re-read under the same row lock used by review, rather than trusting
+            # a pre-lock replay object or only its stored digest.
+            try:
+                claim = bounded_claim_notes(SourceClaim.objects.using(claim._state.db)
+                    .select_for_update()).get(pk=claim.pk)
+            except SourceClaim.DoesNotExist as exc:
+                raise ClaimConflict('ادعای قبلی در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
+            materialize_claim_note(claim)
+            if (claim.note_oversized or not valid_claim(claim) or claim_data(claim) != data
+                    or not current_account_exists(claim.recorded_by_id, using=claim._state.db)):
+                raise ClaimConflict('ادعای قبلی در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.')
+        return claim, created
+
+
+def _lock_latest_review(claim):
+    """Lock the latest existing review ID; absent and future rows remain unlocked."""
+    using = claim._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest-review locking requires an atomic writer transaction.')
+    return (SourceClaimReview.objects.using(using).filter(claim_id=claim.pk)
+            .order_by('-pk').select_for_update().only('pk').first())
 
 
 def review_claim(*, actor, claim_id, decision, reason, expected_review, expected_hash):
     require_staff(actor, VIEW, REVIEW)
-    if (decision not in dict(SourceClaimReview.DECISIONS) or not valid_review_reason(reason)
-            or type(expected_review) is not int or expected_review < 0
+    if (type(claim_id) is not int or not 1 <= claim_id <= MAX_PK
+            or not isinstance(decision, str) or decision not in dict(SourceClaimReview.DECISIONS)
+            or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
             or not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash)):
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
-    with transaction.atomic():
-        claim = SourceClaim.objects.select_for_update().get(pk=claim_id)
+    with write_conflict_boundary(ReviewConflict):
+        claim = bounded_claim_notes(SourceClaim.objects.select_for_update()).get(pk=claim_id)
+        materialize_claim_note(claim)
         if claim.recorded_by_id == actor.pk:
             raise PermissionDenied
-        if not valid_claim(claim) or claim.payload_sha256 != expected_hash:
-            raise ReviewConflict('اطلاعات منبع تغییر کرده یا معتبر نیست؛ بازبینی متوقف شد.')
-        latest = claim.reviews.order_by('-pk').first()
+        if (claim.note_oversized or not valid_claim(claim) or claim.payload_sha256 != expected_hash
+                or not current_account_exists(claim.recorded_by_id, using=claim._state.db)):
+            raise ReviewConflict('اطلاعات منبع یا ثبت‌کننده در دسترس نیست یا تغییر کرده است؛ بازبینی متوقف شد.')
+        latest = _lock_latest_review(claim)
         if (latest.pk if latest else 0) != expected_review:
             raise ReviewConflict('بازبینی جدیدی ثبت شده است؛ صفحه را تازه کنید.')
         return SourceClaimReview.objects.create(
@@ -139,7 +180,10 @@ def related_claims(user, source_url):
     except ClaimError:
         return {'can_view': True, 'invalid_url': True, 'items': [], 'limited': False}
     latest = SourceClaimReview.objects.filter(claim_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
-    rows = list(SourceClaim.objects.filter(source_url=source_url).annotate(latest_decision=Subquery(latest))
-                .order_by('-pk')[:SUMMARY_LIMIT + 1])
-    return {'can_view': True, 'invalid_url': False, 'limited': len(rows) > SUMMARY_LIMIT,
-            'items': [{'claim': claim, 'date_label': date_label(claim)} for claim in rows[:SUMMARY_LIMIT]]}
+    rows = list(bounded_claim_notes(SourceClaim.objects.filter(source_url=source_url)
+                .annotate(latest_decision=Subquery(latest)).order_by('-pk'))[:SUMMARY_LIMIT + 1])
+    items = []
+    for claim in rows[:SUMMARY_LIMIT]:
+        materialize_claim_note(claim)
+        items.append({'claim': claim, 'date_label': date_label(claim)})
+    return {'can_view': True, 'invalid_url': False, 'limited': len(rows) > SUMMARY_LIMIT, 'items': items}

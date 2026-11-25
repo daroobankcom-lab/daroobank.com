@@ -3,18 +3,21 @@ import unicodedata
 from collections import Counter
 
 from django.db.models import Exists, OuterRef
+from django.db.models.functions import Substr
 
 from daroobank.validation import valid_private_source_url
-from .models import ProductPresentation
+from .models import PRESENTATION_SEARCH_FIELDS, ProductPresentation
 from .normalization import normalize_search
 from .services import is_public_presentation, public_candidates
 
 BATCH_SIZE = 50
 MAX_PK = 9_223_372_036_854_775_807
-SEARCH_FIELDS = ('name_fa', 'name_en', 'manufacturer', 'strength', 'dosage_form', 'package_description', 'irc')
+MAX_INSPECTED_SEARCH_LENGTH = 65_536
+SEARCH_FIELDS = PRESENTATION_SEARCH_FIELDS
 TEXT_FIELDS = SEARCH_FIELDS + ('source_name', 'source_url', 'search_text', 'irc_normalized')
 ISSUE_LABELS = {
     'invalid_text': 'متن ناسازگار یا دارای نویسه کنترلی',
+    'oversized_search_projection': 'شاخص جست‌وجو برای این بازرسی بیش از حد طولانی است',
     'search_projection': 'شاخص جست‌وجو با داده فعلی همخوان نیست',
     'irc_projection': 'شاخص IRC با داده فعلی همخوان نیست',
     'weak_source_url': 'نشانی منبع با سیاست سخت‌گیرانه داخلی همخوان نیست',
@@ -34,7 +37,10 @@ def inspect_batch(*, after=0):
     # Use the exact SQL prefilter used by public detail/search; the later
     # predicate is shared too.
     prefilter = public_candidates().filter(pk=OuterRef('pk'))
-    rows = list(ProductPresentation.objects.filter(pk__gt=after).annotate(
+    # Inspect one extra character to identify an oversized stored projection
+    # without transferring the entire value. SQL work itself is not bounded.
+    rows = list(ProductPresentation.objects.filter(pk__gt=after).defer('search_text').annotate(
+        _bounded_search=Substr('search_text', 1, MAX_INSPECTED_SEARCH_LENGTH + 1),
         _passes_public_prefilter=Exists(prefilter),
     ).order_by('pk')[:BATCH_SIZE + 1])
     more = len(rows) > BATCH_SIZE
@@ -43,17 +49,22 @@ def inspect_batch(*, after=0):
     ircs = []
     for product in rows:
         problems = []
-        safe = all(isinstance(getattr(product, field), str) and not any(
-            unicodedata.category(char) in ('Cc', 'Cs') for char in getattr(product, field)
-        ) for field in TEXT_FIELDS)
+        inspected_texts = [getattr(product, field) for field in TEXT_FIELDS if field != 'search_text']
+        inspected_texts.append(product._bounded_search)
+        safe = all(isinstance(value, str) and not any(
+            unicodedata.category(char) in ('Cc', 'Cs') for char in value
+        ) for value in inspected_texts)
+        oversized = isinstance(product._bounded_search, str) and len(product._bounded_search) > MAX_INSPECTED_SEARCH_LENGTH
         eligible = None
         irc = None
         if not safe:
             problems.append('invalid_text')
-        else:
+        if oversized:
+            problems.append('oversized_search_projection')
+        if safe and not oversized:
             expected_search = normalize_search(' '.join(getattr(product, field) for field in SEARCH_FIELDS))
             expected_irc = normalize_search(product.irc)
-            if product.search_text != expected_search:
+            if product._bounded_search != expected_search:
                 problems.append('search_projection')
             if product.irc_normalized != expected_irc:
                 problems.append('irc_projection')

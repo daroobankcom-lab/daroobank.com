@@ -1,6 +1,7 @@
 """Permission-scoped navigation tests with synthetic accounts and no business data."""
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.contrib.auth.forms import AuthenticationForm
 from django.db import connection
 from django.test import Client, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -36,6 +37,32 @@ class StaffWorkspaceTests(TestCase):
         inactive = get_user_model().objects.create_user('inactive-workspace', is_staff=True, is_active=False)
         self.client.force_login(inactive)
         self.assertNotEqual(self.client.get(url).status_code, 200)
+
+    @override_settings(APPEND_SLASH=True, SECURE_SSL_REDIRECT=False)
+    def test_slashless_staff_root_is_private_and_disabled_before_redirect(self):
+        for enabled in (False, True):
+            with self.settings(STAFF_PORTAL_ENABLED=enabled):
+                for method in (self.client.get, self.client.head):
+                    with self.subTest(enabled=enabled, method=method.__name__), self.assertNumQueries(0):
+                        response = method('/staff', {'next': 'synthetic-canary'})
+                        self.assertEqual(response.status_code, 301 if enabled else 404)
+                        if enabled:
+                            self.assertEqual(response['Location'], '/staff/?next=synthetic-canary')
+                        self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                        self.assertEqual(response['Referrer-Policy'], 'same-origin')
+                        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')
+        with self.settings(STAFF_PORTAL_ENABLED=False):
+            csrf_client = Client(enforce_csrf_checks=True)
+            with self.assertNumQueries(0):
+                response = csrf_client.post('/staff', {'synthetic': 'canary'})
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+            self.assertNotIn(b'canary', response.content)
+        # A prefix lookalike is neither a staff endpoint nor hidden by the gate.
+        with self.settings(STAFF_PORTAL_ENABLED=False):
+            response = self.client.get('/staffing')
+            self.assertEqual(response.status_code, 404)
+            self.assertNotEqual(response.get('Cache-Control'), 'private, no-store, max-age=0')
 
     def test_no_permission_is_empty_private_and_no_business_reads(self):
         self.client.force_login(self.user)
@@ -111,6 +138,27 @@ class StaffWorkspaceTests(TestCase):
                     if other_route != route:
                         self.assertNotContains(workspace, f'href="{reverse(other_route)}?{other_query}"')
                         self.assertEqual(self.client.get(reverse(other_route) + '?' + other_query).status_code, 403)
+
+    def test_public_and_staff_skip_target_is_programmatically_focusable(self):
+        for name in ('home', 'about', 'staff_login'):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name))
+                self.assertContains(response, '<main id="main" tabindex="-1">')
+                self.assertContains(response, 'class="skip-link" href="#main"')
+
+    def test_login_does_not_steal_initial_focus_even_after_invalid_post(self):
+        login = reverse('staff_login')
+        for response in (self.client.get(login), self.client.post(login, {
+                'username': 'workspace-staff', 'password': 'incorrect-synthetic-password'})):
+            with self.subTest(method=response.wsgi_request.method):
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn('autofocus', response.context['form'].fields['username'].widget.attrs)
+                self.assertNotContains(response, 'autofocus')
+                self.assertContains(response, 'href="#main"')
+                self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                self.assertContains(response, 'name="csrfmiddlewaretoken"')
+        # The portal customizes only its own form instance, not Django's base form.
+        self.assertTrue(AuthenticationForm().fields['username'].widget.attrs['autofocus'])
 
     def test_default_login_landing_and_safe_next(self):
         # Even an active staff account with no view permission gets the empty workspace.

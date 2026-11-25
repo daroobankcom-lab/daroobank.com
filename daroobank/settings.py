@@ -18,6 +18,8 @@ if DEBUG:
     ALLOWED_HOSTS += ['.e2b.app', 'testserver']
 INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing', 'sources', 'ingestion', 'clinical']
 MIDDLEWARE = [
+    'daroobank.middleware.ContentSecurityPolicyMiddleware',
+    'daroobank.middleware.EarlyRedirectPrivacyHeadersMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'daroobank.middleware.PublicReadPrivacyHeadersMiddleware',
     'daroobank.middleware.StaffPrivacyHeadersMiddleware',

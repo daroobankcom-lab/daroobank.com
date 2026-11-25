@@ -1,0 +1,15 @@
+# ADR 0121: a restrictive baseline content-security policy
+
+Status: development baseline, 24 November 2026. This is not a production security approval.
+
+## Decision
+
+An outer Django middleware supplies a `Content-Security-Policy` header on Django responses unless a view explicitly sets one. The present server-rendered slice uses same-origin scripts, styles, images, fonts and connections; plug-ins and embedded frames are disallowed; `base-uri` is none and form submission is restricted to the same origin. Inline script/style and `unsafe-eval` are not allowed. The static JSON-LD data block remains in the page. This is a compatibility-affecting policy: adding external assets, inline scripts/styles, embedded content or cross-origin form actions requires a deliberate policy and security review, not a blanket unsafe exception.
+
+The baseline intentionally does not include `frame-ancestors`, so development preview iframes continue to work. Outside debug, the separately configured `X-Frame-Options: DENY` middleware remains in place; it is not a substitute for a reviewed deployment-specific framing policy. A view can explicitly replace the default policy; a proxy, static server or CDN can add, remove or override headers independently. Browser CSP behavior and multiple policies depend on those components.
+
+## Selected evidence and limitations
+
+Django tests check selected public, private, error, method and HTTPS-redirect responses and preservation of an explicitly supplied policy. A fresh subprocess with non-debug settings and deliberately unreachable synthetic DB coordinates checks the home response retains both the policy and `X-Frame-Options: DENY` without requiring a database. Synthetic Chromium tests observe enforcement against selected inline and off-origin scripts, an inline style, off-origin fetch/frame/form and a base element, while a test-only same-origin script is allowed and the JSON-LD remains readable. The full selected browser workflow still runs with the policy. A cross-origin `about:blank` parent could embed the synthetic debug page in Chromium; this is not a full Arena proxy or production framing test. Test-only contrast/focus mutations now use the CSSOM rather than inline style tags; this is privileged test code and demonstrates that CSP is not a sandbox once code executes. Axe results still include items needing manual review.
+
+This policy allows same-origin scripts, so script-capable same-origin uploads or vulnerable endpoints can undermine it. It does not replace context-aware escaping, CSRF, origin authorization, dependency hygiene, MFA, logging, throttling, proxy/TLS hardening, `frame-ancestors`, trusted types, or review of every asset, dynamic state, browser or response source. External link navigation is not prohibited. No CSP reporting endpoint is configured, and debug error pages or future dependencies using inline assets can render differently. Review compatibility, headers from every serving layer and actual security requirements before any deployment; the staff portal remains development-only.

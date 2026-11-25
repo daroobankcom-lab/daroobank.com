@@ -6,10 +6,12 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import transaction
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from .intake import FIELDS, MAX_FILE_BYTES, MAX_ROWS, IntakeError, parse_product_csv, stage_products
+from .intake import (FIELDS, MAX_FILE_BYTES, MAX_PK, MAX_ROWS, IntakeError, ReviewConflict,
+                     parse_product_csv, review_product, stage_products)
 from .models import ProductCandidate, ProductCandidateReview, ProductPresentation
 
 
@@ -119,6 +121,66 @@ class ProductIntakeTests(TestCase):
         self.assertEqual(self.client.get(reverse('search_api'), {'q': 'فرآورده ساختگی'}).json()['data'], [])
         self.assertNotContains(self.client.get(reverse('sitemap')), '/staff/')
 
+    def test_csv_rejects_controls_before_stripping_any_product_cell(self):
+        examples = (('source_record_id', '\tother'), ('name_fa', '\nنام'), ('name_en', '\r'),
+                    ('manufacturer', 'سازنده\t'), ('irc', '\t۰۰۱۲۳۴'))
+        for field, value in examples:
+            for commit in (False, True):
+                with self.subTest(field=field, commit=commit), transaction.atomic():
+                    rows = [self.row, {**self.row, 'source_record_id': 'second', field: value}]
+                    with self.assertRaises(IntakeError) as error:
+                        stage_products(io.BytesIO(make_csv(rows)), 'منبع', 'https://example.org',
+                                       actor=self.submitter, commit=commit, rights_attested=commit)
+                    self.assertNotIn(value, str(error.exception))
+                    self.assertEqual(ProductCandidate.objects.count(), 0)
+                    transaction.set_rollback(True)
+        valid = {**self.row, 'name_fa': ' نام\u200cساختگی ', 'source_record_id': '  example  '}
+        parsed = parse_product_csv(io.BytesIO(make_csv([valid])))[0]
+        self.assertEqual(parsed['name_fa'], 'نام\u200cساختگی')
+        self.assertEqual(parsed['source_record_id'], 'example')
+
+    def test_upload_rejects_raw_source_and_csv_controls_without_receipt(self):
+        from ingestion.models import ImportReceipt
+
+        self.client.force_login(self.submitter)
+        for field, value in (('source_name', '\tمنبع'), ('source_url', 'https://example.org\n')):
+            with self.subTest(field=field):
+                data = {'source_name': 'منبع', 'source_url': 'https://example.org', 'action': 'stage',
+                        'rights_attested': 'on', 'csv_file': SimpleUploadedFile('synthetic.csv', make_csv([self.row]))}
+                data[field] = value
+                response = self.client.post(reverse('staff_product_upload'), data)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(field, response.context['form'].errors)
+                self.assertEqual(ProductCandidate.objects.count(), 0)
+                self.assertEqual(ImportReceipt.objects.count(), 0)
+        bad = {**self.row, 'name_fa': '\tنام ساختگی'}
+        response = self.submit(data=make_csv([self.row, bad]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].non_field_errors())
+        self.assertEqual(ProductCandidate.objects.count(), 0)
+        self.assertEqual(ImportReceipt.objects.count(), 0)
+
+    def test_commit_must_be_a_real_boolean_before_read_or_write(self):
+        for value in (0, 1, None, 'False', 'True', [], {}):
+            for with_callback in (False, True):
+                with self.subTest(commit=value, callback=with_callback), transaction.atomic():
+                    stream = io.BytesIO(make_csv([self.row]))
+                    outcomes = []
+                    callback = (lambda *item: outcomes.append(item)) if with_callback else None
+                    with self.assertRaises(IntakeError):
+                        stage_products(stream, 'منبع', 'https://example.org', actor=self.submitter,
+                                       commit=value, rights_attested=True, on_staged=callback)
+                    self.assertEqual(stream.tell(), 0)
+                    self.assertEqual(outcomes, [])
+                    self.assertEqual(ProductCandidate.objects.count(), 0)
+                    transaction.set_rollback(True)
+        preview = stage_products(io.BytesIO(make_csv([self.row])), 'منبع', 'https://example.org', actor=self.submitter)
+        self.assertEqual(preview['rows'], 1)
+        self.assertEqual(ProductCandidate.objects.count(), 0)
+        staged = stage_products(io.BytesIO(make_csv([self.row])), 'منبع', 'https://example.org',
+                                actor=self.submitter, commit=True, rights_attested=True)
+        self.assertEqual(staged['created'], 1)
+
     def test_service_requires_actor_permissions_and_boolean_attestation(self):
         for actor in [self.viewer, self.add_only, self.regular, self.reviewer]:
             with self.subTest(actor=actor), self.assertRaises(PermissionDenied):
@@ -182,6 +244,8 @@ class ProductIntakeTests(TestCase):
         self.client.force_login(self.reviewer)
         detail = self.client.get(reverse('staff_product_detail', args=[candidate.pk]))
         self.assertContains(detail, 'ثبت بازبینی اولیه')
+        self.assertContains(detail, 'فقط شناسه آخرین بازبینی موجود برای تشخیص تغییر بررسی می‌شود')
+        self.assertContains(detail, 'تغییر هم‌زمان یا بعدی تاریخچه همچنان ممکن است')
         self.assert_private(detail)
         self.assertEqual(self.review(candidate).status_code, 302)
         event = ProductCandidateReview.objects.get()
@@ -197,6 +261,26 @@ class ProductIntakeTests(TestCase):
             event.save()
         with self.assertRaises(ValidationError):
             event.delete()
+
+    def test_review_ids_and_decisions_are_bounded_at_form_and_service(self):
+        candidate = self.stage_one()
+        self.client.force_login(self.reviewer)
+        for value in (-1, MAX_PK + 1):
+            with self.subTest(value=value):
+                response = self.review(candidate, self.review_data(candidate, expected_review=value))
+                self.assertEqual(response.status_code, 400)
+                self.assert_private(response)
+        args = dict(candidate_id=candidate.pk, actor=self.reviewer, decision='defer',
+                    reason='این نتیجه صرفاً یک بررسی آزمایشی است.', expected_review=0,
+                    expected_hash=candidate.payload_sha256)
+        for field, value in [('candidate_id', True), ('candidate_id', 0), ('candidate_id', MAX_PK + 1),
+                             ('expected_review', True), ('expected_review', -1), ('expected_review', MAX_PK + 1),
+                             ('decision', []), ('expected_hash', None)]:
+            with self.subTest(field=field, value=value), self.assertRaises(ReviewConflict):
+                review_product(**(args | {field: value}))
+        with self.assertRaises(PermissionDenied):
+            review_product(**(args | {'actor': None}))
+        self.assertFalse(ProductCandidateReview.objects.exists())
 
     def test_queue_filter_uses_latest_review_not_a_public_approval(self):
         candidate = self.stage_one()

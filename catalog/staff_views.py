@@ -6,12 +6,19 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import Http404, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from daroobank.account_checks import current_accounts
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
+from daroobank.candidate_review_scan_views import scan_response
+from daroobank.review_history import recent_reviews_with_reviewers
+from daroobank.sample_downloads import synthetic_sample_response
 from sources.services import related_claims
+from ingestion.exceptions import StagingConflict
 from ingestion.receipts import related_receipts, stage_product_with_receipt
 
-from .comparisons import product_comparison_context
+from .comparisons import product_comparison_context, valid_candidate
 from .intake import IntakeError, ReviewConflict, require_staff, review_product, stage_products
 from .models import ProductCandidate, ProductCandidateReview
+from .review_inspection import classify_review
 from .staff_forms import ProductReviewForm, ProductUploadForm
 
 VIEW = 'catalog.view_productcandidate'
@@ -27,12 +34,15 @@ def candidates(request):
     if status not in ('', 'pending', 'further_review', 'reject', 'defer'):
         return HttpResponseBadRequest('Invalid filter.')
     latest = ProductCandidateReview.objects.filter(candidate_id=OuterRef('pk')).order_by('-pk').values('decision')[:1]
-    rows = ProductCandidate.objects.select_related('staged_by').annotate(latest_decision=Subquery(latest)).order_by('-pk')
+    rows = ProductCandidate.objects.annotate(latest_decision=Subquery(latest)).order_by('-pk')
     if status == 'pending':
         rows = rows.filter(latest_decision__isnull=True)
     elif status:
         rows = rows.filter(latest_decision=status)
-    page = Paginator(rows, 20).get_page(request.GET.get('page', 1))
+    page = Paginator(bounded_candidates(rows), 20).get_page(request.GET.get('page', 1))
+    for candidate in page.object_list:
+        materialize_candidate(candidate)
+        candidate.display_consistent = not candidate.content_oversized and valid_candidate(candidate)
     return render(request, 'staff/products.html', {
         'page_title': 'نامزدهای فرآورده | داروبانک', 'description': 'صف داخلی نامزدهای فرآورده.',
         'noindex': True, 'private_staff': True, 'page': page, 'status': status,
@@ -45,11 +55,20 @@ def candidates(request):
 
 
 @login_required(login_url='staff_login')
+@require_safe
+def sample_download(request):
+    require_staff(request.user, VIEW, ADD)
+    return synthetic_sample_response('product')
+
+
+@login_required(login_url='staff_login')
 @require_http_methods(['GET', 'POST'])
 def upload(request):
     require_staff(request.user, VIEW, ADD)
-    form = ProductUploadForm(request.POST or None, request.FILES or None)
+    form = ProductUploadForm(request.POST if request.method == 'POST' else None,
+                             request.FILES if request.method == 'POST' else None)
     result = None
+    status = 200
     if request.method == 'POST' and form.is_valid():
         data = form.cleaned_data
         try:
@@ -62,32 +81,51 @@ def upload(request):
             result['mode'] = data['action']
         except IntakeError as exc:
             form.add_error(None, 'فایل معتبر نیست؛ هیچ داده‌ای ثبت نشد. ' + str(exc))
+        except StagingConflict:
+            form.add_error(None, 'ثبت به دلیل تداخل هم‌زمان یا ناسازگاری رکورد قبلی متوقف شد؛ وضعیت داده را بررسی و برای تلاش دوباره فایل را دوباره انتخاب کنید.')
+            status = 409
     return render(request, 'staff/product_upload.html', {
         'page_title': 'ورود فرآورده | داروبانک', 'description': 'ورود مرحله‌ای مشخصات فرآورده.',
         'noindex': True, 'private_staff': True, 'form': form, 'result': result,
-    })
+    }, status=status)
 
 
 def get_candidate(pk):
     if not 1 <= pk <= 9_223_372_036_854_775_807:
         raise Http404('Candidate not found')
-    return get_object_or_404(ProductCandidate.objects.select_related('staged_by'), pk=pk)
+    candidate = get_object_or_404(bounded_candidates(ProductCandidate.objects.all()), pk=pk)
+    materialize_candidate(candidate)
+    return candidate
 
 
 def detail_response(request, candidate, *, form=None, status=200):
-    reviews = list(candidate.reviews.select_related('reviewer').order_by('-pk')[:25])
-    can_review = (request.user.has_perm(REVIEW) and candidate.staged_by_id != request.user.pk
-                  and bool(candidate.staged_by_id) and candidate.source_rights_attested)
+    reviews = recent_reviews_with_reviewers(candidate.reviews.all())
+    candidate.display_stager = current_accounts([candidate.staged_by_id], using=candidate._state.db).get(candidate.staged_by_id)
+    comparison = product_comparison_context(candidate)
+    for review in reviews:
+        if review.content_oversized:
+            review.technical_status, review.candidate_comparison = 'oversized', 'unknown'
+            continue
+        review.technical_status, review.candidate_comparison = classify_review(
+            review, candidate, comparison['available'] and candidate.display_stager is not None)
+    can_review = (comparison['available'] and request.user.has_perm(REVIEW) and candidate.staged_by_id != request.user.pk
+                  and candidate.display_stager is not None and candidate.source_rights_attested)
     if form is None and can_review:
         form = ProductReviewForm(initial={'expected_review': reviews[0].pk if reviews else 0,
                                           'expected_hash': candidate.payload_sha256})
     return render(request, 'staff/product_detail.html', {
         'page_title': 'نامزد فرآورده | داروبانک', 'description': 'جزئیات داخلی نامزد فرآورده.',
         'noindex': True, 'private_staff': True, 'candidate': candidate, 'reviews': reviews,
-        'can_review': can_review, 'review_form': form, 'comparison': product_comparison_context(candidate),
+        'can_review': can_review, 'review_form': form, 'comparison': comparison,
         'source_claims': related_claims(request.user, candidate.source_url),
         'receipt_refs': related_receipts(request.user, candidate, 'product'),
     }, status=status)
+
+
+@login_required(login_url='staff_login')
+@require_safe
+def review_inspection(request, pk):
+    return scan_response(request, pk, 'product')
 
 
 @login_required(login_url='staff_login')
@@ -110,7 +148,7 @@ def review(request, pk):
         review_product(candidate_id=pk, actor=request.user, **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
-        candidate.refresh_from_db()
+        candidate = get_candidate(pk)
         return detail_response(request, candidate, form=form, status=409)
     except ProductCandidate.DoesNotExist:
         return HttpResponseBadRequest('Candidate no longer exists.')

@@ -12,7 +12,7 @@ from django.urls import reverse
 from catalog.models import ProductPresentation
 from .importer import FIELDS, ImportValidationError, stage_csv
 from .models import PriceCandidate, PriceCandidateReview
-from .reviews import product_fingerprint
+from .reviews import MAX_PK, ReviewConflict, product_fingerprint, record_preliminary_review
 
 
 def csv_bytes(rows):
@@ -95,6 +95,27 @@ class PriceWorkflowTests(TestCase):
         with self.assertRaises(ImportValidationError):
             stage_csv(io.BytesIO(csv_bytes([self.row])), 'نمونه', 'https://example.org', commit=True)
 
+    def test_upload_rejects_raw_source_and_csv_controls_without_receipt(self):
+        from ingestion.models import ImportReceipt
+
+        self.client.force_login(self.stager)
+        for field, value in (('source_name', '\tمنبع'), ('source_url', 'https://example.org\n')):
+            with self.subTest(field=field):
+                data = {'source_name': 'منبع', 'source_url': 'https://example.org', 'action': 'stage',
+                        'rights_attested': 'on', 'csv_file': SimpleUploadedFile('synthetic.csv', csv_bytes([self.row]))}
+                data[field] = value
+                response = self.client.post(reverse('staff_price_upload'), data)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(field, response.context['form'].errors)
+                self.assertEqual(PriceCandidate.objects.count(), 0)
+                self.assertEqual(ImportReceipt.objects.count(), 0)
+        bad = {**self.row, 'source_record_id': 'bad', 'currency': '\tTOMAN'}
+        response = self.upload(rows=[self.row, bad])
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].non_field_errors())
+        self.assertEqual(PriceCandidate.objects.count(), 0)
+        self.assertEqual(ImportReceipt.objects.count(), 0)
+
     def test_import_review_history_and_no_public_price(self):
         candidate = self.stage_one()
         self.assertEqual(candidate.staged_by, self.stager)
@@ -104,6 +125,9 @@ class PriceWorkflowTests(TestCase):
         self.client.force_login(self.reviewer)
         detail = self.client.get(reverse('staff_price_detail', args=[candidate.pk]))
         self.assertContains(detail, 'ثبت بازبینی اولیه')
+        self.assertContains(detail, 'این بازبینی تضمین یکتایی نیست')
+        self.assertContains(detail, 'فقط شناسه آخرین بازبینی موجود برای تشخیص تغییر بررسی می‌شود')
+        self.assertContains(detail, 'تغییر هم‌زمان یا بعدی تاریخچه همچنان ممکن است')
         self.assertEqual(self.review(candidate).status_code, 302)
         event = PriceCandidateReview.objects.get()
         self.assertEqual(event.reviewer, self.reviewer)
@@ -177,6 +201,28 @@ class PriceWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('no-store', response['Cache-Control'])
         self.assertEqual(PriceCandidateReview.objects.count(), 0)
+
+    def test_review_ids_are_bounded_and_service_rejects_invalid_types(self):
+        candidate = self.stage_one()
+        self.client.force_login(self.reviewer)
+        for field in ('expected_review', 'expected_product'):
+            for value in (-1, MAX_PK + 1):
+                with self.subTest(field=field, value=value):
+                    payload = self.payload(candidate)
+                    payload[field] = value
+                    response = self.review(candidate, **payload)
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn('no-store', response['Cache-Control'])
+        args = dict(candidate_id=candidate.pk, actor=self.reviewer, decision='defer',
+                    reason='این نتیجه صرفاً یک بررسی آزمایشی است.', expected_review=0,
+                    expected_product=0, expected_product_hash='')
+        for field, value in [('candidate_id', True), ('candidate_id', 0), ('candidate_id', MAX_PK + 1),
+                             ('expected_review', True), ('expected_review', MAX_PK + 1),
+                             ('expected_product', False), ('expected_product', MAX_PK + 1),
+                             ('decision', []), ('expected_product_hash', None)]:
+            with self.subTest(field=field, value=value), self.assertRaises(ReviewConflict):
+                record_preliminary_review(**(args | {field: value}))
+        self.assertFalse(PriceCandidateReview.objects.exists())
 
     def test_invalid_hidden_fingerprint_and_source_mutation_are_rejected(self):
         candidate = self.stage_one()

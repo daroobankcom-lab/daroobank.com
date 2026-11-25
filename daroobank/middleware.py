@@ -1,13 +1,81 @@
+import re
+
 from django.conf import settings
 from django.http import HttpResponseNotFound
+
+
+# The current server-rendered slice has no executable inline scripts or styles.
+# Do not set frame-ancestors here: development previews embed the page, while
+# production framing remains governed by the separately configured X-Frame-Options.
+DEVELOPMENT_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
+                   "img-src 'self'; font-src 'self'; connect-src 'self'; "
+                   "object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'")
+
+
+class ContentSecurityPolicyMiddleware:
+    """Set a conservative baseline, without replacing an explicit view policy."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.setdefault('Content-Security-Policy', DEVELOPMENT_CSP)
+        return response
+
+
+def _is_staff_path(path):
+    return path == '/staff' or path.startswith('/staff/')
+
+
+def _is_public_read_path(path):
+    return path in {'/search', '/search/', '/api/v1/search', '/api/v1/search/', '/api/v1/openapi.json'} or bool(
+        re.fullmatch(r'/(?:api/v1/)?products/[0-9]+/?', path)
+    )
+
+
+def _public_headers(response):
+    response['Cache-Control'] = 'no-store'
+    response['Referrer-Policy'] = 'no-referrer'
+    response['X-Robots-Tag'] = 'noindex, follow'
+
+
+def _staff_headers(response):
+    response['Cache-Control'] = 'private, no-store, max-age=0'
+    response['Pragma'] = 'no-cache'
+    response['X-Robots-Tag'] = 'noindex, nofollow'
+    # Same-origin Referer is required for Django's HTTPS CSRF fallback.
+    response['Referrer-Policy'] = 'same-origin'
+
+
+class EarlyRedirectPrivacyHeadersMiddleware:
+    """Apply known-path headers to redirects produced before URL resolution.
+
+    In particular, this wraps SecurityMiddleware without changing its HTTPS
+    redirect or the staff gate's ordering. It cannot affect upstream proxies.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if response.status_code in (301, 302, 303, 307, 308):
+            if _is_staff_path(request.path_info):
+                _staff_headers(response)
+            elif _is_public_read_path(request.path_info):
+                _public_headers(response)
+        return response
 
 
 class PublicReadPrivacyHeadersMiddleware:
     """Apply privacy headers to resolved public reads, including CSRF/405 errors.
 
     Runs outside CommonMiddleware and CsrfViewMiddleware so their responses for
-    these resolved views receive the same policy. Unresolved requests, redirects
-    before URL resolution and responses from an upstream proxy are outside scope.
+    these resolved views receive the same policy. Known public path shapes
+    receive the policy even when unresolved, including slashless redirects and
+    oversized numeric IDs. Other unresolved paths and upstream responses remain
+    outside scope.
     """
 
     view_names = frozenset({
@@ -20,10 +88,11 @@ class PublicReadPrivacyHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         match = getattr(request, 'resolver_match', None)
-        if match is not None and match.url_name in self.view_names:
-            response['Cache-Control'] = 'no-store'
-            response['Referrer-Policy'] = 'no-referrer'
-            response['X-Robots-Tag'] = 'noindex, follow'
+        # CommonMiddleware may redirect before resolving the request. An
+        # oversized numeric product ID can also fail the converter before a
+        # resolver_match exists. Match only our known public path shapes.
+        if (match is not None and match.url_name in self.view_names) or _is_public_read_path(request.path_info):
+            _public_headers(response)
         return response
 
 
@@ -34,16 +103,11 @@ class StaffPrivacyHeadersMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        is_staff_path = request.path_info.startswith('/staff/')
+        is_staff_path = _is_staff_path(request.path_info)
         if is_staff_path and not settings.STAFF_PORTAL_ENABLED:
             response = HttpResponseNotFound()
         else:
             response = self.get_response(request)
         if is_staff_path:
-            response['Cache-Control'] = 'private, no-store, max-age=0'
-            response['Pragma'] = 'no-cache'
-            response['X-Robots-Tag'] = 'noindex, nofollow'
-            # Preserve same-origin form Origin/Referer for Django CSRF validation,
-            # while withholding staff URLs from other origins.
-            response['Referrer-Policy'] = 'same-origin'
+            _staff_headers(response)
         return response

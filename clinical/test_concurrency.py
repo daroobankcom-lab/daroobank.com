@@ -1,13 +1,14 @@
 """PostgreSQL concurrent evidence and triage checks with synthetic data."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from threading import Barrier, Event, current_thread
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.db import close_old_connections, connection
+from django.db import OperationalError, close_old_connections, connection
 from django.test import TransactionTestCase
 
-from .evidence import MAX_REFERENCES, add_reference, evidence_state
+from .evidence import MAX_REFERENCES, add_reference, evidence_state, reference_fingerprint, reviewed_evidence
 from .models import ClinicalDraftReview, ClinicalReferenceAssertion
 from .services import DraftConflict, create_draft, review_draft
 
@@ -76,6 +77,73 @@ class ClinicalConcurrentEvidenceTests(TransactionTestCase):
                               ['created', 'conflict'])
         self.assertEqual(ClinicalReferenceAssertion.objects.filter(draft=self.draft).count(), MAX_REFERENCES)
         self.assertEqual(evidence_state(self.draft)['status'], 'available')
+
+    def test_two_reviewers_of_same_version_record_one_and_one_conflicts(self):
+        initial = evidence_state(self.draft)['fingerprint']
+        def review(actor):
+            review_draft(actor=actor, draft_id=self.draft.pk, decision='defer',
+                reason='این ارجاع ساختگی نیاز به بررسی دارد.', expected_review=0,
+                expected_hash=self.draft.payload_sha256, expected_evidence_hash=initial)
+        self.assertCountEqual(self.race([review, review]), ['created', 'conflict'])
+        event = ClinicalDraftReview.objects.get(draft=self.draft)
+        self.assertEqual(event.review_snapshot['evidence_fingerprint'], initial)
+        self.assertEqual(event.review_snapshot['evidence_snapshot'], [])
+
+    def test_review_locks_existing_reference_but_later_bypass_can_stale_snapshot(self):
+        initial = evidence_state(self.draft)['fingerprint']
+        reference, _ = add_reference(actor=self.actors[0], draft_id=self.draft.pk, data=self.ref,
+            expected_draft_hash=self.draft.payload_sha256, expected_evidence_hash=initial)
+        current = evidence_state(self.draft)['fingerprint']
+        ready, resume = Event(), Event()
+        review_thread = []
+        def paused_evidence(draft, **kwargs):
+            state = evidence_state(draft, **kwargs)
+            if review_thread and current_thread() is review_thread[0]:
+                ready.set()
+                if not resume.wait(8):
+                    raise TimeoutError('Synthetic evidence review did not resume')
+            return state
+        def worker(fn, lock_timeout='2s'):
+            close_old_connections()
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT set_config('lock_timeout', %s, false)", [lock_timeout])
+                    cursor.execute("SET statement_timeout = '10s'")
+                return fn()
+            finally:
+                connection.close()
+        def review():
+            review_thread.append(current_thread())
+            actor = get_user_model().objects.get(pk=self.actors[1].pk)
+            return review_draft(actor=actor, draft_id=self.draft.pk, decision='defer',
+                reason='این ارجاع ساختگی نیاز به بررسی دارد.', expected_review=0,
+                expected_hash=self.draft.payload_sha256, expected_evidence_hash=current).pk
+        def bypass():
+            changed = {**self.ref, 'reference_title': 'تغییر ساختگی با bypass'}
+            # A bypass writer can make a new coherent payload/hash pair, not
+            # merely corrupt an existing one, without locking the draft.
+            return ClinicalReferenceAssertion.objects.filter(pk=reference.pk).update(
+                reference_title=changed['reference_title'],
+                payload_sha256=reference_fingerprint(changed, self.draft.pk, self.draft.payload_sha256))
+        with patch('clinical.evidence.evidence_state', side_effect=paused_evidence):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                future = pool.submit(worker, review)
+                try:
+                    self.assertTrue(ready.wait(8), 'Review did not finish reading evidence under lock')
+                    with self.assertRaises(OperationalError):
+                        pool.submit(worker, bypass, '300ms').result(timeout=10)
+                finally:
+                    resume.set()
+                event = ClinicalDraftReview.objects.get(pk=future.result(timeout=10))
+                self.assertEqual(pool.submit(worker, bypass).result(timeout=10), 1)
+        self.assertEqual(event.review_snapshot['evidence_fingerprint'], current)
+        self.assertEqual(event.review_snapshot['evidence_snapshot'][0]['reference']['reference_title'], self.ref['reference_title'])
+        after = evidence_state(self.draft)
+        self.assertEqual(after['status'], 'available')
+        self.assertNotEqual(after['fingerprint'], current)
+        self.assertEqual(after['snapshot'][0]['reference']['reference_title'], 'تغییر ساختگی با bypass')
+        self.assertEqual(reviewed_evidence(event)['status'], 'available')
+        self.assertEqual(ClinicalDraftReview.objects.count(), 1)
 
     def test_review_and_reference_addition_share_draft_lock(self):
         initial = evidence_state(self.draft)['fingerprint']

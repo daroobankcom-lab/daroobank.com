@@ -1,0 +1,17 @@
+# ADR 0019: bounded inspection of synthetic clinical review snapshots
+
+Status: development-only implementation, 22 November 2026; extends [ADR 0005](0005-clinical-draft-triage.md) and [ADR 0006](0006-clinical-evidence-assertions.md).
+
+## Decision
+
+Offer a read-only scan at `/staff/clinical/<draft-id>/reviews/inspection/`, linked from the draft detail. The existing DEBUG-only portal and active staff `clinical.view_clinicaldraft` permission apply; the service also checks permission but is not subject to the web gate. The report shows only review IDs and fixed statuses, not snapshot content, reason, user names, hashes, references or decisions. No changes, source fetching, approval or publication are performed. Invalid scan parameters receive a private non-reflecting 400 and a local restart for the same accessible draft.
+
+One request reads the selected draft and immediate parent, then up to 51 review rows for that draft in ascending ID order; it inspects the first 50 and applies the optional filter within that batch. The next position comes from the last scanned row even if the filtered section is empty. With cached permissions this uses two SELECTs. Missing reviewer or author rows are not joined away, but their existence, status, permissions and qualifications are **not** checked.
+
+First check the decision, trimmed reason, plausible distinct reviewer and snapshot author IDs, expected snapshot key set, canonical date fields and the snapshot payload against its stored draft hash, using existing draft payload validation. A malformed record or snapshot yields `invalid_record`; its comparison is unknown. For a structurally valid snapshot, check historical supplementary assertions with `reviewed_evidence` and check the reviewer is not a recorded contributor in that snapshot. An invalid set yields `invalid_evidence`. A complete older-shaped snapshot without any evidence keys yields `legacy` (no supplementary snapshot); this cannot establish when or why it is absent. A supported valid set yields `consistent`, meaning only that these checks found no inconsistency. Unknown or partial shapes are classified invalid, not silently accepted as legacy; future snapshot formats require explicit support.
+
+Separately compare only the snapshot payload hash and author ID to the current draft **if** `valid_draft` succeeds; otherwise the comparison is unknown. A difference is a clue, not proof of cause or misconduct. Equality does not compare current supplementary evidence or historical/current review status. Apart from its new link, the detail page behavior and the write/review flow are unchanged.
+
+## Limits
+
+This is not a snapshot: the draft, history and later pages may change independently or be inserted behind the cursor. Fifty-one rows, 50 classifications and ten historical references per supported snapshot are bounded, not JSON size, total bytes, database work, time or production load. Hashes are unkeyed; actors, timestamps, decisions and reasons are not cryptographically authenticated, and privileged writers can recompute them or remove historical evidence. The inspector does not validate actor existence, current roles, full ancestry, earlier data, source rights, clinical correctness, review qualifications or provenance. Absence of a warning is not approval, authenticity, completeness, audit, repair or publication readiness. Only synthetic non-sensitive data should be used; URL parameters may be logged. Clinical, legal, production security and physical-device accessibility review remain outstanding.

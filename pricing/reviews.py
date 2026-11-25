@@ -8,11 +8,18 @@ import re
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.transaction import TransactionManagementError
 
+from daroobank.account_checks import current_account_exists
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
+from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_review_reason
 
 from .importer import FIELDS, LIMITS, ImportValidationError, parse_csv, suggest_product, validate_source
 from .models import PriceCandidate, PriceCandidateReview
+
+
+MAX_PK = 9_223_372_036_854_775_807
 
 
 class ReviewConflict(ValueError):
@@ -64,28 +71,45 @@ def ensure_candidate_integrity(candidate):
         raise ReviewConflict('اطلاعات منبع یا مقدار ذخیره‌شده تغییر کرده است؛ بررسی متوقف شد.')
 
 
+def _lock_latest_review(candidate):
+    """Lock the latest existing review ID; absent and future rows remain unlocked."""
+    using = candidate._state.db
+    if not transaction.get_connection(using).in_atomic_block:
+        raise TransactionManagementError('Latest-review locking requires an atomic writer transaction.')
+    return (PriceCandidateReview.objects.using(using).filter(candidate_id=candidate.pk)
+            .order_by('-pk').select_for_update().only('pk').first())
+
+
 def record_preliminary_review(*, candidate_id, actor, decision, reason, expected_review, expected_product, expected_product_hash):
-    if not actor.is_authenticated or not actor.is_active or not actor.is_staff or not actor.has_perm('pricing.view_pricecandidate') or not actor.has_perm('pricing.review_pricecandidate'):
+    if not actor or not actor.is_authenticated or not actor.is_active or not actor.is_staff or not actor.has_perm('pricing.view_pricecandidate') or not actor.has_perm('pricing.review_pricecandidate'):
         raise PermissionDenied
-    if (decision not in dict(PriceCandidateReview.DECISIONS) or not valid_review_reason(reason) or not isinstance(expected_review, int)
-            or expected_review < 0 or not isinstance(expected_product, int) or expected_product < 0
+    if (type(candidate_id) is not int or not 1 <= candidate_id <= MAX_PK
+            or not isinstance(decision, str) or decision not in dict(PriceCandidateReview.DECISIONS)
+            or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_PK
+            or type(expected_product) is not int or not 0 <= expected_product <= MAX_PK
             or not isinstance(expected_product_hash, str)):
         raise ReviewConflict('نتیجه یا توضیح بررسی معتبر نیست.')
     if decision == PriceCandidateReview.ACCEPT_SUGGESTION and not re.fullmatch(r'[0-9a-f]{64}', expected_product_hash):
         raise ReviewConflict('شناسه تطبیق معتبر نیست.')
-    with transaction.atomic():
-        candidate = PriceCandidate.objects.select_for_update().get(pk=candidate_id)
+    with write_conflict_boundary(ReviewConflict):
+        candidate = bounded_candidates(PriceCandidate.objects.select_for_update()).get(pk=candidate_id)
+        materialize_candidate(candidate)
         if not candidate.staged_by_id or not candidate.source_rights_attested:
             raise ReviewConflict('این رکورد فاقد ثبت‌کننده یا اظهار مجوز است و در این مسیر قابل بررسی نیست.')
         if candidate.staged_by_id == actor.pk:
             raise PermissionDenied
+        if not current_account_exists(candidate.staged_by_id, using=candidate._state.db):
+            raise ReviewConflict('حساب ثبت‌کننده در دسترس نیست؛ بررسی متوقف شد.')
+        if candidate.content_oversized:
+            raise ReviewConflict('داده نامزد بیش از حد بررسی است؛ بازبینی متوقف شد.')
         ensure_candidate_integrity(candidate)
-        latest = candidate.reviews.order_by('-pk').first()
+        latest = _lock_latest_review(candidate)
         if (latest.pk if latest else 0) != expected_review:
             raise ReviewConflict('این رکورد هم‌زمان تغییر کرده است؛ صفحه را تازه کنید.')
         product = None
         fingerprint = ''
         if decision == PriceCandidateReview.ACCEPT_SUGGESTION:
+            # Locks existing rows, not absent matching rows or future inserts.
             current, product = suggest_product(candidate.source_fields, lock=True)
             if current != PriceCandidate.MATCH_SUGGESTED or product is None:
                 raise ReviewConflict('پیشنهاد تطبیق فعلی یکتا نیست؛ پذیرش اولیه ممکن نیست.')

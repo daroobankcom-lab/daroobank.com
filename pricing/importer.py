@@ -5,13 +5,16 @@ import io
 import json
 import re
 import unicodedata
+from collections import OrderedDict
 from datetime import date
-from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
 
-from django.db import transaction
-
-from daroobank.validation import valid_private_source_url
+from daroobank.account_checks import current_account_exists
+from daroobank.bounded_read import read_bounded_bytes
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
+from daroobank.validation import has_control_or_surrogate, valid_private_source_url
+from daroobank.write_conflict_boundary import write_conflict_boundary
+from ingestion.exceptions import StagingConflict
 from ingestion.locks import lock_source_stage
 from catalog.models import ProductPresentation
 from catalog.normalization import normalize_search
@@ -21,6 +24,7 @@ MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 5000
 MAX_RIAL = 9_223_372_036_854_775_807
 MAX_MATCH_CANDIDATES = 100
+MAX_CACHED_IRCS = 8
 IDENTITY_FIELDS = ('irc', 'manufacturer', 'strength', 'dosage_form', 'package_description')
 FIELDS = (
     'source_record_id', 'irc', 'manufacturer', 'strength', 'dosage_form',
@@ -37,6 +41,12 @@ OPTIONAL = {'effective_date', 'source_published_date'}
 CATEGORIES = {'official_consumer', 'retail', 'manufacturer', 'wholesale', 'unit'}
 UNITS = {'package', 'tablet', 'capsule', 'ampoule', 'vial', 'ml'}
 AMOUNT_PATTERN = re.compile(r'^[0-9]+(?:\.[0-9]+)?$')
+AMOUNT_DIGITS = str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789')
+UNSAFE_AMOUNT_CATEGORIES = frozenset({'Cc', 'Cs', 'Cf', 'Mn', 'Me', 'Zl', 'Zp'})
+
+
+def _unsafe_amount_characters(value):
+    return any(unicodedata.category(char) in UNSAFE_AMOUNT_CATEGORIES for char in value)
 
 
 class ImportValidationError(ValueError):
@@ -46,6 +56,8 @@ class ImportValidationError(ValueError):
 def validate_source(name, url):
     if not isinstance(name, str) or not isinstance(url, str):
         raise ImportValidationError('Source name and HTTPS URL are required and must be at most 200 characters.')
+    if has_control_or_surrogate(name) or has_control_or_surrogate(url):
+        raise ImportValidationError('Source name or URL contains unsupported characters.')
     name, url = name.strip(), url.strip()
     if (not name or len(name) > 200 or any(unicodedata.category(c) in ('Cc', 'Cs') for c in name)):
         raise ImportValidationError('Source name is invalid or oversized.')
@@ -55,21 +67,33 @@ def validate_source(name, url):
 
 
 def amount_to_rial(amount, currency):
-    """Convert explicitly declared currency with exact arithmetic and no rounding."""
-    number = normalize_search(amount).replace('٫', '.')
+    """Convert bounded, explicitly declared currency exactly and without rounding."""
+    if not isinstance(amount, str) or len(amount) > LIMITS['amount'] or _unsafe_amount_characters(amount):
+        raise ImportValidationError('Amount must be a bounded plain decimal string.')
+    normalized = unicodedata.normalize('NFKC', amount)
+    if _unsafe_amount_characters(normalized):
+        raise ImportValidationError('Amount must be a bounded plain decimal string.')
+    # Search normalization intentionally removes marks and format characters;
+    # financial amounts must reject them rather than silently change the input.
+    number = normalized.translate(AMOUNT_DIGITS).replace('٫', '.').strip()
     if not AMOUNT_PATTERN.fullmatch(number):
         raise ImportValidationError('Amount must be a positive plain decimal without separators or exponent.')
-    if currency not in {'RIAL', 'TOMAN'}:
+    if not isinstance(currency, str) or currency not in {'RIAL', 'TOMAN'}:
         raise ImportValidationError('Currency must explicitly be RIAL or TOMAN.')
-    try:
-        with localcontext() as context:
-            context.prec = 80  # Longer than the maximum input; do not silently round.
-            value = Decimal(number) * (10 if currency == 'TOMAN' else 1)
-            if value <= 0 or value > MAX_RIAL or value != value.to_integral_value():
-                raise ImportValidationError('Amount must convert exactly to a positive whole rial within range.')
-            return int(value)
-    except InvalidOperation as exc:
-        raise ImportValidationError('Amount is not a valid decimal.') from exc
+    integer, _, fraction = number.partition('.')
+    # A toman is exactly ten rial. Move at most one fractional digit to the
+    # integer part and reject any nonzero remainder, without decimal context or
+    # rounding. Only convert the final bounded integer to avoid huge int inputs.
+    if currency == 'TOMAN':
+        integer += fraction[:1] or '0'
+        fraction = fraction[1:]
+    if fraction.strip('0'):
+        raise ImportValidationError('Amount must convert exactly to a positive whole rial within range.')
+    digits = integer.lstrip('0')
+    upper = str(MAX_RIAL)
+    if not digits or len(digits) > len(upper) or (len(digits) == len(upper) and digits > upper):
+        raise ImportValidationError('Amount must convert exactly to a positive whole rial within range.')
+    return int(digits)
 
 
 def parse_date(value, field):
@@ -87,10 +111,10 @@ def parse_date(value, field):
 def parse_csv(path):
     try:
         if hasattr(path, 'read'):
-            data = path.read(MAX_FILE_BYTES + 1)
+            data = read_bounded_bytes(path, limit=MAX_FILE_BYTES)
         else:
             with Path(path).open('rb') as f:
-                data = f.read(MAX_FILE_BYTES + 1)
+                data = read_bounded_bytes(f, limit=MAX_FILE_BYTES)
     except OSError as exc:
         raise ImportValidationError('Cannot read input file.') from exc
     if len(data) > MAX_FILE_BYTES:
@@ -109,6 +133,13 @@ def parse_csv(path):
                 raise ImportValidationError('Input exceeds the 5000-row limit.')
             if None in row or any(value is None for value in row.values()):
                 raise ImportValidationError(f'Row {line}: wrong number of fields.')
+            # Controls must not be silently stripped from any raw CSV cell.
+            for key in FIELDS:
+                if has_control_or_surrogate(row[key]):
+                    raise ImportValidationError(f'Row {line}: invalid or oversized {key}.')
+            # Amounts additionally reject format/mark and line-separator characters.
+            if _unsafe_amount_characters(row['amount']):
+                raise ImportValidationError(f'Row {line}: invalid or oversized amount.')
             row = {key: value.strip() for key, value in row.items()}
             for key in FIELDS:
                 if '\x00' in row[key] or len(row[key]) > LIMITS[key]:
@@ -149,31 +180,67 @@ def match_fields_valid(row):
     return len(normalize_search(row['irc'])) <= 80
 
 
+def _load_irc_index(irc, *, lock=False):
+    """Index at most 100 candidates for one IRC; None means over the cap."""
+    # Matching uses current identity fields, never the stored search text. Do
+    # not transfer a bypass-written projection for candidates or the sentinel.
+    possibilities = ProductPresentation.objects.filter(irc_normalized=irc).defer('search_text').order_by('pk')
+    if lock:
+        possibilities = possibilities.select_for_update()
+    possibilities = list(possibilities[:MAX_MATCH_CANDIDATES + 1])
+    # Too many records must not become a false unique suggestion or false negative.
+    if len(possibilities) > MAX_MATCH_CANDIDATES:
+        return None
+    index = {}
+    for product in possibilities:
+        fields = {field: getattr(product, field) for field in IDENTITY_FIELDS}
+        # A malformed value cannot be assigned safely to one identity. Treat the
+        # entire indexed IRC group as uncertain rather than manufacture uniqueness.
+        if any(not isinstance(value, str) for value in fields.values()):
+            return None
+        # A stale stored projection must not become a match.
+        if normalize_search(fields['irc']) != irc:
+            continue
+        identity = tuple(normalize_search(fields[field]) for field in IDENTITY_FIELDS)
+        name = product.name_fa
+        safe_name = (isinstance(name, str) and bool(normalize_search(name))
+                     and not any(unicodedata.category(c) in ('Cc', 'Cs') for c in name))
+        # An unsafe presentation is still a potential match, not evidence of a
+        # unique valid row. Poison only its normalized identity, when knowable.
+        if not match_fields_valid(fields) or not safe_name or identity in index:
+            index[identity] = None
+        else:
+            index[identity] = product
+    return index
+
+
+def _match_index(identity, index):
+    if index is None:
+        return PriceCandidate.MATCH_AMBIGUOUS, None
+    if identity not in index:
+        return PriceCandidate.MATCH_UNMATCHED, None
+    product = index[identity]
+    return ((PriceCandidate.MATCH_SUGGESTED, product) if product is not None
+            else (PriceCandidate.MATCH_AMBIGUOUS, None))
+
+
 def suggest_product(row, *, lock=False):
     """Suggest only a unique exact presentation, conservatively bounded."""
     if not match_fields_valid(row):
         return PriceCandidate.MATCH_UNMATCHED, None
-    possibilities = ProductPresentation.objects.filter(irc_normalized=normalize_search(row['irc'])).order_by('pk')
-    if lock:
-        possibilities = possibilities.select_for_update()
-    # Too many records must not become a false unique suggestion or false negative.
-    possibilities = list(possibilities[:MAX_MATCH_CANDIDATES + 1])
-    if len(possibilities) > MAX_MATCH_CANDIDATES:
-        return PriceCandidate.MATCH_AMBIGUOUS, None
-    fields = IDENTITY_FIELDS[1:]
-    normalized = {field: normalize_search(row[field]) for field in IDENTITY_FIELDS}
-    matches = [p for p in possibilities if normalize_search(p.irc) == normalized['irc'] and all(
-        normalize_search(getattr(p, field)) == normalized[field] for field in fields
-    )]
-    if len(matches) == 1:
-        return PriceCandidate.MATCH_SUGGESTED, matches[0]
-    if len(matches) > 1:
-        return PriceCandidate.MATCH_AMBIGUOUS, None
-    return PriceCandidate.MATCH_UNMATCHED, None
+    identity = tuple(normalize_search(row[field]) for field in IDENTITY_FIELDS)
+    return _match_index(identity, _load_irc_index(identity[0], lock=lock))
+
+
+def _find_or_create_candidate(**kwargs):
+    # Existing rows only need an ID before the authoritative locked read.
+    return PriceCandidate.objects.only('pk').get_or_create(**kwargs)
 
 
 def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None, on_staged=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
+    if type(commit) is not bool:
+        raise ImportValidationError('Commit mode must be an explicit boolean.')
     if on_staged is not None and (not commit or not callable(on_staged)):
         raise ImportValidationError('Row outcomes require staged commit mode.')
     if commit and rights_attested is not True:
@@ -186,17 +253,32 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
     # Validate the whole file before any write; malformed input cannot partially stage.
     rows = parse_csv(path)
     counts = {'rows': len(rows), 'suggested': 0, 'ambiguous': 0, 'unmatched': 0, 'created': 0, 'duplicates': 0}
-    with transaction.atomic():
+    # Only validated rows reach this point. Both caches are per invocation and
+    # advisory: changing catalog data is not observed consistently during a call.
+    suggestions = {}
+    irc_indexes = OrderedDict()
+    with write_conflict_boundary(StagingConflict):
         if commit:
             lock_source_stage('price', source_url)
         for row, currency, amount, effective, published in rows:
-            match_status, product = suggest_product(row)
+            identity = tuple(normalize_search(row[field]) for field in IDENTITY_FIELDS)
+            if identity not in suggestions:
+                irc = identity[0]
+                if irc not in irc_indexes:
+                    if len(irc_indexes) == MAX_CACHED_IRCS:
+                        irc_indexes.popitem(last=False)
+                    irc_indexes[irc] = _load_irc_index(irc)
+                else:
+                    irc_indexes.move_to_end(irc)
+                status, product = _match_index(identity, irc_indexes[irc])
+                suggestions[identity] = (status, product.pk if product else None)
+            match_status, product_id = suggestions[identity]
             counts[match_status] += 1
             if not commit:
                 continue
             payload = json.dumps({'source_name': source_name, 'fields': row}, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
             digest = hashlib.sha256(payload.encode('utf-8')).hexdigest()
-            candidate, created = PriceCandidate.objects.get_or_create(
+            candidate, created = _find_or_create_candidate(
                 source_url=source_url, source_record_id=row['source_record_id'], payload_sha256=digest,
                 defaults={
                     'source_name': source_name, 'source_fields': row,
@@ -204,9 +286,26 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
                     'original_amount': row['amount'], 'original_currency': currency,
                     'amount_rial': amount, 'price_category': row['category'], 'unit': row['unit'],
                     'effective_date': effective, 'source_published_date': published,
-                    'suggested_product': product, 'match_status': match_status,
+                    'suggested_product_id': product_id, 'match_status': match_status,
                 },
             )
+            if not created:
+                try:
+                    candidate = bounded_candidates(PriceCandidate.objects.using(candidate._state.db)
+                        .select_for_update()).get(pk=candidate.pk)
+                except PriceCandidate.DoesNotExist as exc:
+                    raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.') from exc
+                materialize_candidate(candidate)
+                if (candidate.content_oversized or candidate.source_name != source_name or candidate.source_url != source_url
+                        or candidate.source_record_id != row['source_record_id'] or candidate.source_fields != row
+                        or candidate.payload_sha256 != digest or candidate.original_amount != row['amount']
+                        or candidate.original_currency != currency or candidate.amount_rial != amount
+                        or candidate.price_category != row['category'] or candidate.unit != row['unit']
+                        or candidate.effective_date != effective or candidate.source_published_date != published
+                        or candidate.source_rights_attested is not True
+                        or (candidate.staged_by_id is not None
+                            and not current_account_exists(candidate.staged_by_id, using=candidate._state.db))):
+                    raise StagingConflict('رکورد تکراری در دسترس نیست یا تغییر کرده است؛ ثبت متوقف شد.')
             counts['created' if created else 'duplicates'] += 1
             if on_staged is not None:
                 on_staged(candidate.pk, row['source_record_id'], digest, created, match_status)

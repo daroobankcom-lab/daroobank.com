@@ -1,0 +1,13 @@
+# ADR 0112: historical presentation projection migration test
+
+Status: development-only test, 24 November 2026.
+
+## Decision and evidence
+
+Use a Django historical-model migration-executor test on a disposable PostgreSQL test database for catalog `0001` to `0002`. Four synthetic pre-existing rows cover Persian digits, Arabic letter folding and joiner spacing, an NFKC expansion beyond the new field's 80-character limit, and an empty identifier. The test checks the backfilled values and compares every other historical field before and after migration. A separate injected exception after confirming the backfill writes checks that PostgreSQL rolls back the added column, old row changes and migration recorder entry, and that a subsequent clean upgrade succeeds. A two-connection test pauses after the backfill inside the migration transaction: a SELECT against the table fails with lock timeout `55P03`, then succeeds after commit. This demonstrates one blocking case, not an online migration guarantee. It registers migration-graph restoration before rollback, including on setup failure. This extends, rather than replaces, the existing candidate projection migration test.
+
+## Limits
+
+A one-off PostgreSQL 16.2 synthetic probe on 5,000 rows observed 5,000 individual UPDATE statements and 5,010 statements total; the upgrade took 2.611 seconds on this shared local environment. A separate 5,000-row candidate projection (`0003` to `0004`) probe also observed 5,000 updates and 5,010 statements, taking 8.445 seconds while other synthetic tests were running. These single timings are not comparable performance estimates or safe deployment windows. The presentation migration holds a table lock while its transaction and per-row backfill run; assess and rehearse representative volumes, lock impact and recovery for both migrations before deployment rather than assuming online availability.
+
+The migration intentionally stores an empty projection instead of truncating an overlong normalized identifier. An empty value can hide a search match; it is not a repair. The tests use a handful of synthetic examples, one injected failure point and one observed lock conflict, not all Unicode, historical data, failure modes or contention scenarios, and don't establish application validity, completeness, production upgrade safety, general rollback safety, performance, backups or concurrent-writer behavior. Migration tests alter schema and must run only against an authorized disposable database. Production migrations require an independent plan, representative data assessment, backup and tested recovery.

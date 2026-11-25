@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container">
+  <h1>ادامه بازرسی معتبر نیست</h1>
+  <div class="staff-alert">نشانی ادامه نامعتبر یا منقضی شده است، یا نسخه مرتبط تغییر کرده است. برای بررسی دوباره از ابتدا شروع کنید.</div>
+  <p><a class="staff-detail-link" href="{% url 'staff_clinical_lineage' anchor_id %}">شروع دوباره بازرسی ←</a></p>
+  <p><a class="staff-detail-link" href="{% url 'staff_clinical_detail' anchor_id %}">بازگشت به پیش‌نویس ←</a></p>
+</div></section>{% endblock %}

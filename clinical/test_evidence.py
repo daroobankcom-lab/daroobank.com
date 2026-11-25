@@ -4,15 +4,16 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from catalog.models import ProductPresentation
 from pricing.models import PriceCandidate
 from .evidence import MAX_REFERENCES, add_reference, evidence_state, reference_fingerprint, valid_reference
 from .models import ClinicalDraft, ClinicalDraftReview, ClinicalReferenceAssertion
-from .services import DraftConflict, DraftError, create_draft, review_draft
+from .services import DraftConflict, DraftError, create_draft, draft_data, fingerprint, review_draft
 
 
 class ClinicalEvidenceTests(TestCase):
@@ -151,7 +152,7 @@ class ClinicalEvidenceTests(TestCase):
         self.assertEqual(snap['evidence_snapshot'][0]['reference']['relation'], 'supports')
         self.assertContains(self.detail(draft), 'شناسه ارجاع‌های ثبت‌شده با فهرست فعلی برابر است')
         self.add(draft, data={**self.ref_data, 'reference_title': 'ارجاع متناقض ساختگی', 'relation': 'contradicts'})
-        self.assertContains(self.detail(draft), 'ارجاع‌های تکمیلی پس از این بازبینی تغییر کرده‌اند')
+        self.assertContains(self.detail(draft), 'شناسه ارجاع‌های ثبت‌شده با فهرست فعلی متفاوت است')
         self.assertEqual(len(event.review_snapshot['evidence_snapshot']), 1)
         self.assertEqual(self.client.post(reverse('staff_clinical_review', args=[draft.pk]), self.review_data(draft, event.pk)).status_code, 302)
         self.assertEqual(len(ClinicalDraftReview.objects.first().review_snapshot['evidence_snapshot']), 2)
@@ -161,7 +162,7 @@ class ClinicalEvidenceTests(TestCase):
         old = ClinicalDraftReview.objects.create(draft=draft, reviewer=self.reviewer, decision='defer', reason='قدیمی ساختگی',
                                                   draft_payload_sha256=draft.payload_sha256, review_snapshot={'author_id': self.author.pk})
         self.client.force_login(self.viewer)
-        self.assertContains(self.detail(draft), 'این بازبینی قدیمی تصویر ارجاع‌های تکمیلی ندارد')
+        self.assertContains(self.detail(draft), 'رکورد بازبینی یا تصویر پیش‌نویس ناسازگار است')
         payload = {k: v for k, v in self.review_data(draft, old.pk).items() if k != 'expected_evidence_hash'}
         event = review_draft(actor=self.reviewer, draft_id=draft.pk, **payload)
         self.assertEqual(event.review_snapshot['evidence_snapshot'], [])
@@ -176,7 +177,7 @@ class ClinicalEvidenceTests(TestCase):
         self.assertContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
         self.assertEqual(len(response.context['reviews'][0].evidence_history['items']), 1)
         self.assertEqual(response.context['reviews'][0].evidence_history['items'][0]['id'], ref.pk)
-        self.assertContains(response, 'ارجاع‌های تکمیلی پس از این بازبینی تغییر کرده‌اند')
+        self.assertContains(response, 'شناسه ارجاع‌های ثبت‌شده با فهرست فعلی متفاوت است')
         for mutated in [
             [],
             {**event.review_snapshot, 'evidence_snapshot': [{'invalid': 'shape'}]},
@@ -188,12 +189,133 @@ class ClinicalEvidenceTests(TestCase):
             with self.subTest(snapshot=ascii(mutated)):
                 ClinicalDraftReview.objects.filter(pk=event.pk).update(review_snapshot=mutated)
                 response = self.detail(draft)
-                self.assertContains(response, 'تصویر ارجاع‌های بازبینی ناسازگار است')
+                self.assertIn(response.context['reviews'][0].technical_status, ('invalid_record', 'invalid_evidence'))
                 self.assertNotContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
         ClinicalDraftReview.objects.filter(pk=event.pk).update(review_snapshot=event.review_snapshot)
         ClinicalDraft.objects.filter(pk=draft.pk).update(statement='متن ناسازگار')
         response = self.detail(draft)
         self.assertNotContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
+
+    def test_detail_distinguishes_draft_and_evidence_comparisons_without_chronology(self):
+        draft = self.draft()
+        review_draft(actor=self.reviewer, draft_id=draft.pk, **self.review_data(draft))
+        self.client.force_login(self.viewer)
+        response = self.detail(draft)
+        self.assertContains(response, 'اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند')
+        self.assertContains(response, 'شناسه ارجاع‌های ثبت‌شده با فهرست فعلی برابر است')
+        modified = {**draft_data(draft), 'title': 'عنوان متفاوت ساختگی'}
+        ClinicalDraft.objects.filter(pk=draft.pk).update(title=modified['title'],
+            payload_sha256=fingerprint(modified, None, '', ''))
+        response = self.detail(draft)
+        self.assertContains(response, 'اثر انگشت پیش‌نویس یا شناسه نویسنده با وضعیت فعلی متفاوت است')
+        self.assertContains(response, 'شناسه ارجاع‌های ثبت‌شده با فهرست فعلی برابر است')
+        self.assertNotContains(response, 'ارجاع‌های تکمیلی پس از این بازبینی تغییر کرده‌اند')
+        self.assert_private(response)
+        ClinicalDraft.objects.filter(pk=draft.pk).update(title=draft.title, payload_sha256=draft.payload_sha256,
+                                                         author_id=self.recorder.pk)
+        self.assertContains(self.detail(draft), 'اثر انگشت پیش‌نویس یا شناسه نویسنده با وضعیت فعلی متفاوت است')
+
+    def test_detail_rejects_incomplete_or_inconsistent_historical_review(self):
+        draft = self.draft(); self.add(draft)
+        event = review_draft(actor=self.reviewer, draft_id=draft.pk, **self.review_data(draft))
+        self.client.force_login(self.viewer)
+        original = event.review_snapshot
+        partial = {key: value for key, value in original.items() if key != 'evidence_version'}
+        ClinicalDraftReview.objects.filter(pk=event.pk).update(review_snapshot=partial)
+        response = self.detail(draft)
+        self.assertContains(response, 'رکورد بازبینی یا تصویر پیش‌نویس ناسازگار است')
+        self.assertNotContains(response, event.reason)
+        self.assertNotContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
+        self.assertNotContains(response, 'این بازبینی قدیمی')
+        ClinicalDraftReview.objects.filter(pk=event.pk).update(review_snapshot=original, reviewer_id=self.recorder.pk)
+        response = self.detail(draft)
+        self.assertContains(response, 'تصویر ارجاع‌های بازبینی ناسازگار است')
+        self.assertNotContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
+
+    def test_missing_reviewer_does_not_hide_review_or_reset_expected_review(self):
+        draft = self.draft()
+        event = review_draft(actor=self.reviewer, draft_id=draft.pk, **self.review_data(draft))
+        self.client.force_login(self.author)
+        missing = 2_147_483_000
+        try:
+            # PostgreSQL's deferred FK allows this corrupt fixture until rollback/restoration.
+            ClinicalDraftReview.objects.filter(pk=event.pk).update(reviewer_id=missing)
+            response = self.detail(draft)
+            self.assertEqual(len(response.context['reviews']), 1)
+            self.assertContains(response, 'حساب بازبین در دسترس نیست')
+            self.assertNotContains(response, event.reason)
+            self.assertNotContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
+            self.assertContains(response, f'پیش‌نویس {draft.pk}')
+            self.assert_private(response)
+            self.client.force_login(self.reviewer)
+            response = self.detail(draft)
+            self.assertEqual(response.context['review_form'].initial['expected_review'], event.pk)
+        finally:
+            ClinicalDraftReview.objects.filter(pk=event.pk).update(reviewer_id=self.reviewer.pk)
+
+    def test_supported_missing_evidence_shape_is_not_called_old(self):
+        draft = self.draft()
+        event = review_draft(actor=self.reviewer, draft_id=draft.pk, **self.review_data(draft))
+        legacy = {key: value for key, value in event.review_snapshot.items() if not key.startswith('evidence_')}
+        ClinicalDraftReview.objects.filter(pk=event.pk).update(review_snapshot=legacy)
+        self.client.force_login(self.viewer)
+        response = self.detail(draft)
+        self.assertContains(response, 'در ساختار ثبت‌شده تصویر ارجاع‌های تکمیلی وجود ندارد')
+        self.assertContains(response, 'این به‌تنهایی قدمت بازبینی را ثابت نمی‌کند')
+        self.assertContains(response, 'اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند')
+        self.assertNotContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
+        event.refresh_from_db()
+        self.assertEqual(event.review_snapshot, legacy)
+
+    def test_unavailable_current_evidence_or_draft_does_not_claim_a_match(self):
+        draft = self.draft(); ref, _ = self.add(draft)
+        event = review_draft(actor=self.reviewer, draft_id=draft.pk, **self.review_data(draft))
+        self.client.force_login(self.viewer)
+        ClinicalReferenceAssertion.objects.filter(pk=ref.pk).update(reference_title='ناسازگار')
+        response = self.detail(draft)
+        self.assertContains(response, 'مقایسه ارجاع‌های این بازبینی نامشخص است')
+        self.assertNotContains(response, 'شناسه ارجاع‌های ثبت‌شده با فهرست فعلی برابر است')
+        self.assertContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
+        ClinicalDraft.objects.filter(pk=draft.pk).update(statement='متن ناسازگار')
+        response = self.detail(draft)
+        self.assertContains(response, 'مقایسه پیش‌نویس این بازبینی نامشخص است')
+        self.assertNotContains(response, event.reason)
+        self.assertNotContains(response, 'تصویر ارجاع‌های تکمیلی هنگام بازبینی')
+
+    def test_detail_reads_are_not_a_database_snapshot_and_may_miss_aba(self):
+        draft = self.draft()
+        event = review_draft(actor=self.reviewer, draft_id=draft.pk, **self.review_data(draft))
+        self.client.force_login(self.viewer)
+        modified = {**draft_data(draft), 'title': 'تغییر هم‌زمان ساختگی'}
+        def update_between_reads(instance):
+            ClinicalDraft.objects.filter(pk=draft.pk).update(title=modified['title'],
+                payload_sha256=fingerprint(modified, None, '', ''))
+            return evidence_state(instance)
+        with patch('clinical.staff_views.evidence_state', side_effect=update_between_reads):
+            response = self.detail(draft)
+        self.assertContains(response, 'اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند')
+        self.assertContains(response, 'خوانش‌های جداگانه')
+        self.assertNotEqual(ClinicalDraft.objects.get(pk=draft.pk).payload_sha256, event.draft_payload_sha256)
+        self.assertContains(self.detail(draft), 'اثر انگشت پیش‌نویس یا شناسه نویسنده با وضعیت فعلی متفاوت است')
+        ClinicalDraft.objects.filter(pk=draft.pk).update(title=draft.title, payload_sha256=draft.payload_sha256)
+        self.assertContains(self.detail(draft), 'اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند')
+
+    def test_detail_checks_only_25_reviews_without_per_review_queries(self):
+        draft = self.draft()
+        event = review_draft(actor=self.reviewer, draft_id=draft.pk, **self.review_data(draft))
+        self.client.force_login(self.viewer)
+        self.detail(draft)  # warm app-level state for a fair request comparison
+        with CaptureQueriesContext(connection) as first:
+            self.detail(draft)
+        ClinicalDraftReview.objects.bulk_create([ClinicalDraftReview(draft=draft, reviewer=self.reviewer,
+            decision=event.decision, reason=event.reason, draft_payload_sha256=event.draft_payload_sha256,
+            review_snapshot=event.review_snapshot) for _ in range(25)])
+        with CaptureQueriesContext(connection) as many:
+            response = self.detail(draft)
+        self.assertEqual(len(first), len(many))
+        self.assertEqual(len(response.context['reviews']), 25)
+        self.assertEqual(response.content.decode().count('اثر انگشت پیش‌نویس و شناسه نویسنده با وضعیت فعلی برابرند'), 25)
+        self.assertContains(response, 'حداکثر ۲۵ بازبینی اخیر نمایش داده می‌شود')
 
     def test_new_revision_does_not_inherit_additional_evidence(self):
         draft = self.draft(); self.add(draft)

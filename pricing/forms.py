@@ -1,11 +1,13 @@
 import re
 
 from django import forms
+from daroobank.forms import ExplicitBooleanField, RawControlsMixin, RawMultilineControlsMixin, SourceUploadRawControlsMixin
 from .importer import MAX_FILE_BYTES
 from .models import PriceCandidateReview
+from .reviews import MAX_PK
 
 
-class PriceUploadForm(forms.Form):
+class PriceUploadForm(SourceUploadRawControlsMixin, forms.Form):
     source_name = forms.CharField(label='نام منبع', max_length=200)
     source_url = forms.URLField(label='نشانی HTTPS منبع', max_length=200)
     csv_file = forms.FileField(label='فایل CSV مجاز')
@@ -13,7 +15,7 @@ class PriceUploadForm(forms.Form):
         label='نوع عملیات', choices=[('preview', 'فقط بررسی آزمایشی'), ('stage', 'ثبت برای بررسی')],
         initial='preview',
     )
-    rights_attested = forms.BooleanField(
+    rights_attested = ExplicitBooleanField(
         label='تأیید می‌کنم مجوز جمع‌آوری و ذخیره داخلی این داده را دارم.', required=False,
     )
 
@@ -30,7 +32,9 @@ class PriceUploadForm(forms.Form):
         return values
 
 
-class PriceReviewForm(forms.Form):
+class PriceReviewForm(RawControlsMixin, RawMultilineControlsMixin, forms.Form):
+    raw_control_fields = ('decision', 'expected_review', 'expected_product', 'expected_product_hash')
+    raw_multiline_control_fields = ('reason',)
     decision = forms.ChoiceField(label='نتیجه بررسی اولیه', choices=[
         ('', 'یک نتیجه انتخاب کنید'),
         (PriceCandidateReview.ACCEPT_SUGGESTION, 'پذیرش اولیه پیشنهاد تطبیق'),
@@ -38,8 +42,8 @@ class PriceReviewForm(forms.Form):
         (PriceCandidateReview.DEFER, 'نیاز به بررسی بیشتر'),
     ])
     reason = forms.CharField(label='توضیح و دلیل', min_length=12, max_length=1000, widget=forms.Textarea(attrs={'rows': 4}))
-    expected_review = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
-    expected_product = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
+    expected_review = forms.IntegerField(min_value=0, max_value=MAX_PK, widget=forms.HiddenInput)
+    expected_product = forms.IntegerField(min_value=0, max_value=MAX_PK, widget=forms.HiddenInput)
     expected_product_hash = forms.CharField(required=False, max_length=64, widget=forms.HiddenInput)
 
     def clean_expected_product_hash(self):

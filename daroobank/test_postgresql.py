@@ -25,7 +25,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 class PostgreSQLConfigurationTests(SimpleTestCase):
     def test_only_postgresql_backend_configured(self):
-        self.assertEqual({db['ENGINE'] for db in settings.DATABASES.values()}, {'django.db.backends.postgresql'})
+        self.assertIn({db['ENGINE'] for db in settings.DATABASES.values()},
+                      ({'django.db.backends.postgresql'}, {'daroobank.isolated_postgresql'}))
+        self.assertEqual(connection.vendor, 'postgresql')
         self.assertTrue(settings.DATABASES['default']['CONN_HEALTH_CHECKS'])
 
     def test_missing_required_configuration_fails_closed(self):
@@ -46,6 +48,37 @@ class PostgreSQLConfigurationTests(SimpleTestCase):
         with patch('tools.wait_for_database.connections') as connections:
             connections.__getitem__.return_value.cursor.side_effect = OperationalError('unavailable')
             self.assertFalse(wait_for_database(timeout=0))
+
+    def test_wait_propagates_nonoperational_errors(self):
+        with patch('tools.wait_for_database.connections') as connections, patch('tools.wait_for_database.time.sleep') as sleep:
+            database = connections.__getitem__.return_value
+            database.cursor.side_effect = ValueError('synthetic-programming-error')
+            with self.assertRaisesRegex(ValueError, 'synthetic-programming-error'):
+                wait_for_database(timeout=1)
+            self.assertEqual(database.cursor.call_count, 1)
+            database.close.assert_not_called()
+            sleep.assert_not_called()
+
+    def test_wait_does_not_start_another_attempt_at_deadline(self):
+        from django.db import OperationalError
+        with patch('tools.wait_for_database.connections') as connections, \
+             patch('tools.wait_for_database.time.monotonic', side_effect=[0.0, 0.9, 1.0]), \
+             patch('tools.wait_for_database.time.sleep') as sleep:
+            database = connections.__getitem__.return_value
+            database.cursor.side_effect = OperationalError('synthetic-unavailable')
+            self.assertFalse(wait_for_database(timeout=1, interval=2))
+            self.assertEqual(database.cursor.call_count, 1)
+            self.assertEqual(database.close.call_count, 1)
+            sleep.assert_called_once()
+            self.assertAlmostEqual(sleep.call_args.args[0], 0.1)
+
+    def test_wait_makes_one_attempt_with_zero_window(self):
+        with patch('tools.wait_for_database.connections') as connections, \
+             patch('tools.wait_for_database.time.monotonic', return_value=0.0), \
+             patch('tools.wait_for_database.time.sleep') as sleep:
+            self.assertTrue(wait_for_database(timeout=0))
+            self.assertEqual(connections.__getitem__.return_value.cursor.call_count, 1)
+            sleep.assert_not_called()
 
 
 class PostgreSQLIntegrationTests(TestCase):

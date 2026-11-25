@@ -1,4 +1,5 @@
 """Bounded, conditional arithmetic on staged source assertions, never price approval."""
+from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from catalog.normalization import normalize_search
 
 from .importer import IDENTITY_FIELDS, match_fields_valid
@@ -21,17 +22,21 @@ def valid_candidate(candidate):
 
 
 def price_revision_context(candidate):
-    context = {'available': False, 'revisions': [], 'limited': False}
-    if not valid_candidate(candidate):
+    context = {'available': False, 'revisions': [], 'limited': False,
+               'current_oversized': getattr(candidate, 'content_oversized', False)}
+    if context['current_oversized'] or not valid_candidate(candidate):
         return context
     context['available'] = True
-    revisions = list(PriceCandidate.objects.filter(source_url=candidate.source_url,
+    revisions = list(bounded_candidates(PriceCandidate.objects.filter(source_url=candidate.source_url,
                      source_record_id=candidate.source_record_id).exclude(pk=candidate.pk)
-                     .order_by('-pk')[:MAX_REVISIONS + 1])
+                     .order_by('-pk'))[:MAX_REVISIONS + 1])
     context['limited'] = len(revisions) > MAX_REVISIONS
     for other in revisions[:MAX_REVISIONS]:
-        item = {'candidate': other, 'valid': valid_candidate(other), 'comparable': False,
-                'differences': [], 'delta_rial': None}
+        materialize_candidate(other)
+        valid = not other.content_oversized and valid_candidate(other)
+        item = {'candidate': other, 'valid': valid,
+                'status': 'oversized' if other.content_oversized else 'valid' if valid else 'invalid',
+                'comparable': False, 'differences': [], 'delta_rial': None}
         if item['valid']:
             if candidate.source_name != other.source_name:
                 item['differences'].append('نام منبع')

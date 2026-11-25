@@ -5,6 +5,8 @@ import unicodedata
 from django.core import signing
 from django.utils.crypto import constant_time_compare, salted_hmac
 
+from daroobank.signed_cursors import loads_nonfuture
+
 from .models import ProductPresentation
 from .normalization import normalize_search
 from .quality import BATCH_SIZE, MAX_PK
@@ -47,7 +49,7 @@ def _decode_cursor(token, anchor_id, code):
     if not isinstance(token, str) or not token or len(token) > MAX_CURSOR_LENGTH or token.startswith('.'):
         raise InvalidIRCCursor
     try:
-        data = signing.loads(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
+        data = loads_nonfuture(token, salt=CURSOR_SALT, max_age=CURSOR_MAX_AGE)
         if (not isinstance(data, dict) or set(data) != {'anchor', 'code', 'last'}
                 or type(data['anchor']) is not int or data['anchor'] != anchor_id
                 or type(data['last']) is not int or not 1 <= data['last'] <= MAX_PK

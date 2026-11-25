@@ -1,0 +1,15 @@
+# ADR 0039: formulation row lock for identity package review and correction
+
+Status: development-only, 22 November 2026. Existing component/ingredient row locking was subsequently extended in [ADR 0040](0040-identity-components-and-ingredients-locks.md). Narrows the formulation-row limitation of [ADR 0038](0038-identity-package-product-lock.md) for the two package writers below, not the entire identity graph.
+
+## Problem and decision
+
+A selected synthetic PostgreSQL race demonstrated that package review could save a previously read graph while its formulation row changed; ADR 0038 locked only the package and product. Inside the same existing transaction, both package review and package correction now lock the package, separately re-read and lock its product, and then separately re-read and lock that product's formulation on the same database before graph reconstruction. The formulation replaces any stale cached relation. A missing formulation conflicts without the requested write. The helper requires an atomic transaction and assumes the caller already locked the product. The locks persist until the outer transaction finishes. Existing permission, self-review, creator-presence and optimistic hash/version checks are unchanged. Package creation and component/product correction are not expanded by this decision.
+
+A formulation row lock does not lock the ingredient or component rows used to build its graph. User accounts are not exclusively locked, and separate graph/account reads are not a consistent database snapshot. The interface states this boundary. Acquiring more row locks may add latency, timeouts or deadlocks, especially with other code taking locks in another order; no retry is added. This is not authenticity, source rights, medical approval, a complete audit or production hardening.
+
+## Evidence and limits
+
+Synthetic PostgreSQL separate-connection tests show that a formulation update waits for either package writer and can proceed after commit. When a formulation update holds its row lock first, each writer re-reads it after waiting and rejects the now-inconsistent graph. Tests also cover stale relation-cache replacement, the transaction guard, a missing formulation with a deferred FK restored before commit, and an enclosing transaction's lock lifetime. A separate-connection component update after the snapshot can still succeed and the review can save the earlier graph. Another test inserts a new component through a test-only bypass **in the same transaction** after the snapshot; that is not evidence about a concurrent insert or all FK scheduling. An existing separate-connection test demonstrates the ingredient row remains unlocked.
+
+These tests cover selected schedules, not concurrent deletion, absence of deadlocks or all interleavings. Existing rows outside package/product/formulation, absent rows and predicates, account changes, bypasses after commit, older correction ancestors, ABA and other writers remain outside the guarantee. FK constraints and application checks are not tamper-proof; use only synthetic data.

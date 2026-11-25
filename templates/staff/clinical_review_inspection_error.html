@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'css/staff.css' %}">{% endblock %}
+{% block content %}<section class="staff-section"><div class="container"><h1>درخواست بازرسی معتبر نیست</h1>
+<div class="staff-alert">شناسه باید با یک تا ۱۹ رقم فارسی، عربی یا انگلیسی از ۰ تا ۹۲۲۳۳۷۲۰۳۶۸۵۴۷۷۵۸۰۷ باشد؛ فیلتر نیز باید از گزینه‌های موجود انتخاب شود. شروع دوباره موقعیت و فیلتر را پاک می‌کند.</div>
+<p><a class="staff-detail-link" href="{% url 'staff_clinical_review_inspection' draft_id %}">بازگشت و شروع دوباره ←</a></p>
+</div></section>{% endblock %}

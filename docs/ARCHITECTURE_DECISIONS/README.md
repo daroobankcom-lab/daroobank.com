@@ -344,4 +344,6 @@
 
 - [0172: defensive bounded JSON decoding](0172-defensive-bounded-json-decoding.md) — development-only selected reads.
 
+- [0173: checkbox bound rendering](0173-checkbox-bound-rendering.md) — development-only form rendering correction.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

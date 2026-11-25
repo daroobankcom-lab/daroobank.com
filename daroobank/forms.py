@@ -37,6 +37,14 @@ class ExplicitBooleanField(forms.BooleanField):
                 return False
         raise ValidationError('مقدار انتخاب معتبر نیست.', code='invalid')
 
+    def bound_data(self, data, initial):
+        try:
+            # Render the validated boolean state, not a truthy raw string. This
+            # also prevents malformed input being echoed as the HTML value.
+            return self.to_python(initial if self.disabled else data)
+        except ValidationError:
+            return False
+
     def has_changed(self, initial, data):
         try:
             return super().has_changed(initial, data)

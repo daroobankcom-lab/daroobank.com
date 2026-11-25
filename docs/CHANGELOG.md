@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-25 — checkbox state after form errors
+
+**Changes:** Selected checkboxes now render their validated boolean state after form errors; false or malformed raw values no longer appear checked or echo as the input value.
+
+**Limits:** This does not establish consent or cover all form widgets. See ADR 0173.
+
 ## 2026-11-24 — defensive bounded JSON decoding
 
 **Changes:** Selected bounded candidate and review reads decode text defensively, so unusually deep or very large numeric JSONB values do not crash these reads before validation. Incompatible values are suppressed and comparison remains unknown.

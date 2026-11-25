@@ -316,6 +316,10 @@ Direct service tests reject selected truthy and falsey non-boolean `commit` valu
 
 Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. `daroobank/test_staff_raw_text_controls.py` checks selected source, clinical and identity forms and selected HTTP writes; an unchanged empty extra component row is skipped rather than validated (ADR 0133). `daroobank/test_staff_empty_posts.py` checks required errors and no selected writes for six empty staff POSTs with CSRF enforcement (ADR 0134). `daroobank/test_sample_downloads.py` checks the two fixed synthetic downloads, permissions and preview without writes; the browser smoke exercises both downloads (ADR 0136). Selected form summaries and their handling of field, hidden, general and formset errors are checked in these HTTP tests; the Chromium smoke checks a summary link by keyboard on one invalid identity form (ADR 0135). Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
+## Checkbox rendering after validation errors
+
+`daroobank/test_checkbox_rendering.py` checks true, false, malformed, duplicate and disabled checkbox rendering, plus a synthetic CSRF-protected no-write error response. It does not establish consent or cover every widget; see [ADR 0173](ARCHITECTURE_DECISIONS/0173-checkbox-bound-rendering.md).
+
 ## Defensive bounded JSON decoding
 
 `daroobank/test_bounded_json_decode.py` inserts synthetic PostgreSQL JSONB with huge integers and deeply nested arrays and checks selected candidate, review, receipt, CLI and writer paths. It also checks the decoder integer boundary and SQL projection. These tests do not cover all reads or bound database work; see [ADR 0172](ARCHITECTURE_DECISIONS/0172-defensive-bounded-json-decoding.md).

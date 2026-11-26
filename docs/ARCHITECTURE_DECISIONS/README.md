@@ -420,4 +420,6 @@
 
 - [0210: staff header inventory](0210-staff-header-inventory.md) — one closed header inventory across 1 204 staff responses, for every account shape.
 
+- [0211: staff redirect targets](0211-staff-redirect-targets.md) — a caller-supplied `next` cannot aim login, logout or an anonymous redirect off-host.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

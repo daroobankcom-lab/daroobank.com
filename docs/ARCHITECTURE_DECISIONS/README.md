@@ -428,4 +428,6 @@
 
 - [0214: session inventory](0214-session-inventory.md) — a read-only report of which sessions exist and which the guard would end, with no session material in it.
 
+- [0215: the generated authorization review](0215-generated-authorization-review.md) — the endpoint inventory the Phase 1 review asks for, derived from the resolver and drift-checked; its judgement stays unsigned.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

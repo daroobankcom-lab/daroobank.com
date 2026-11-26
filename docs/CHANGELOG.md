@@ -2,6 +2,47 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — collect the endpoint-by-endpoint authorization inventory, generated from the resolver
+
+**Changes:** the Phase 1 checklist has carried an open gate reading "complete
+endpoint-by-endpoint authorization review". The inventory that review has to be based on
+was already measured across four suites but existed nowhere as one reviewable document,
+and typing it would have created a fourth copy of the route names that goes stale
+silently. `docs/AUTHORIZATION_REVIEW.md` now carries both tables between `GENERATED`
+markers, produced by `daroobank/authorization_review.py` from the live URL resolver,
+`test_staff_authorization_matrix.ROUTES` (the requirement each staff route declares),
+`test_staff_csrf_gate` and `test_staff_method_sweep` (the allowed methods),
+`test_staff_write_route_inventory` (which routes write and which in-flight test covers
+them) and `test_public_route_privacy_matrix.PUBLIC_ROUTES` (the non-staff probes and their
+expected statuses). `write_review()` replaces exactly that block and refuses to rewrite a
+document whose markers are missing. It reports **43 staff routes** — 36 requiring `all of`
+a permission list, four requiring `any of` one, one requiring `is_staff` alone, two
+authentication endpoints stating their own requirement — and **12 non-staff routes** across
+17 probe rows, with 14 routes classified as writing and 29 as read-only.
+`daroobank/test_authorization_review_drift.py` adds 12 tests, run in ~0.01 s with no
+database: the block must match a fresh render byte for byte under four different
+`PYTHONHASHSEED` values, the counts and route-name sets must match the resolver in both
+directions, every row must agree with its derived counterpart in all five data columns,
+every cited ADR number must have a document, every module named in a writes column must
+exist and still park a write around a password invalidation, the document must keep stating
+its own limits, and the sign-off table's owner, date and answer cells must stay empty.
+
+**Limits:** this is the inventory, **not** the review the gate asks for. Nobody has judged
+whether a requirement is correct, there is no threat model, and threat modeling plus an
+independent security assessment remain open. Everything was measured against synthetic data
+in a test transaction on a DEBUG-only portal — `STAFF_PORTAL_ENABLED = DEBUG`, and every
+`/staff/…` request is answered 404 when the flag is off — so describing these routes
+precisely is not a recommendation to expose them. Generated content is only as true as its
+inputs: if a suite stops covering a route without the matrix changing, the evidence column
+keeps citing it, and the drift test can verify that cited ADRs exist and that named modules
+mention their route but not that a suite still sends requests to every route it claims. The
+tables cover the URL surface only, not management commands, middleware, signals or
+background jobs. Two red checks: dropping `sources.add_sourceclaim` from a route's declared
+requirement fails two assertions, and citing a nonexistent ADR `0299` fails 43. One real
+defect surfaced while writing this: `AUTH_ROUTES` is a frozenset, so iterating it to place
+the two authentication endpoints made the generated block depend on the interpreter's hash
+seed; the render now uses an explicit `AUTH_ORDER` tuple asserted equal to that set.
+
 ## 2026-11-26 — add a read-only inventory of synthetic staff sessions
 
 **Changes:** `staff_security/management/commands/list_staff_sessions.py` reports which sessions are in the store, whose they are, and which of them the ADR 0213 guard would end on the next request — the dormant sessions a guard that only fires on arrival cannot itself see. It is read-only, development-only, scans at most 5 000 unexpired sessions and emits one JSON report: per account `account_id`, `username`, `account_exists`, `is_active`, `is_staff`, `is_superuser` and `session_count`; per session `alias`, `bound`, `expires_at` and `guard_would_end_it`. The alias replaces the key — the first 32 hex characters of `salted_hmac('daroobank.staff.session.inventory.v1', session_key)` — so sessions can be told apart and two reports compared without the output being usable as a credential; no session key, cookie value or stored digest is emitted. Expired sessions are excluded, a non-integer session identity is skipped, a session whose account was deleted is still listed with `account_exists: false` and flagged, and `--username` narrows the report while an unknown or empty username is a `CommandError` rather than an empty-looking store. `daroobank/test_staff_session_inventory.py` adds 7 tests, including the residual case end to end: deactivate an account with no intervening request, see the row still listed and flagged, revoke it, see the report empty. Emitting the key instead of the alias fails three assertions.

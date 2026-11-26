@@ -432,4 +432,6 @@
 
 - [0216: migration reversibility](0216-migration-reversibility.md) — rollback and reapply measured on throwaway PostgreSQL databases, with the dependent-app cascade derived from the migration graph.
 
+- [0217: the deployment readiness report](0217-deployment-readiness-report.md) — ten required settings and database checks plus the undecided conditions, in one read-only JSON report; a zero exit status is not an authorization.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

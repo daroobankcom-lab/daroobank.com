@@ -2,6 +2,52 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — report the settings a deployment has to get right, in one read-only command
+
+**Changes:** `manage.py check_deployment_readiness` collects what `health/ready/` (one
+`SELECT 1`), the non-debug startup checks (which refuse to boot but say nothing afterwards)
+and `inspect_postgresql_schema` (model-derived database expectations) each cover only in
+part. It reads settings and the migration table, writes nothing, prints one JSON report and
+exits 1 when not ready. Ten **required** checks decide `ready`: debug off, staff portal
+off, secret shape via the existing `require_nondebug_secret`, explicit hosts via
+`require_nondebug_hosts`, secure session and CSRF cookies, the session flags ADR 0208 pins,
+HTTPS redirection, no pending migrations, no applied migration without a file in this
+release, and a reachable database via the existing `database_ready()`. A separate
+**review** list carries conditions that need a decision rather than a fix — HSTS off,
+HTTPS redirection with no trusted proxy header, development hostnames, health probes
+answering, the synthetic login limiter, `XFrameOptionsMiddleware` absent — and `--strict`
+fails on those too. In the synthetic environment the command reports not ready and names
+the four checks that fail there; against a hardened test fixture it reports ready with an
+empty review list and exits 0. `daroobank/test_deployment_readiness.py` adds 10 tests whose
+point is that every required check can fail on its own: seven broken alone from the
+hardened fixture, an unmigrated throwaway database failing `migrations_applied` with 31
+pending, an applied row for `catalog.0099_never_written` failing
+`migration_history_consistent`, a run inside an open transaction failing
+`database_reachable`, each of the six review conditions appearing alone with a reason, two
+runs byte-identical, the secret value and its first 24 characters absent from the output,
+and no writes to the 14 counted domain models, the migration table or the database list.
+`daroobank` was added to `INSTALLED_APPS` so a command belonging to the project rather than
+to one domain app is discoverable; it declares no models, so the schema inventory ADR 0216
+pins is unchanged and 96 tests across the schema-sensitive suites still pass.
+
+**Limits:** a zero exit status is **not** a deployment authorization. The report describes
+the shape of one process's settings and one database connection; it serves no request and
+checks nothing about collected static files, logging, clock synchronization, connection
+pooling, replicas or external dependencies. The hardened fixture is a test fixture, not a
+recommended production profile — real values depend on TLS topology, proxy configuration and
+hostnames that do not exist yet. The report is only as complete as its ten checks, review
+items are prompts rather than decisions, and `migration_history_consistent` cannot detect a
+release older than its database in any other way, a squashed history or an out-of-order
+apply. Nothing aggregates, stores or alerts on these reports, and the command has never run
+against a real deployment. Two red checks: making `debug_disabled` unable to fail, and
+echoing the secret into a detail line, each fail exactly one test. Documenting this work
+also destroyed two `## ` entry headings in this file — a patch script replaced a heading
+instead of inserting above it and nothing noticed — so both were restored and
+`daroobank/test_release_notes_structure.py` (2 tests, no database) now fails on that
+defect: headings must be unique, the four legacy undated headings are pinned so a new
+entry cannot join them, dated entries must stay newest-first, and every `**Changes:**`
+paragraph must sit under its own heading. Structure only; it cannot judge accuracy.
+
 ## 2026-11-26 — measure migration rollback and reapply on throwaway databases
 
 **Changes:** `daroobank/test_migration_reversibility.py` adds 7 tests (~5.7 s) covering the

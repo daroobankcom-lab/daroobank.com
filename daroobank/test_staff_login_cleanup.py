@@ -44,6 +44,75 @@ class StaffLoginCleanupTests(TransactionTestCase):
         with self.assertRaisesMessage(CommandError, 'synthetic development'):
             self.command('--apply')
 
+    def test_outer_transaction_is_refused_without_altering_timeout_or_deleting(self):
+        key = 'b' * 64
+        StaffLoginWindow.objects.create(client_key=key, started_at=timezone.now() - timedelta(days=2), attempts=1)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL lock_timeout = '9s'")
+            with self.assertRaisesMessage(CommandError, 'maintenance is unavailable'):
+                self.command('--apply')
+            with connection.cursor() as cursor:
+                cursor.execute('SHOW lock_timeout')
+                self.assertEqual(cursor.fetchone()[0], '9s')
+            self.assertTrue(StaffLoginWindow.objects.filter(pk=key).exists())
+
+    def test_non_autocommit_is_refused_without_resetting_caller_state(self):
+        connection.set_autocommit(False)
+        try:
+            with self.assertRaisesMessage(CommandError, 'maintenance is unavailable'):
+                self.command()
+            self.assertFalse(connection.get_autocommit())
+        finally:
+            connection.rollback()
+            connection.set_autocommit(True)
+
+    def test_server_statement_timeout_fails_closed_and_does_not_escape(self):
+        with connection.cursor() as cursor:
+            cursor.execute('SHOW statement_timeout')
+            before = cursor.fetchone()[0]
+        invoked = []
+        def slow_count(execute, sql, params, many, context):
+            if sql.lstrip().upper().startswith('SELECT COUNT'):
+                invoked.append(True)
+                execute('SELECT pg_sleep(3)', None, False, context)
+            return execute(sql, params, many, context)
+        with connection.execute_wrapper(slow_count):
+            with self.assertRaisesMessage(CommandError, 'maintenance is unavailable'):
+                self.command()
+        self.assertEqual(invoked, [True])
+        with connection.cursor() as cursor:
+            cursor.execute('SHOW statement_timeout')
+            self.assertEqual(cursor.fetchone()[0], before)
+        self.assertTrue(connection.get_autocommit())
+
+    def test_blocked_cleanup_times_out_and_keeps_the_connection_usable(self):
+        key = 'c' * 64
+        StaffLoginWindow.objects.create(client_key=key, started_at=timezone.now() - timedelta(days=2), attempts=1)
+        ready = Queue()
+        def worker():
+            close_old_connections()
+            try:
+                def observe(execute, sql, params, many, context):
+                    if sql.lstrip().upper().startswith('DELETE') and 'staff_security_staffloginwindow' in sql:
+                        ready.put(True)
+                    return execute(sql, params, many, context)
+                with connection.execute_wrapper(observe):
+                    with self.assertRaisesMessage(CommandError, 'maintenance is unavailable'):
+                        self.command('--apply')
+                with connection.cursor() as cursor:
+                    cursor.execute('SELECT 1')
+                    return cursor.fetchone()
+            finally:
+                connection.close()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with transaction.atomic():
+                StaffLoginWindow.objects.select_for_update().get(pk=key)
+                future = pool.submit(worker)
+                ready.get(timeout=5)
+                self.assertEqual(future.result(timeout=5), (1,))
+        self.assertTrue(StaffLoginWindow.objects.filter(pk=key).exists())
+
     def test_concurrent_refreshed_window_is_not_deleted(self):
         key = 'a' * 64
         StaffLoginWindow.objects.create(client_key=key, started_at=timezone.now() - timedelta(days=2), attempts=4)

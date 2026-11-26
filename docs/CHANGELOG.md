@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — bound selected login-window maintenance waits
+
+**Changes:** Synthetic cleanup now refuses outer/non-autocommit transactions and runs with PostgreSQL-local lock and statement timeouts. Timeout and connection-reuse tests exercise selected failures and the refreshed-row race remains covered.
+
+**Limits:** These are server-side statement/lock limits, not full request/network deadlines or a scheduler; see ADR 0187.
+
 ## 2026-11-26 — disabled staff boundary regression tests
 
 **Changes:** Tests enumerate currently named staff routes, verify the shared gated path, and exercise private 404 responses for GET, HEAD and POST before session loading when the portal is disabled.

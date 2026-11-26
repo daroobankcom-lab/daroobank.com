@@ -1,0 +1,9 @@
+# ADR 0187: bounded server-side waits for synthetic login-window maintenance
+
+Status: development-only operational hardening, not a scheduler, production abuse control, or a complete execution deadline.
+
+The manual login-window cleanup retains its dry-run default, 24-hour age threshold and 500-row batch cap from [ADR 0181](0181-development-staff-login-throttle.md). It now requires PostgreSQL and an autocommit connection with no enclosing transaction. It runs one short transaction with `SET LOCAL lock_timeout = '1s'` and `SET LOCAL statement_timeout = '2s'` for both inspection and deletion, and reports selected database failures generically. A failure rolls back the batch. Local timeouts do not alter caller settings after completion. The deletion still rechecks age after a row-lock wait; a refreshed window must not be deleted merely because it was old when first selected.
+
+The PostgreSQL timeouts bound selected server-side statement and lock waits only. They do not bound connection setup, network stalls, Python work, the total duration across multiple statements or other direct writers. SQL can scan or sort more rows than the returned batch. They do not prevent unbounded row growth, provide scheduling, establish that DEBUG means an isolated environment, or make this a production-ready limiter. Use synthetic data only. Any operational maintenance, retention and alerting policy remains separately owned and reviewed.
+
+Synthetic PostgreSQL tests exercise dry-run and deletion, a locked-row timeout and reusable connection, one slow-statement timeout, rejection in an outer or non-autocommit transaction, and a selected concurrent refresh race. These are not a proof of all possible races or network failure behavior. Command tracebacks omit selected driver error chains; server logs and direct exception introspection remain outside that guarantee.

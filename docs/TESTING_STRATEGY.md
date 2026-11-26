@@ -354,7 +354,7 @@ The PostgreSQL synthetic-test step preserves its complete job log and, on failur
 
 ## Opt-in synthetic staff-login throttle
 
-`daroobank/test_staff_login_throttle.py`, `daroobank/test_staff_login_cleanup.py` and `staff_security/test_migration.py` cover selected fixed-window, privacy, CSRF, account/session, real row-lock, concurrent cleanup and synthetic upgrade scenarios. Tests do not prove universal concurrency, anonymity, MFA or production security; see [ADR 0181](ARCHITECTURE_DECISIONS/0181-development-staff-login-throttle.md).
+`daroobank/test_staff_login_throttle.py`, `daroobank/test_staff_login_cleanup.py` and `staff_security/test_migration.py` cover selected fixed-window, privacy, CSRF, account/session, real row-lock, concurrent cleanup and synthetic upgrade scenarios. Cleanup tests additionally exercise PostgreSQL lock/statement timeouts, refusal within outer or non-autocommit transactions, and post-error connection reuse; see [ADR 0187](ARCHITECTURE_DECISIONS/0187-bounded-login-window-maintenance.md). Tests do not prove universal concurrency, complete deadlines, anonymity, MFA or production security; see [ADR 0181](ARCHITECTURE_DECISIONS/0181-development-staff-login-throttle.md).
 
 ## Opt-in operational probes
 

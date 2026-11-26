@@ -9,11 +9,11 @@ from unittest.mock import patch
 
 from django.core.management import call_command, CommandError
 from django.db import DatabaseError
-from django.test import SimpleTestCase, override_settings
+from django.test import TransactionTestCase, override_settings
 
 
 @override_settings(DEBUG=True)
-class CommandErrorRedactionTests(SimpleTestCase):
+class CommandErrorRedactionTests(TransactionTestCase):
     def test_selected_database_errors_have_generic_formatted_tracebacks(self):
         cases = (
             ('cleanup_staff_login_windows', 'staff_security.management.commands.cleanup_staff_login_windows.StaffLoginWindow.objects.filter',
@@ -55,7 +55,7 @@ class CommandErrorRedactionTests(SimpleTestCase):
                    POSTGRES_PORT='5432')
         script = ("import django; django.setup(); from unittest.mock import patch; "
                   "from django.db import DatabaseError; from django.core.management import execute_from_command_line; "
-                  "p=patch('staff_security.management.commands.cleanup_staff_login_windows.StaffLoginWindow.objects.filter', "
+                  "p=patch('staff_security.management.commands.cleanup_staff_login_windows.connection.get_autocommit', "
                   "side_effect=DatabaseError('synthetic-cli-driver-private-canary')); p.start(); "
                   "execute_from_command_line(['manage.py', 'cleanup_staff_login_windows', '--traceback'])")
         result = subprocess.run([sys.executable, '-c', script], cwd=Path(__file__).resolve().parent.parent,

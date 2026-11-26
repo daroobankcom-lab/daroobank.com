@@ -372,4 +372,6 @@
 
 - [0186: staff password input bound](0186-staff-password-input-bound.md) — development form limit before authentication.
 
+- [0187: bounded login-window maintenance](0187-bounded-login-window-maintenance.md) — selected server-side timeouts, not a scheduler or full deadline.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

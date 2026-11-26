@@ -326,7 +326,7 @@ Product and price CSV tests reject six selected raw controls at both edges of ev
 
 ## Disabled staff-route boundary
 
-`daroobank/test_staff_disabled_boundary.py` checks every currently named staff route is under the middleware's `/staff/` path boundary and that GET, HEAD and POST return private 404 responses when the portal is disabled, without loading a supplied session. These are selected Django-level regression checks; they do not prove proxy isolation or protect direct service calls, unnamed/misnamed future routes, or upstream logs.
+`daroobank/test_staff_disabled_boundary.py` checks every currently named staff route is under the middleware's `/staff/` path boundary and that GET, HEAD and POST return private 404 responses when the portal is disabled, without loading a supplied session. A fresh process repeats the named-route checks with actual non-debug settings and an unreachable synthetic database. These are selected Django-level regression checks; they do not prove proxy isolation or protect direct service calls, unnamed/misnamed future routes, or upstream logs.
 
 ## Synthetic CI failure annotations
 

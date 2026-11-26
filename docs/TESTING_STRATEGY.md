@@ -316,6 +316,10 @@ Direct service tests reject selected truthy and falsey non-boolean `commit` valu
 
 Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. `daroobank/test_staff_raw_text_controls.py` checks selected source, clinical and identity forms and selected HTTP writes; an unchanged empty extra component row is skipped rather than validated (ADR 0133). `daroobank/test_staff_empty_posts.py` checks required errors and no selected writes for six empty staff POSTs with CSRF enforcement (ADR 0134). `daroobank/test_sample_downloads.py` checks the two fixed synthetic downloads, permissions and preview without writes; the browser smoke exercises both downloads (ADR 0136). Selected form summaries and their handling of field, hidden, general and formset errors are checked in these HTTP tests; the Chromium smoke checks a summary link by keyboard on one invalid identity form (ADR 0135). Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
+## Development staff password bound
+
+`daroobank/test_staff_password_bounds.py` tests the 4,096-character boundary, non-echo, disabled-field behavior, session preservation and synthetic throttle interaction. It does not limit body bytes or test other authentication entry points; see [ADR 0186](ARCHITECTURE_DECISIONS/0186-staff-password-input-bound.md).
+
 ## PostgreSQL numeric setting errors
 
 `daroobank/test_database_configuration.py` imports real settings in fresh subprocesses and checks that invalid synthetic port and connection-lifetime canaries are absent from tracebacks. This is not a comprehensive secret-log audit.

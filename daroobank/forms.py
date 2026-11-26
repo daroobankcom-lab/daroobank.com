@@ -118,6 +118,10 @@ class SourceUploadRawControlsMixin(RawControlsMixin):
         return cleaned
 
 
+# This bounds what is passed to the authentication backend, not the HTTP body.
+STAFF_PASSWORD_MAX_CHARACTERS = 4096
+
+
 class StaffAuthenticationForm(AuthenticationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -130,6 +134,10 @@ class StaffAuthenticationForm(AuthenticationForm):
         # Reject ambiguous credentials before invoking any authentication backend
         # and preserve the same non-enumerating error as other login failures.
         if any(_duplicate_field(self, name) for name in ('username', 'password')):
+            self.user_cache = None
+            raise self.get_invalid_login_error()
+        password = self.cleaned_data.get('password')
+        if isinstance(password, str) and len(password) > STAFF_PASSWORD_MAX_CHARACTERS:
             self.user_cache = None
             raise self.get_invalid_login_error()
         return super().clean()

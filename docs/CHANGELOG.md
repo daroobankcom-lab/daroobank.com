@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — development staff-login password bound
+
+**Changes:** The staff form rejects passwords over 4,096 characters before calling the backend, with the generic invalid-login error. CSRF-valid attempts still count toward the opt-in synthetic throttle.
+
+**Limits:** This is a compatibility change for longer existing passwords, not a request-body limit, MFA or a production abuse control; see ADR 0186.
+
 ## 2026-11-26 — database configuration error redaction
 
 **Changes:** Invalid PostgreSQL port or connection lifetime still fails startup, but no longer chains Python's conversion exception, which may contain the configured value. Fresh-process tests exercise synthetic canaries.

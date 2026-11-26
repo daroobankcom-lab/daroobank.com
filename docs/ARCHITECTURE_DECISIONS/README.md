@@ -370,4 +370,6 @@
 
 - [0185: opt-in HSTS](0185-opt-in-hsts.md) — explicit header duration, not a TLS deployment.
 
+- [0186: staff password input bound](0186-staff-password-input-bound.md) — development form limit before authentication.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -25,7 +25,7 @@ Audits record actor, role, target, before/after versions or hashes, decision, ti
 
 ## Known staff-session revocation gap
 
-In the development portal, disabling an account or removing its staff flag denies selected requests while that state remains in effect, but reactivation or regranting staff can make the same unexpired session usable again. This is **not durable revocation**. A synthetic password-change test invalidates an old session on its next request, but does not establish an operational incident procedure or cover all authentication backends and races. See [ADR 0191](ARCHITECTURE_DECISIONS/0191-staff-session-revocation-gap.md); account lifecycle and session revocation remain production blockers.
+In the development portal, disabling an account or removing its staff flag denies selected requests while that state remains in effect, but reactivation or regranting staff can make the same unexpired session usable again. This is **not durable revocation**. Synthetic password-invalidation tests reject selected old sessions on later requests, but a synchronized, already-authorized source-claim POST still commits after the account is disabled and its password invalidated. These tests do not establish an operational incident procedure or cover all authentication backends, writes and races. See [ADR 0191](ARCHITECTURE_DECISIONS/0191-staff-session-revocation-gap.md); account lifecycle and session revocation remain production blockers.
 
 ## Privacy and incident response
 

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — document selected in-flight staff write race
+
+**Finding:** A CSRF-valid synthetic source-claim POST already past its authorization checks can commit after account disable and password invalidation; a new request while disabled does not create another claim.
+
+**Limits:** One route and one ordering are tested. No race-free revocation control or production procedure is implemented; ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — document in-flight staff read boundary
 
 **Finding:** A synchronized synthetic workspace request can finish successfully after the account is disabled and its password invalidated; two selected old sessions fail on later requests after the password change, while another account remains unaffected.

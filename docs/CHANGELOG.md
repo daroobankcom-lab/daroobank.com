@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — document in-flight staff read boundary
+
+**Finding:** A synchronized synthetic workspace request can finish successfully after the account is disabled and its password invalidated; two selected old sessions fail on later requests after the password change, while another account remains unaffected.
+
+**Limits:** These are selected observations, not a revocation implementation, an in-flight write test, or a production procedure. The production blocker in ADR 0191 remains open.
+
 ## 2026-11-26 — document unresolved staff-session revocation gap
 
 **Finding:** Synthetic tests show that reactivating an account or restoring its staff flag can make an existing unexpired session usable again. A selected password-change test invalidates an old session on a later request but is not a complete incident or revocation procedure.

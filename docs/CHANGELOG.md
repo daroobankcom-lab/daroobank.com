@@ -2,6 +2,92 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — measure what a restore proves, and price the backup and recovery options
+
+ **Changes:** `docs/DEVELOPMENT_GUIDE.md` says *"PostgreSQL's `pg_dump` and `pg_restore` are
+external client utilities, not an application backup service"* and *"A volume alone is not a
+backup."*, `docs/OPERATIONS_RUNBOOK.md` asks an operator to *"define ownership, encrypted backup
+cadence, off-host retention, RPO/RTO and recovery environment"*, says *"no values have been
+approved"* and then forbids the one thing an incident would require — *"never restore into the
+running database"* — `docs/PHASE1_RELEASE_EVIDENCE.md` carries *"encrypted off-site backups,
+independent key custody, access control, retention, integrity and anti-replay/freshness policy,
+recovery objectives, scheduled isolated restore drills and documented owner"* as an open gate,
+`docs/SECURITY.md` assigns *"Operate backups and database"* to a database administrator role that
+does not exist here, and ADR 0225 ends with *"Identity sequences are part of any restore."* The
+drill exists and runs twice in CI under opt-in switches, and it answers a narrower question than the
+gate asks.
+
+`docs/BACKUP_RECOVERY_PLAN.md` now measures before it proposes: a `What is true today, measured`
+section in four subsections, eight numbered decisions, seven priced options — leave the restore path
+as documented, read the archive's own header before restoring, record every dump and restore in the
+database, put the envelope keys in a custodian outside the repository, document and drill the
+live-database shape, verify completeness against a manifest instead of a self-written fixture, and
+declare backup and recovery out of Phase 1 scope — a seven-item `Required behavior before any
+restore` list and a six-item verification list. The measurements, taken against the synthetic
+PostgreSQL 16.2 server with the `pg_dump`, `pg_restore` and `createdb` clients the `pgserver` wheel
+bundles: the documented sequence is `dump, list, createdb, restore, migrate, check` and its listing
+step is `pg_restore --list --no-password -- "$SYNTHETIC_DUMP_FILE" > /dev/null`, while the drill
+captures the same listing and asserts only `listed.returncode` — `listed.stdout` appears nowhere in
+its 315 lines; the guide's target is the literal `daroobank_restore_drill`, created one line
+earlier, and of the 262 markdown documents in `docs/` only the plan and its record name the flags a
+restore over an existing database needs.
+
+One replay dumped a synthetic fixture, wrote one later business fact, dumped again, and restored the
+older archive into a new database: 136,001 bytes against 136,541, both listings stamped `2026-11-26
+23:37:44 UTC` because the two dumps took 0.071 s and 0.053 s, the restore exiting 0 in 0.163 s and
+printing 0 bytes, the target holding 33 public tables, 32 applied migrations, 2 accounts, 0
+sessions, 1 package and 1 review while the source held 2 and 2, and `manage.py check` (0.372 s),
+`migrate --check` (0.390 s), `inspect_postgresql_schema` (0.388 s) and the drill's ORM verification
+(0.522 s) all exiting 0 with empty stderr — 1.673 s of verification that cannot tell a stale archive
+from a current one. The archive's header counts `TOC Entries: 291` and its listing prints 287
+selected entries — 33 `TABLE`, 33 `TABLE DATA`, 60 `INDEX`, 30 `SEQUENCE` and 30 `SEQUENCE SET`, 51
+`CONSTRAINT` and 50 `FK CONSTRAINT`, matching the 50 foreign keys the schema inspection counts — of
+which none is an ACL, an OWNER or a GRANT, while four `TABLE DATA` entries are `auth_user`,
+`auth_user_groups`, `auth_user_user_permissions` and `django_session`. A second restore of the same
+archive into the restored target exited 1 in 0.006 s on `ERROR:  relation "auth_group" already
+exists`, and the two flags that made it exit 0 in 0.209 s are named in no other document.
+
+`daroobank/test_synthetic_encrypted_restore.py` mints its own recipient and signing keys with
+`openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=synthetic-only` at mode `0600` inside a
+`0700` temporary directory the test destroys, `.github/workflows/checks.yml` references zero
+`secrets.*` expressions, CI takes its clients from `docker run --rm --network host … postgres:16`,
+one of the four mutable base-image references ADR 0226 counted, `LOGGING` is `{}`, no application
+module imports `logging`, and none of the 24 project models is named like a backup, dump, archive,
+restore or recovery record.
+
+`daroobank/test_backup_recovery_plan.py` holds the plan to all of it: that the plan keeps its five
+sections, four measured subsections, eight decisions, seven priced options, seven required behaviors
+and its proposal disclaimers; that it quotes the sixteen requirements it is priced against with the
+source documents' measured sentences intact; that the guide's script is still six steps that discard
+the listing and still restore only into a database they just created; that no document except the
+plan and its record names a live-database restore; that the drill still never reads the listing it
+captures; that the envelope drill still mints and destroys its own keys; that the workflow still
+holds no secret and no key file is committed; that the client tools are still not in the repository;
+that nothing records a dump or a restore; that the schema, attribution, rollback, CI-gate, document
+and module inventories a backup record or a custodian would move are still as counted; and that the
+replay stays as measured, by re-performing it. Twenty regressions were applied alone to a
+byte-identical backup of the tree and reverted afterwards, and all twenty are caught: between 1 and
+3 of the 24 tests fail for each, except the renamed isolated test database, which
+`daroobank/isolated_postgresql` refuses with *"Invalid isolated synthetic test database name."*
+before any test runs.
+
+No backup control is implemented: no record, manifest, custodian, schedule, command, dependency or
+change to the restore target policy was added, and the guide's script, the runbook's prohibition and
+the drill's new-database policy are unchanged, because changing them is option E and no option was
+chosen. The prices are counted from inventories rather than prototyped — no backup control was built
+and reverted, so no cascade of pin failures was run the way ADR 0227 measured 20 across 7 suites —
+and the replay was performed once, on two accounts, one package, one review and a cross-domain
+fixture in throwaway databases, so it says nothing about restoring a real volume, about the flags
+that make a restore over an existing database succeed against a large or concurrently used one, or
+about what an operator sees while it happens. No option was evaluated for security, lawfulness or
+operational cost; custody was not measured, because no secret store, KMS or key file exists in this
+tree; and the live-database shape was exercised mechanically on a throwaway target with no
+authorization, downtime or privilege story. The 16 tests of the three restore suites still pass
+locally in 23.8 s with the bundled clients on `PATH`, and no CI step runs the new suite's one opt-in
+database test. `docs/DEVELOPMENT_GUIDE.md`, `docs/OPERATIONS_RUNBOOK.md`, `docs/SECURITY.md`,
+`docs/DEPLOYMENT.md`, `docs/PHASE1_RELEASE_EVIDENCE.md` and `docs/TESTING_STRATEGY.md` now name the
+plan and the record. See [ADR 0232](ARCHITECTURE_DECISIONS/0232-backup-recovery-plan.md).
+
 ## 2026-11-26 — measure what rotating the one secret does, and price the rotation options
 
  **Changes:** `docs/SECURITY.md` asks for *"encryption at rest where appropriate with isolated

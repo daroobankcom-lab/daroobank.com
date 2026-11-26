@@ -68,10 +68,13 @@ DEFAULTS = {'DJANGO_SETTINGS_MODULE': ('catalog/test_synthetic_search_benchmark.
                                       'manage.py', 'tools/wait_for_database.py')}
 # Opt-in switches read by test modules; they gate optional probes and are documented for that audience.
 TEST_SWITCHES = {
-    'DAROOBANK_BROWSER_TESTS': 'daroobank/test_browser.py',
-    'DAROOBANK_ENCRYPTED_RESTORE_TESTS': 'daroobank/test_synthetic_encrypted_restore.py',
-    'DAROOBANK_RESTORE_TESTS': 'daroobank/test_synthetic_restore.py',
-    'DAROOBANK_SEARCH_BENCHMARK': 'catalog/test_synthetic_search_benchmark.py',
+    'DAROOBANK_BROWSER_TESTS': ('daroobank/test_browser.py',),
+    'DAROOBANK_ENCRYPTED_RESTORE_TESTS': ('daroobank/test_synthetic_encrypted_restore.py',),
+    # The restore switch gates two suites: the drill, and the replay that re-performs the
+    # measurement `docs/BACKUP_RECOVERY_PLAN.md` quotes (ADR 0232).
+    'DAROOBANK_RESTORE_TESTS': ('daroobank/test_backup_recovery_plan.py',
+                                'daroobank/test_synthetic_restore.py'),
+    'DAROOBANK_SEARCH_BENCHMARK': ('catalog/test_synthetic_search_benchmark.py',),
 }
 # Environment the project reads but does not own.
 EXTERNAL = {'GITHUB_ACTIONS': 'daroobank/test_browser.py'}
@@ -176,7 +179,7 @@ class EnvironmentInventoryTests(SimpleTestCase):
         found = environment_inventory()
         self.assertEqual(found['reads'], {name: (module,) for name, module in READS.items()},
                          'the set of environment variables the application reads changed')
-        self.assertEqual(found['switches'], {name: (module,) for name, module in TEST_SWITCHES.items()},
+        self.assertEqual(found['switches'], {name: modules for name, modules in TEST_SWITCHES.items()},
                          'the set of opt-in test switches changed')
         self.assertEqual(found['defaults'], {name: modules for name, modules in DEFAULTS.items()},
                          'the set of environment variables the code defaults changed')

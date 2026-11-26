@@ -9,7 +9,7 @@ Protect against unauthorized price/content changes, account takeover, source poi
 | Role | Proposed scope; not automatically granted |
 |---|---|
 | Super administrator | Manage roles/security configuration; no automatic clinical approval bypass. |
-| Database administrator | Operate backups and database, not editorial publication by default. |
+| Database administrator | Operate backups and database, not editorial publication by default. Measured today: no custodian, cadence, off-host copy or owner exists, and what a local drill proves is measured in [the backup and recovery plan](BACKUP_RECOVERY_PLAN.md) ([ADR 0232](ARCHITECTURE_DECISIONS/0232-backup-recovery-plan.md)). |
 | Content editor | Draft/submit clinical content, not approve own work. |
 | Pharmacist/medical reviewer | Review/approve clinical content within qualification, not own drafts. |
 | Pricing administrator / verifier | Review prices, source evidence and corrections within assigned scope. |

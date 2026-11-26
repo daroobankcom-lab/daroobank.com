@@ -444,4 +444,6 @@
 
 - [0222: the environment is documented in one place per audience](0222-documented-environment.md) — fifteen variables, four opt-in test switches and one default, pinned from an AST inventory and held to the template, the Compose stack, the development guide and a new deployment configuration reference.
 
+- [0223: abuse protection is external](0223-no-abuse-protection.md) — the only rate limit is the opt-in debug-only login window, 48 sequential public reads all answer 200, no request-size ceiling is configured, and the deployment guide now assigns rate and size limits to the edge.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

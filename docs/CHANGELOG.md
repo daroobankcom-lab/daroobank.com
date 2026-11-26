@@ -2,6 +2,50 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — measure the abuse protection that does not exist, and assign it to the edge
+
+**Changes:** `SECURITY.md` lists rate limits among the controls this product should have and says
+the upload size check happens after Django receives the request; neither claim was measured, and
+no document said who is responsible for the rest. `daroobank/test_no_abuse_protection.py`
+(10 tests, ~1.1 s) measures the shape. The only rate limiting in the project is the opt-in,
+debug-only staff login window: the literal `429` appears in exactly one non-test module
+(`pricing/staff_views.py`), `Retry-After` appears in none, `staff_security.throttle` is imported
+by exactly one non-test module, no project class has a limiter-like name, and the pinned
+twelve-entry middleware stack contains no limiter. With the flag forced on and `consume_attempt`
+patched, `limited` answers 429 as plain text with no rate-limit header and no CSRF token in the
+body, `unavailable` answers 503, `allowed` reaches the login form, and with the flag off the
+limiter is never consulted.
+
+Nothing limits a public read: six routes — home, about, price list, search, search API, OpenAPI
+document — read eight times each by one anonymous client produce 48 requests, all 200, none
+carrying `Retry-After`, `X-RateLimit-*`, `X-Rate-Limit-*` or `RateLimit-*`, every one carrying
+`content-security-policy` as the positive control that the header inspection sees headers at all,
+and no change in any of the 23 project table counts. No request-size ceiling is configured either:
+`settings.py` defines neither `DATA_UPLOAD_MAX_MEMORY_SIZE` nor `FILE_UPLOAD_MAX_MEMORY_SIZE`,
+both sit at Django's 2621440 default, no module contains `413`, and the limits that do exist —
+1 MiB for product intake, 2 MiB for price staging — are `upload.size` checks in forms, so they run
+on a body Django has already spooled. An authorized stager POSTing a 2 MiB + 1 KiB CSV gets a 200
+with `form.errors['csv_file']` and no candidate row: refused by validation, not by a ceiling.
+
+`docs/DEPLOYMENT.md` gains an "Abuse protection is external" section stating plainly that the
+application has no rate limit and no request-size ceiling, what was measured, and what the edge
+must therefore provide — per-client and per-route rate limiting, a size limit that refuses before
+the body is buffered, connection and slow-client timeouts and volumetric absorption — reviewed
+against the bounded page sizes and the 2 MiB validation limit so a legitimate upload is not
+refused by the proxy or accepted by it and refused later by the form. `SECURITY.md` now carries the
+measured sentence next to the claim it qualifies.
+
+Six red checks were applied alone, each verified by the failure it produced, and reverted: a second
+`429` in `catalog/views.py`; a `Retry-After` header on the login 429, which fails two assertions;
+`DATA_UPLOAD_MAX_MEMORY_SIZE` in settings; a second module importing the throttle; a
+`RateLimitHeaderMiddleware` added to the stack, which fails 53 assertions including all 48 public
+reads; and deleting the new deployment section. An earlier attempt at the `Retry-After` check did
+not apply at all and was redone. This pins what happens inside the process: a proxy, CDN, WAF or
+host control is invisible to it, the 48-request sweep is not a load test, and the absence of
+`Retry-After` is recorded as today's fact rather than as a virtue — adding it would fail the suite
+until the record is updated. See
+[ADR 0223](ARCHITECTURE_DECISIONS/0223-no-abuse-protection.md).
+
 ## 2026-11-26 — document every environment variable where it is set, and pin the inventory
 
 **Changes:** the fail-closed behavior of each configuration variable was already measured

@@ -40,6 +40,19 @@ Every environment variable the application reads, where it is enforced, and what
 
 `DJANGO_SETTINGS_MODULE` is the one variable the project only ever defaults, in `manage.py`, `daroobank/wsgi.py` and `tools/wait_for_database.py`; a deployment sets it explicitly to `daroobank.settings`.
 
+## Abuse protection is external
+
+The application itself has **no rate limit** on any public route, and no request size ceiling beyond what a form checks after the body has arrived. Both have to be provisioned by the reverse proxy, a CDN or the host before this service faces the public internet; nothing in this repository arranges them, and no configuration variable turns them on.
+
+Measured by `daroobank/test_no_abuse_protection.py` ([ADR 0223](ARCHITECTURE_DECISIONS/0223-no-abuse-protection.md)):
+
+- Repeated anonymous reads — eight in a row of the home page, the about page, the price list, the search page, the search API and the OpenAPI document — all answer 200 with no `Retry-After`, no `X-RateLimit-*` header and no row written anywhere.
+- The only limiter in the project is the opt-in, debug-only staff login window ([ADR 0181](ARCHITECTURE_DECISIONS/0181-development-staff-login-throttle.md)): one call site, ten attempts per client key in a rolling minute, answering 429 with no `Retry-After` header when limited and 503 when the limiter itself is unavailable. It protects one form in one debug-only portal; it is not a platform control and it is off in production configuration.
+- `DATA_UPLOAD_MAX_MEMORY_SIZE` and `FILE_UPLOAD_MAX_MEMORY_SIZE` are left at Django's defaults (2.5 MiB each) and `settings.py` sets neither; the first bounds a non-file request body, the second only decides whether an upload spools to memory or to a temporary file. No module answers 413.
+- The upload limits that do exist are per-form `upload.size` checks — 1 MiB for product intake, 2 MiB for price staging — so they run after Django has received and spooled the body, and an oversized upload is refused with the form's own validation error, not with a transport-level status.
+
+Provision therefore, at the edge: request-rate limiting per client and per route, a request-size and upload-size limit that refuses before the body is buffered, connection and slow-client timeouts, and volumetric absorption. Review those limits against the bounded page sizes and the 2 MiB CSV validation limit so a legitimate upload is not refused by the proxy or accepted by the proxy and refused later by the form. Until they exist, treat any public exposure of this service — including a reachable development preview — as unprotected against scraping and volumetric abuse.
+
 ## Proposed deployment topology
 
 TLS-terminating reverse proxy → independent Django web processes → PostgreSQL; separate scheduler and bounded worker processes → Redis queue and permitted source endpoints. Use private networks and least-privilege credentials; optionally private object storage for authorized payloads/images. Isolate worker resource quotas and egress so a crawl failure does not take down the web service. Choose provider/region only after review of Iranian connectivity, resilience, sanctions/vendor constraints, data residency and qualified local legal advice.

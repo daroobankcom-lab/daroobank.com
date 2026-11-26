@@ -330,7 +330,7 @@ The PostgreSQL synthetic-test step preserves its complete job log and, on failur
 
 ## PostgreSQL numeric setting errors
 
-`daroobank/test_database_configuration.py` imports real settings in fresh subprocesses and checks that invalid synthetic port and connection-lifetime canaries are absent from tracebacks. This is not a comprehensive secret-log audit.
+`daroobank/test_database_configuration.py` imports real settings in fresh subprocesses and checks that invalid synthetic port and connection-lifetime canaries are absent from tracebacks. It also opens a synthetic PostgreSQL connection at the maximum supported connection age. This is not a comprehensive secret-log audit or a production connection-pool endurance test.
 
 ## Opt-in HSTS duration
 

@@ -4,7 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from django.test import SimpleTestCase
+from django.db import connection
+from django.test import SimpleTestCase, TransactionTestCase
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -45,3 +46,18 @@ class DatabaseConfigurationTests(SimpleTestCase):
                 result = self.run_settings(**changes)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('Invalid PostgreSQL port or connection lifetime', result.stderr)
+
+
+class DatabaseConnectionAgeIntegrationTests(TransactionTestCase):
+    def test_maximum_supported_age_opens_a_real_synthetic_connection(self):
+        # A separate wrapper avoids modifying the test runner's connection.
+        probe = connection.copy(alias='synthetic_connection_age_probe')
+        probe.settings_dict['CONN_MAX_AGE'] = 31_536_000
+        try:
+            with probe.cursor() as cursor:
+                cursor.execute('SELECT 1')
+                self.assertEqual(cursor.fetchone(), (1,))
+            self.assertIsInstance(probe.close_at, float)
+            self.assertGreater(probe.close_at, 0)
+        finally:
+            probe.close()

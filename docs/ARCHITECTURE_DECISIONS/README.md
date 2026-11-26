@@ -446,4 +446,6 @@
 
 - [0223: abuse protection is external](0223-no-abuse-protection.md) — the only rate limit is the opt-in debug-only login window, 48 sequential public reads all answer 200, no request-size ceiling is configured, and the deployment guide now assigns rate and size limits to the edge.
 
+- [0224: the documentation graph resolves](0224-documentation-graph.md) — 251 markdown documents, 224 numbered decision records, every link, anchor, index entry and named suite resolves, and no document is orphaned.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

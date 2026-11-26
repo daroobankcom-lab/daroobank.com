@@ -2,6 +2,40 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — pin the documentation graph so a broken link fails a test
+
+**Changes:** this repository documents itself heavily — 251 markdown files, 224 of them numbered
+decision records, cross-linked to each other, to the operator documents, to `SECURITY.md` and to
+the suites that measure each decision — and a broken link in that graph fails quietly: a record
+citing a suite that was renamed, an index that forgets the newest record because a script
+replaced a heading instead of inserting above it, an anchor that stopped matching after a heading
+was reworded, a document that survives linked from nowhere. None of that is visible in a diff, a
+test run or CI.
+
+`daroobank/test_document_links.py` (7 tests, ~0.09 s, no database) resolves the graph
+mechanically: every relative link in `README.md` and `docs/` must point at a file that exists
+(895 links, 31 of them external), every fragment must match a heading slug in its target using
+GitHub's rule (29 anchors), every document must open with exactly one top-level heading, the 224
+decision-record numbers must be unique and contiguous so a record can be superseded but not
+silently removed, `docs/ARCHITECTURE_DECISIONS/README.md` must list every record by filename and
+link nothing missing, every `.py` path named in a `Suite:` line must exist (14 lines), and no
+document except `README.md` may be orphaned. Text inside fenced code blocks is not prose, so the
+three shell comments in the development guide that begin with `# ` are not headings and an
+example path in a code block is not a link.
+
+Nothing had to be repaired to make it pass; the graph was already intact, and this pins it. Six
+red checks were applied alone and reverted: retargeting the index's link to ADR 0223 at a missing
+file (3 failures), rewording the heading that `docs/DEPLOYMENT.md` links to (1), deleting the
+0223 index bullet (2), pointing ADR 0223's `Suite:` line at a nonexistent module (1), adding an
+unlinked `docs/ORPHAN_PROBE.md` (2) and moving `docs/ARCHITECTURE_DECISIONS/0100-*.md` out of the
+tree (6).
+
+The pinned counts fail on legitimate growth, including the growth this entry caused, which is the
+point: adding a document or a decision record is an event that also updates the pins. These are
+mechanical checks — nothing here can tell whether a link points at the right document, whether an
+index summary still matches the record it summarizes, or whether a document says something true.
+See [ADR 0224](ARCHITECTURE_DECISIONS/0224-documentation-graph.md).
+
 ## 2026-11-26 — measure the abuse protection that does not exist, and assign it to the edge
 
 **Changes:** `SECURITY.md` lists rate limits among the controls this product should have and says

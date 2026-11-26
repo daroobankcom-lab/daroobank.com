@@ -167,8 +167,12 @@ staff account.
   `AUTHENTICATION_BACKENDS` is invisible at request time. Granting a permission ends
   sessions exactly as revoking one does, because the guard compares state and not intent.
 - **Authentication strength.** There is no MFA. `MFA_IMPLEMENTATION_PLAN.md` is an
-  unreviewed plan that explicitly leaves its own decisions open, and an earlier prototype
-  of it was reverted.
+  unowned proposal that now measures this tree — one login view rendering two credential
+  fields, no factor state in any model or module, a stock account model, nothing between
+  the password and the session, two address-keyed opt-in limiters that are not lockouts,
+  and no cryptographic library — and prices six options against seven decisions nobody
+  has made. ADR 0230 records that measurement and implements nothing. An earlier
+  prototype of the plan was reverted.
 - **Exhaustiveness beyond the resolver.** The tables are exhaustive of the URL surface,
   which is what "endpoint" means here. Management commands, middleware-only behavior,
   signals and background jobs are not routes and do not appear.

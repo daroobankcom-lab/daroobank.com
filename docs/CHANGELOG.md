@@ -2,6 +2,76 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — measure the authentication surface and price the MFA options
+
+ **Changes:** `docs/SECURITY.md` asks for *"MFA for administrators"*, *"Argon2-compatible password
+hashing"* and *"lockout/recovery controls"* and then states *"This is **not a production security
+model**. No MFA."*; `docs/PHASE1_RELEASE_EVIDENCE.md` leaves *"MFA for the sixteen guarded write
+services"* unchecked; `docs/AUTHORIZATION_REVIEW.md` carries *"There is no MFA"* as a residual risk
+and *"Is MFA in scope for Phase 1"* as an open question with no owner, no date and no answer; and
+`daroobank/settings.py` keeps the staff portal debug-only *"until MFA, throttling and audit exist"*,
+which `check_deployment_readiness` enforces by failing `staff_portal_disabled` for that reason. The
+document meant to close the gap, `docs/MFA_IMPLEMENTATION_PLAN.md`, stated no measurements, so
+nobody could tell whether a second factor was one model away or whether this tree had anywhere to
+put one. An earlier prototype of it had already been reverted before review.
+
+ The plan grew from 26 lines to 168 and now measures before it proposes: twelve counted facts,
+seven numbered decisions, and six priced options — leave authentication as documented, a TOTP second
+factor, WebAuthn or a passkey, an account-aware lockout, delegation to an identity provider, and
+declaring MFA out of Phase 1 scope — each with a price counted from pins and files and a column for
+what the option still does not answer. Its `Required flows`, `Secret and session boundaries` and
+`Verification before any enablement` sections are byte-identical to the original. The measurements,
+taken with a live `django.setup()` under `daroobank.synthetic_test_settings` on synthetic
+PostgreSQL data plus file reads: `StaffLoginView` is the only `LoginView` subclass among the 127
+non-test project modules and its template renders exactly `username` and `password`, with 41 of the
+236 test modules naming that route; no field on any installed model matches `mfa`, `totp`,
+`webauthn`, `passkey`, `otp`, `factor`, `device`, `credential`, `challenge` or `recovery`, no
+project module names a factor mechanism, and the four modules that mention `MFA` mention it to
+exclude it; `AUTH_USER_MODEL`, `AUTHENTICATION_BACKENDS`, `PASSWORD_HASHERS`, `SESSION_ENGINE`,
+`CACHES` and `LOGGING` are all unset in project settings, so `auth.User` keeps its 11 stock columns
+and 19 of the 24 project models point at it; no project module calls `authenticate()`, `login()`,
+`cycle_key` or `check_password`, exactly one project receiver is connected to `user_logged_in` and
+none to `user_login_failed`, so nothing observes a failed login except the optional throttle; both
+limiters are keyed to an HMAC of `REMOTE_ADDR` — 10 login attempts and 120 public reads per 60
+seconds, windows of `client_key, started_at, attempts` — fail open and are opt-in, so neither is
+account-aware and neither is a lockout; `argon2-cffi`, `cryptography`, `pyotp`, `fido2` and
+`webauthn` are not installed and the preferred hasher is `pbkdf2_sha256`, while `salted_hmac`
+already appears in 9 project modules, `constant_time_compare` in 7, `hashlib` in 9 and `hmac` in 1;
+the lock is 4 direct requirements and 94 lines / 7 names / 78 hashes installed with
+`pip install --require-hashes`, verified by `tools.verify_runtime_lock` and audited by
+`pip-audit --strict`, against 12 documented environment variables of which 6 are `DAROOBANK_*`; both
+signed-token surfaces are stateless with no consumption record and are reached by no route and no
+test; `tests/browser/smoke.cjs` is 1564 lines with zero mentions of an authenticator or `webauthn`;
+and the schema is 33 tables, 279 columns, 111 indexes, 138 constraints, 50 foreign keys and 32
+applied migrations built by 17 project migrations, so one factor model is table 34, a third
+`staff_security` migration, 18 project migrations, 33 applied and 20 attributed models of 25.
+
+ `daroobank/test_mfa_implementation_plan.py` (14 tests, no database, about a second) pins both
+halves: that the plan is an unowned proposal whose six sections, seven decisions and six options
+survive, that it still quotes the requirements it answers, that option B's price cell and the
+measured schema sentence are exact rather than paraphrased, that every module, file, tool and
+decision record it names exists, and that the twelve measurements stay true. Ten regressions were
+applied alone and reverted from backups that `filecmp` then proved byte-identical, and all ten fail
+the suite, 15 failures in total: dropping a decision's number (1), renaming the options heading (2),
+giving the plan an owner (2), renaming an option (1), overstating option B's migration price (1),
+changing the measured schema count (2), removing the link to the decision record (1), creating
+`daroobank/mfa.py` that names TOTP (3), adding `AUTHENTICATION_BACKENDS` to project settings (1) and
+raising `ATTEMPT_LIMIT` from 10 to 12 (1). Two of the ten were green on the first run — the price
+cell and the measured sentence were not pinned exactly — so both pins were added and both checks
+were run again.
+
+ No factor is implemented: no model, migration, setting, backend, route, dependency, template field
+or module was added, the portal is still refused outside debug for exactly this gap, and the counts
+the suite pins are the ones measured before the plan was rewritten. The prices are counted from
+inventories rather than prototyped — no cascade of pin failures was run the way ADR 0227 measured 20
+across 7 suites — so they are a lower bound on the work; no option was evaluated for security,
+performance, availability or lawfulness; and the schema numbers are quoted by a database-free suite
+whose live counterparts are pinned by the suites of ADR 0225, ADR 0227 and ADR 0228.
+`docs/SECURITY.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/PHASE1_RELEASE_EVIDENCE.md`,
+`docs/TESTING_STRATEGY.md` and the residual-risk list of `docs/AUTHORIZATION_REVIEW.md` now name the
+plan and the record. See
+[ADR 0230](ARCHITECTURE_DECISIONS/0230-mfa-implementation-plan.md).
+
 ## 2026-11-26 — write down the decision for the two write paths that name nobody
 
  **Changes:** ADR 0220 measured attribution instead of assuming it — 19 of the 24 project models

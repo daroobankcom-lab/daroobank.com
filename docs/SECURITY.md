@@ -41,7 +41,7 @@ Data minimization and purpose limitation; record consent, role access, legal bas
 
 ## Opt-in synthetic login throttle
 
-The debug-only staff login can optionally use a shared PostgreSQL per-server-address fixed-window limiter with `DAROOBANK_STAFF_LOGIN_THROTTLE=1`. It is disabled by default and outside debug, is not MFA or production protection, ignores forwarded client headers, and may block users sharing a proxy. Old pseudonymous rows require explicit synthetic-only maintenance; no scheduler or cardinality cap exists. See [ADR 0181](ARCHITECTURE_DECISIONS/0181-development-staff-login-throttle.md) before enabling it.
+The debug-only staff login can optionally use a shared PostgreSQL per-server-address fixed-window limiter with `DAROOBANK_STAFF_LOGIN_THROTTLE=1`. It is disabled by default and outside debug, is not MFA or production protection, ignores forwarded client headers, and may block users sharing a proxy. Old pseudonymous rows require explicit synthetic-only maintenance; no scheduler or cardinality cap exists. See [ADR 0181](ARCHITECTURE_DECISIONS/0181-development-staff-login-throttle.md) before enabling it. Neither limiter is MFA, a lockout or account-aware: the unowned [MFA implementation plan](MFA_IMPLEMENTATION_PLAN.md) measures this tree — one login view, two credential fields, no factor state, no challenge store, no cryptographic library and a hash-pinned lock — prices six options for closing the gap and lists the seven decisions an owner has to make, and [ADR 0230](ARCHITECTURE_DECISIONS/0230-mfa-implementation-plan.md) records that measurement. Neither implements a factor.
 
 ## Opt-in public read limit
 

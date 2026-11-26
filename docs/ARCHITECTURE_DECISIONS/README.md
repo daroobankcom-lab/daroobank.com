@@ -368,4 +368,6 @@
 
 - [0184: trusted proxy scheme](0184-trusted-proxy-scheme.md) — explicit, default-off configuration.
 
+- [0185: opt-in HSTS](0185-opt-in-hsts.md) — explicit header duration, not a TLS deployment.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -6,6 +6,10 @@ A development Django application, PostgreSQL-only configuration, `.env.example` 
 
 Non-debug startup requires an explicit `DAROOBANK_SECRET_KEY` and `DAROOBANK_ALLOWED_HOSTS`. The key must meet the shape checks in [ADR 0183](ARCHITECTURE_DECISIONS/0183-nondebug-config-guards.md); those checks cannot establish randomness or secrecy. Supply a unique randomly generated key through an approved secret manager. List only authorized ASCII hostnames (IDNA/punycode for international names) or bracketed IPv6 addresses, without ports or URLs; `*` is refused and `.example.org` trusts all of its subdomains. Changing a key affects existing signatures and sessions; no production rotation policy is implemented. These requirements do not configure a production deployment or grant authorization.
 
+## Optional HSTS header
+
+HSTS is off unless `DAROOBANK_HSTS_SECONDS` is explicitly set to a positive value outside debug. Before using it, review HTTPS certificates, proxy behavior, affected hosts and recovery: browsers cache this policy, and later setting the option to zero does not clear an existing browser policy. The application does not enable subdomain inclusion or preload; an upstream proxy may independently set HSTS. See [ADR 0185](ARCHITECTURE_DECISIONS/0185-opt-in-hsts.md).
+
 ## Optional proxy scheme configuration
 
 For a separately reviewed non-debug TLS proxy only, `DAROOBANK_TRUST_PROXY_SSL_HEADER=1` requires an explicit `DAROOBANK_TRUSTED_PROXY_CIDRS` list. The application accepts only a single `http` or `https` value from an immediate peer in those networks. This is **not** a firewall or proof that the peer is an authorized proxy: the proxy must overwrite incoming forwarding headers, preserve the approved Host, and the app must be network-restricted. The flag is off by default and ignored in debug. Do not enable it until the complete topology is reviewed and tested; see [ADR 0184](ARCHITECTURE_DECISIONS/0184-trusted-proxy-scheme.md).

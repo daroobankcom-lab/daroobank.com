@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
-from .configuration import require_nondebug_hosts, require_nondebug_secret, require_trusted_proxy_networks
+from .configuration import parse_hsts_seconds, require_nondebug_hosts, require_nondebug_secret, require_trusted_proxy_networks
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get('DAROOBANK_DEBUG') == '1'
@@ -26,6 +26,10 @@ else:
 # peer networks and an independently secured proxy are explicitly configured.
 TRUSTED_PROXY_SCHEME_NETWORKS = ()
 SECURE_PROXY_SSL_HEADER = None
+# HSTS is off until an operator explicitly selects a reviewed TLS policy.
+SECURE_HSTS_SECONDS = 0 if DEBUG else parse_hsts_seconds(os.environ.get('DAROOBANK_HSTS_SECONDS'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 if not DEBUG and os.environ.get('DAROOBANK_TRUST_PROXY_SSL_HEADER') == '1':
     TRUSTED_PROXY_SCHEME_NETWORKS = require_trusted_proxy_networks(os.environ.get('DAROOBANK_TRUSTED_PROXY_CIDRS'))
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — optional non-debug HSTS duration
+
+**Changes:** A bounded explicit HSTS max-age can be configured outside debug; the default remains off and subdomain/preload directives stay disabled.
+
+**Limits:** HSTS persists in browsers, and resetting this option to zero does not clear an earlier policy. TLS, ownership and recovery require independent review; see ADR 0185.
+
 ## 2026-11-26 — opt-in trusted proxy scheme
 
 **Changes:** A default-off non-debug option accepts a single forwarded scheme only from configured immediate peer networks, and rejects universal or malformed network lists.

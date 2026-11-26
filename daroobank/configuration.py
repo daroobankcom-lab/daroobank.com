@@ -28,6 +28,19 @@ def _valid_host_pattern(pattern):
     return all(_DNS_LABEL.fullmatch(label) is not None for label in domain.split('.'))
 
 
+def parse_hsts_seconds(value):
+    """Accept a bounded ASCII duration; enablement needs independent TLS review."""
+    if value is None:
+        return 0
+    if (not isinstance(value, str) or not 1 <= len(value) <= 8
+            or not value.isascii() or not value.isdecimal()):
+        raise ImproperlyConfigured('DAROOBANK_HSTS_SECONDS must be an integer from 0 to 31536000.')
+    seconds = int(value)
+    if seconds > 31_536_000:
+        raise ImproperlyConfigured('DAROOBANK_HSTS_SECONDS must be an integer from 0 to 31536000.')
+    return seconds
+
+
 def require_trusted_proxy_networks(value):
     """Parse a small explicit network list; this cannot prove proxy ownership."""
     message = 'DAROOBANK_TRUSTED_PROXY_CIDRS must list explicit, non-universal networks.'

@@ -382,4 +382,6 @@
 
 - [0191: staff session revocation gap](0191-staff-session-revocation-gap.md) — unresolved reactivation/regrant behavior.
 
+- [0192: source-claim account-status serialization](0192-source-claim-account-status-serialization.md) — narrow PostgreSQL write ordering, not general revocation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

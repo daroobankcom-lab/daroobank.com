@@ -5,6 +5,7 @@ import re
 import unicodedata
 from datetime import date
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
@@ -106,6 +107,15 @@ def record_claim(*, actor, data):
     validate_data(data)
     digest = fingerprint(data)
     with write_conflict_boundary(ClaimConflict):
+        # Serialize this write with updates of this account's active/staff flags.
+        # NO KEY UPDATE allows foreign-key key-share locks; this is PostgreSQL
+        # specific and does not serialize permission/group or session changes.
+        if type(actor.pk) is not int or not 1 <= actor.pk <= MAX_PK:
+            raise PermissionDenied
+        state = (get_user_model().objects.select_for_update(no_key=True)
+                 .filter(pk=actor.pk).values_list('is_active', 'is_staff').first())
+        if state != (True, True):
+            raise PermissionDenied
         claim, created = _find_or_create_claim(source_url=data['source_url'], payload_sha256=digest,
                                                              defaults={**data, 'recorded_by': actor})
         if not created:

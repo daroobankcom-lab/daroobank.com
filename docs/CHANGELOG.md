@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — serialize source-claim account status with selected writes
+
+**Changes:** The PostgreSQL source-claim recording transaction locks and checks its actor's current active/staff flags before creating or replaying a claim. Synthetic tests cover both account-update orderings and key-share compatibility.
+
+**Limits:** This orders only one service and cannot cancel an earlier writer; session reactivation, cached permissions, other writes, lock waits and broader account lifecycle remain open. See ADR 0192.
+
 ## 2026-11-26 — document selected in-flight staff write race
 
 **Finding:** A CSRF-valid synthetic source-claim POST already past its authorization checks can commit after account disable and password invalidation; a new request while disabled does not create another claim.

@@ -1,0 +1,24 @@
+# ADR 0192: narrow account-status serialization for synthetic source claims
+
+Status: **development-only, partial mitigation**, not an account lifecycle or session revocation solution. ADR 0191 remains an unresolved production blocker.
+
+## Context
+
+A synthetic CSRF-valid source-claim POST previously committed after its actor was disabled, when the disable committed after the request's authorization checks but before the insert. Similar issues may exist elsewhere. A request already authorized is not automatically cancelled by a database change.
+
+## Decision
+
+For the existing PostgreSQL `record_claim` service only, after initial authorization and validation, lock the actor's current database row inside the same writer transaction using `FOR NO KEY UPDATE` and reject if the row is missing, inactive or no longer staff. Hold the lock until that transaction (including any caller's outer transaction) completes. If the account status update commits before the lock is acquired, the write is denied; if the writer acquires the lock first, the account update waits until the writer completes. This orders these operations; it does **not** cancel a writer that already acquired the lock. The weaker PostgreSQL row lock allows foreign-key `KEY SHARE` locks; the synthetic test verifies both that compatibility and a conflicting status update with a deliberately short test-only timeout.
+
+## Limits and consequences
+
+- Applies only to source-claim creation/replay through `record_claim`, not review, other services, arbitrary SQL, other databases or a deployed multi-database router configuration. The project's current database setup uses a single PostgreSQL default database.
+- The status check does not compare the requesting session's authentication hash or a durable generation; a disable/re-enable between checks can still permit a stale session. Other credentials, login, MFA and incident recovery are untouched.
+- Permission and group changes are not serialized by this account-row lock. A selected synthetic test shows a cached Django permission can remain effective for an already-loaded actor after its permission is removed. Fresh permission checks alone would still have a race. This remains a production blocker.
+- Initial checks still use the supplied actor and configured authentication backend. Alternate backends, permission caches, other workers and direct services require an explicit, independently reviewed lifecycle design.
+- This adds a database round trip and serializes same-account source writes. Locks may wait without a service-level deadline, can be held longer by enclosing transactions and can participate in deadlocks with other operations. Selected database conflict translation is not a complete timeout or retry policy. Operational timeouts, lock order and load require review.
+- This does not establish production readiness or permit real data. The staff portal remains development-only. Before a broader rollout, design transaction and authorization semantics across all read and write paths, permission changes, account transitions, direct/bulk changes, session stores and in-flight work, and independently assess them.
+
+## Selected evidence
+
+`daroobank/test_staff_inflight_write.py` synchronizes a CSRF-valid request so disable and password invalidation commit before the guarded write begins; it then asserts 403 and no claim. A CSRF negative control and a fresh disabled-request control are included. `sources/test_claim_actor_status_boundary.py` checks stale or deleted accounts, a successful active-account control, the opposite lock ordering, foreign-key lock compatibility and the separate permission-cache gap. These are synthetic PostgreSQL tests of selected orderings, not exhaustive security evidence.

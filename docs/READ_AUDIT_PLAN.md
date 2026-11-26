@@ -3,9 +3,10 @@
 This document is a **proposal**, not an implemented or approved control. Nothing in this
 application records that a read happened: [ADR 0221](ARCHITECTURE_DECISIONS/0221-no-read-audit.md)
 measured that from four directions — `LOGGING` is `{}`, no project module imports `logging`, the
-twelve middleware entries set headers and delete sessions but write no record, the 32 tables
-include no access-like table, and sweeping all 43 staff routes and all 12 public routes changes no
-row count. The staff portal stays debug-only, all data stays synthetic, and an operator must not
+middleware entries set headers, delete sessions and, since
+[ADR 0228](ARCHITECTURE_DECISIONS/0228-public-read-limit.md), count reads for an opt-in limiter,
+but write no record; the tables include no access-like table; and sweeping all 43 staff routes and
+all 12 public routes changes no row count. The staff portal stays debug-only, all data stays synthetic, and an operator must not
 treat this plan, the existing write-side history or the login window as an audit log. Owners still
 have to decide scope, identity, retention, tamper-resistance and enablement, and to record those
 decisions in an accepted ADR before any implementation.
@@ -79,10 +80,14 @@ tests — produced **20 failures across 7 of them**:
 | `daroobank/test_deployment_readiness.py` (ADR 0217) | 1 | the pending-migration message counts 32 unapplied migrations instead of 31 |
 
 On a freshly migrated throwaway database the prototype schema measured **33 tables, 283 columns,
-113 indexes, 139 constraints, 51 foreign keys and 32 applied migrations**, against today's 32, 276,
-108, 136, 50 and 31 — and `manage.py inspect_postgresql_schema` still reported
+113 indexes, 139 constraints, 51 foreign keys and 32 applied migrations**, against the 32, 276,
+108, 136, 50 and 31 of that day — and `manage.py inspect_postgresql_schema` still reported
 `no_selected_issues`, because its expectations are derived from the models rather than pinned.
 `daroobank/test_postgresql_inspection.py` and `staff_security/test_migration.py` passed unchanged.
+The opt-in read limiter of [ADR 0228](ARCHITECTURE_DECISIONS/0228-public-read-limit.md) added a
+window table afterwards, so the schema this plan would land in is now 33 tables, 279 columns, 111
+indexes, 138 constraints, 50 foreign keys and 32 applied migrations: the same table count as the
+prototype and four fewer columns, because a counter of reads is smaller than a record of them.
 
 So the price of the mechanism is not the model; it is that five accepted records measured a system
 in which reads write nothing, and each of them has to be superseded deliberately.

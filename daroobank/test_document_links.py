@@ -35,7 +35,7 @@ MODULE = re.compile(r'`([^`]+\.py)`')
 # Measured, so that a scan which silently finds nothing cannot pass.
 DOCUMENT_COUNT = 256
 ADR_COUNT = 228
-LINK_COUNT = 936
+LINK_COUNT = 938
 EXTERNAL_COUNT = 31
 ANCHOR_COUNT = 29
 SUITE_LINE_COUNT = 18

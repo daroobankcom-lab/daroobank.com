@@ -41,8 +41,12 @@ DECISIONS = ['Scope', 'Identity and privacy', 'Retention', 'Tamper-resistance', 
 # The prototype that was built and reverted, measured on a freshly migrated throwaway database.
 PROTOTYPE_SCHEMA = {'tables': 33, 'columns': 283, 'indexes': 113, 'constraints': 139,
                     'foreign keys': 51, 'applied migrations': 32}
-CURRENT_SCHEMA = {'tables': 32, 'columns': 276, 'indexes': 108, 'constraints': 136,
-                  'foreign keys': 50, 'applied': 31}
+# The schema the prototype was measured against, and the one the opt-in read limiter of
+# ADR 0228 left behind: the plan has to say which of the two it is quoting.
+BASELINE_SCHEMA = {'tables': 32, 'columns': 276, 'indexes': 108, 'constraints': 136,
+                   'foreign keys': 50, 'applied': 31}
+CURRENT_SCHEMA = {'tables': 33, 'columns': 279, 'indexes': 111, 'constraints': 138,
+                  'foreign keys': 50, 'applied migrations': 32}
 SUPERSEDED = ('0216', '0217', '0220', '0221', '0222', '0223', '0225')
 
 
@@ -129,11 +133,16 @@ class MeasuredCostTests(SimpleTestCase):
         sentence = flat(section(read(PLAN), 'Measured cost of the in-application option'))
         self.assertIn('33 tables, 283 columns, 113 indexes, 139 constraints, 51 foreign keys and '
                       '32 applied migrations', sentence)
-        self.assertIn("against today's 32, 276, 108, 136, 50 and 31", sentence)
+        self.assertIn('against the 32, 276, 108, 136, 50 and 31 of that day', sentence)
         for label, value in PROTOTYPE_SCHEMA.items():
             self.assertIn(f'{value} {label}', sentence, f'the prototype {label} count moved')
+        for label, value in BASELINE_SCHEMA.items():
+            self.assertIn(str(value), sentence, 'the baseline the prototype was compared with moved')
+        # The plan must not quote a stale "today": ADR 0228 added a table after it was written.
+        self.assertIn('is now 33 tables, 279 columns, 111 indexes, 138 constraints, 50 foreign keys '
+                      'and 32 applied migrations', sentence)
         for label, value in CURRENT_SCHEMA.items():
-            self.assertIn(str(value), sentence, f"today's {label} count is no longer compared")
+            self.assertIn(f'{value} {label}', sentence, f"today's {label} count is no longer named")
         self.assertIn('no_selected_issues', sentence)
 
     def test_the_records_the_plan_would_supersede_are_named_and_exist(self):

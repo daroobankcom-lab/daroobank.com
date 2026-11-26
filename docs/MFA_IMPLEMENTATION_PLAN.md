@@ -52,6 +52,14 @@ plus file reads. They are pinned by `daroobank/test_mfa_implementation_plan.py`.
   only by Django's own `login()`. Exactly one project receiver is connected to `user_logged_in`
   (`session_guard._bind_fingerprint`) and none to `user_login_failed` or `user_logged_out`, so
   nothing in the application observes a failed login except the optional throttle window.
+* **A copied session cookie is not detectable.** The only request-time comparison is
+  `daroobank/session_guard.py`, whose fingerprint is a keyed digest of `is_active`, `is_staff`,
+  `is_superuser`, the session-auth hash and the sorted permission set — nothing about the client,
+  the device, the address or the request. No project code rotates a session key,
+  `SESSION_SAVE_EVERY_REQUEST` is `False` and the key lives an hour, so a cookie replayed from
+  anywhere while the account state is unchanged passes the guard. That is the replay gap
+  `docs/PHASE1_RELEASE_EVIDENCE.md` lists as open, and none of the options below closes it on its
+  own.
 * **A pending challenge has nowhere obvious to live.** Sessions use the database engine, with
   `SESSION_COOKIE_AGE = 3600`, `SESSION_EXPIRE_AT_BROWSER_CLOSE = True`, HttpOnly, SameSite=Lax
   and Secure only outside debug. `CACHES` is not configured, so the default is a per-process

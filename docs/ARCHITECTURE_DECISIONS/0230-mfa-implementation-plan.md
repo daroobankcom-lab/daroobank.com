@@ -2,7 +2,7 @@
 
 Date: 2026-11-26
 Status: accepted
-Suite: `daroobank/test_mfa_implementation_plan.py` (14 tests, ~0.9 s, no database)
+Suite: `daroobank/test_mfa_implementation_plan.py` (15 tests, ~1.1 s, no database)
 
 ## Context
 
@@ -34,8 +34,8 @@ measure the surface, price the options, implement nothing until an owner chooses
 Measure the authentication surface, rewrite the plan so that every option carries a counted price,
 and implement no factor.
 
-1. **The plan now states measurements instead of adjectives.** It grew from 26 lines to 168: a
-   `## What is true today, measured` section of twelve counted facts, a
+1. **The plan now states measurements instead of adjectives.** It grew from 26 lines to 176: a
+   `## What is true today, measured` section of thirteen counted facts, a
    `## Candidate approach and decisions required` section of seven numbered decisions, and an
    `## Options and what each costs` table of six options — A leave authentication as documented,
    B a TOTP second factor, C WebAuthn or a passkey, D an account-aware lockout, E delegation to an
@@ -54,9 +54,10 @@ and implement no factor.
 3. **`daroobank/test_mfa_implementation_plan.py` pins both halves.** That the plan is an unowned
    proposal with six sections, seven numbered decisions and six priced options; that it still
    quotes the requirements it answers; that every module, file, tool and decision record it names
-   exists; and that the twelve measurements stay true — one login view rendering two credential
+   exists; and that the thirteen measurements stay true — one login view rendering two credential
    fields, no factor state in any model or module, a stock `auth.User`, nothing between the
-   password and the session, two address-keyed opt-in limiters that are not lockouts, no
+   password and the session, a fingerprint that binds account state and no client dimension, two
+   address-keyed opt-in limiters that are not lockouts, no
    cryptographic library, a hash-pinned audited lock, stateless signed tokens, a browser harness
    with no authenticator, and a 33-table schema built by 17 project migrations.
 
@@ -71,6 +72,7 @@ synthetic data of [ADR 0225](0225-populated-rollback-drill.md) (seed 475502), pl
 | Factor state | no field on any installed model matches `mfa`, `totp`, `webauthn`, `passkey`, `otp`, `factor`, `device`, `credential`, `challenge` or `recovery`; no project module names a factor mechanism; the 4 modules that mention `MFA` mention it to exclude it; `staff_security` holds 2 models, `PublicReadWindow` and `StaffLoginWindow` |
 | Account model | `AUTH_USER_MODEL`, `AUTHENTICATION_BACKENDS`, `PASSWORD_HASHERS`, `SESSION_ENGINE`, `CACHES` and `LOGGING` are all unset in project settings; `auth.User` keeps its 11 stock columns; 19 of the 24 project models point at it through a protected foreign key |
 | Between password and session | no project module calls `authenticate()`, `login()`, `cycle_key` or `check_password`; the connected project receivers are `user_logged_in` → `session_guard._bind_fingerprint`, `user_login_failed` → none, `user_logged_out` → none; `LOGGING` is `{}` and no project module imports `logging` |
+| Cookie replay | `daroobank/session_guard.py` binds `SESSION_FINGERPRINT_KEY = 'staff_auth_fingerprint'` under `_KEY_SALT = 'daroobank.staff.session.v1'` to `is_active`, `is_staff`, `is_superuser`, the session-auth hash and the sorted permission set — no address, user agent, device or session key — and `SESSION_SAVE_EVERY_REQUEST` is `False`, so a copied cookie passes the guard while the account state is unchanged |
 | Pending-challenge storage | sessions use the database engine with `SESSION_COOKIE_AGE = 3600`, `SESSION_EXPIRE_AT_BROWSER_CLOSE = True`, HttpOnly, SameSite=Lax and Secure only outside debug; `CACHES` is a per-process `LocMemCache` another worker cannot read |
 | Limiters | `staff_security/throttle.py` allows 10 attempts per 60 s per HMAC of `REMOTE_ADDR`, its key function takes only `remote_addr`, its window columns are `client_key, started_at, attempts`, it fails open as `unavailable` and runs only with `STAFF_LOGIN_THROTTLE_ENABLED = DEBUG and ...`; `staff_security/read_limit.py` allows 120 reads per 60 s and is opt-in. Neither is account-aware, so neither stops one compromised credential |
 | Cryptography | `argon2-cffi`, `cryptography`, `pyotp`, `fido2` and `webauthn` are not installed; `get_hasher('default').algorithm` is `pbkdf2_sha256`; 4 validators with `min_length=12` against the 4096-character `STAFF_PASSWORD_MAX_CHARACTERS`; keyed digests already exist — `salted_hmac` in 9 project modules, `constant_time_compare` in 7, `hashlib` in 9, `hmac` in 1 |
@@ -108,11 +110,11 @@ the code must do:
 
 ## Red checks
 
-Ten, each applied alone to a working tree whose suite passed, and each reverted from a backup that
+Eleven, each applied alone to a tree whose suite passed, and each reverted from a backup that
 `filecmp` then proved byte-identical. Two were green on the first run — overstating option B's price
 and changing the measured schema count both passed, because no test pinned the option table's price
 cell or the measured sentence exactly — so both pins were added and both checks were run again. All
-ten now fail, 15 failures in total, and the restored tree passes all 14 tests:
+eleven now fail, 18 failures in total, and the restored tree passes all 15 tests:
 
 | Regression | Exit | Failures | Tests that noticed |
 |---|---|---|---|
@@ -126,6 +128,7 @@ ten now fail, 15 failures in total, and the restored tree passes all 14 tests:
 | `daroobank/mfa.py` is created and names TOTP | 1 | 3 | `test_no_factor_exists_while_the_plan_says_so`, `test_no_factor_state_exists_in_the_schema_or_the_code`, `test_there_is_one_login_entry_point_rendering_two_credential_fields` |
 | `AUTHENTICATION_BACKENDS` becomes a project setting | 1 | 1 | `test_the_account_model_is_stock_django_and_nineteen_models_point_at_it` |
 | `ATTEMPT_LIMIT` is raised from 10 to 12 | 1 | 1 | `test_both_limiters_are_address_keyed_opt_in_and_neither_is_a_lockout` |
+| the session fingerprint gains a client dimension | 1 | 3 | `test_a_copied_session_cookie_is_not_detectable` |
 
 ## Consequences
 
@@ -143,6 +146,11 @@ ten now fail, 15 failures in total, and the restored tree passes all 14 tests:
 
 ## Limitations
 
+- **Cookie replay is measured, not decided.** The plan states that a copied session cookie passes
+  the guard while the account state is unchanged and that none of the six options closes that on
+  its own. Whether to bind a client dimension to a session, rotate session keys, or accept the
+  risk is an eighth decision nobody has made, and it is deliberately not among the seven the plan
+  numbers.
 - **The prices are counted, not run.** No prototype was built, so no cascade of pin failures was
   measured the way ADR 0227 measured 20 failures across 7 suites. The counts in option B are an
   inventory of what moves, not an observed failure list, and the real total is unknown until an

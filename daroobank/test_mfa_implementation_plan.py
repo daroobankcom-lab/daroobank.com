@@ -51,6 +51,7 @@ SECURITY = ROOT / 'docs' / 'SECURITY.md'
 EVIDENCE = ROOT / 'docs' / 'PHASE1_RELEASE_EVIDENCE.md'
 REVIEW = ROOT / 'docs' / 'AUTHORIZATION_REVIEW.md'
 SETTINGS = ROOT / 'daroobank' / 'settings.py'
+SESSION_GUARD = ROOT / 'daroobank' / 'session_guard.py'
 FORMS = ROOT / 'daroobank' / 'forms.py'
 THROTTLE = ROOT / 'staff_security' / 'throttle.py'
 READ_LIMIT = ROOT / 'staff_security' / 'read_limit.py'
@@ -355,6 +356,26 @@ class MeasuredAuthenticationSurfaceTests(SimpleTestCase):
         self.assertEqual(settings.LOGGING, {}, 'an application logging configuration appeared')
         self.assertEqual(modules_matching(r'^\s*(import logging|from logging\b)', project), [],
                          'a project module started importing logging')
+
+    def test_a_copied_session_cookie_is_not_detectable(self):
+        """The one request-time comparison binds account state, never the client presenting it."""
+        guard = read(SESSION_GUARD)
+        self.assertIn("SESSION_FINGERPRINT_KEY = 'staff_auth_fingerprint'", guard)
+        self.assertIn("_KEY_SALT = 'daroobank.staff.session.v1'", guard)
+        for part in ('str(current.is_active)', 'str(current.is_staff)', 'str(current.is_superuser)',
+                     'current.get_session_auth_hash()',
+                     "','.join(sorted(current.get_all_permissions()))"):
+            with self.subTest(part=part):
+                self.assertIn(part, guard, 'the fingerprint payload lost a part')
+        for dimension in ('REMOTE_ADDR', 'META', 'user_agent', 'HTTP_USER_AGENT', 'session_key'):
+            with self.subTest(dimension=dimension):
+                self.assertNotIn(dimension, guard,
+                                 'the fingerprint gained a client dimension, which is a design '
+                                 'decision this plan does not make')
+        self.assertFalse(settings.SESSION_SAVE_EVERY_REQUEST,
+                         'sessions started rotating, which changes what a replay can reuse')
+        self.assertIn('a cookie replayed from anywhere while the account state is unchanged',
+                      flat(read(PLAN)), 'the plan stopped stating the replay gap it measures')
 
     def test_both_limiters_are_address_keyed_opt_in_and_neither_is_a_lockout(self):
         throttle = read(THROTTLE)

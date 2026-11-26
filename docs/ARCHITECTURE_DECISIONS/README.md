@@ -458,6 +458,6 @@
 
 - [0229: the two write paths that name nobody](0229-attribution-gap-plan.md) — the published catalog record and command-line price staging are measured again, three facts ADR 0220 did not measure are added, and a proposal with no owner prices six options and lists seven decisions.
 
-- [0230: the MFA plan and the measured price of a second factor](0230-mfa-implementation-plan.md) — the authentication surface is measured instead of described: one login view rendering two credential fields, no factor state in any model or module, a stock `auth.User`, nothing between the password and the session, two address-keyed opt-in limiters that are not lockouts, no cryptographic library, a hash-pinned audited lock and a 33-table schema; an unowned proposal prices six options and lists seven decisions, and no factor is implemented.
+- [0230: the MFA plan and the measured price of a second factor](0230-mfa-implementation-plan.md) — the authentication surface is measured instead of described: one login view rendering two credential fields, no factor state in any model or module, a stock `auth.User`, nothing between the password and the session, a session fingerprint that binds account state and no client dimension, two address-keyed opt-in limiters that are not lockouts, no cryptographic library, a hash-pinned audited lock and a 33-table schema; an unowned proposal prices six options and lists seven decisions, and no factor is implemented.
 
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

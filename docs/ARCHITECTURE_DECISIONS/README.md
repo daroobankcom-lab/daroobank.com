@@ -400,4 +400,6 @@
 
 - [0200: staff authorization matrix](0200-staff-authorization-matrix.md) — every staff route against six synthetic account shapes.
 
+- [0201: staff authorization against existing rows](0201-staff-authorization-existing-rows.md) — the same matrix over real rows, so denials do not become an existence oracle.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

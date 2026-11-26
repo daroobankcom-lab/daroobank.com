@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — repeat the staff authorization matrix against existing rows
+
+**Changes:** `daroobank/test_staff_authorization_objects.py` builds one real synthetic row per object route — a source claim, product candidate, price candidate, import receipt, clinical draft, identity chain and a published presentation — and reuses the ADR 0200 route table for the 23 routes whose argument identifies a stored row. Unauthorized accounts must get the same 403 they get for a missing row, authorized accounts must get exactly 200 on a GET and exactly 400 on a POST-only review route with an empty form, both with staff privacy headers, anonymous requests must redirect to login, and probing every route with all five account shapes must leave fourteen write and audit model counts unchanged. No production code changed. See ADR 0201.
+
+**Limits:** Existence-oracle coverage is status-code only: bodies, headers and timing are not compared. One row per route through the normal services, so ownership, per-object scoping beyond the receipt kind filter, inconsistent or oversized rows and multi-database routing are not exercised. The 400s come from deliberately empty forms, not successful reviews. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — add an endpoint-by-endpoint staff authorization matrix
 
 **Changes:** `daroobank/test_staff_authorization_matrix.py` declares one row for each of the 41 staff routes (all `staff_*` names except login and logout) with its URL arguments, the method that reaches its authorization check and its requirement — staff only, all of a permission set, or any of a permission set. Expectations are derived from that declaration for six account shapes: anonymous (302 to login), active non-staff (403), staff without the requirement (403), staff with it (never 403, and a 302 must not go to login), and a deactivated full-permission account (302 or 403, never content). Denials must still carry staff privacy headers, exact shape counts are pinned, and a coverage assertion enumerates the live URL resolver so a new route cannot appear undeclared. No production code changed. See ADR 0200.

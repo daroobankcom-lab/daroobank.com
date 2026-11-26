@@ -62,7 +62,15 @@ jobs:
           python manage.py makemigrations --check --dry-run
           python manage.py inspect_postgresql_schema
       - name: Run synthetic tests on PostgreSQL
-        run: python manage.py test --settings=daroobank.synthetic_test_settings -v 1 --noinput
+        run: |
+          if python manage.py test --settings=daroobank.synthetic_test_settings -v 1 --noinput > "$RUNNER_TEMP/synthetic-tests.log" 2>&1; then
+            cat "$RUNNER_TEMP/synthetic-tests.log"
+          else
+            cat "$RUNNER_TEMP/synthetic-tests.log"
+            # Only fixed-format test names become annotations; the full log is not redacted.
+            python -m tools.report_synthetic_test_failures "$RUNNER_TEMP/synthetic-tests.log" || true
+            exit 1
+          fi
       - name: Prepare matching PostgreSQL clients for isolated restore drill
         run: |
           mkdir -p "$RUNNER_TEMP/pg16-tools"

@@ -1,7 +1,15 @@
 """Selected staff authorization checks after a staff flag is revoked."""
 from django.contrib.auth import get_user_model
+from django.contrib.auth.backends import AllowAllUsersModelBackend
 from django.test import TestCase, override_settings
 from django.urls import get_resolver, reverse
+
+
+class SyntheticPermissiveBackend(AllowAllUsersModelBackend):
+    """Test-only backend permits inactive accounts and grants every permission."""
+
+    def has_perm(self, user_obj, perm, obj=None):
+        return True
 
 
 @override_settings(STAFF_PORTAL_ENABLED=True)
@@ -59,6 +67,22 @@ class StaffRevocationBoundaryTests(TestCase):
         get_user_model().objects.filter(pk=user.pk).update(is_active=True)
         self.assertEqual(self.client.get(reverse('staff_workspace')).status_code, 302)
         self.assertNotIn('_auth_user_id', self.client.session)
+
+    @override_settings(AUTHENTICATION_BACKENDS=['daroobank.test_staff_revocation_boundary.SyntheticPermissiveBackend'])
+    def test_deactivated_session_is_denied_even_by_a_permissive_backend(self):
+        user = get_user_model().objects.create_user('synthetic-permissive-backend', password='synthetic-only',
+                                                    is_staff=True, is_superuser=True)
+        self.client.force_login(user)
+        get_user_model().objects.filter(pk=user.pk).update(is_active=False)
+        checked = 0
+        for name, path in self.routes():
+            for method in ('get', 'head', 'post'):
+                with self.subTest(name=name, method=method):
+                    response = getattr(self.client, method)(path)
+                    self.assertIn(response.status_code, (403, 405))
+                    self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+                    checked += 1
+        self.assertGreater(checked, 90)
 
     def test_deactivated_existing_session_is_redirected_by_default_backend(self):
         from urllib.parse import parse_qs, urlsplit

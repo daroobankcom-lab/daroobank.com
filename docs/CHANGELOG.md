@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — revoked-staff boundary regression
+
+**Changes:** A synthetic existing-session test exercises named staff routes after the staff flag is revoked, including an account that retains superuser permissions.
+
+**Limits:** This does not establish concurrent revocation, production security or complete authorization coverage; see Testing strategy.
+
 ## 2026-11-26 — optional stdin for synthetic projection repair token
 
 **Changes:** The one-row repair command accepts a bounded token via non-terminal stdin as an alternative to the legacy argument. Invalid combinations and non-debug use fail before reading.

@@ -448,4 +448,6 @@
 
 - [0224: the documentation graph resolves](0224-documentation-graph.md) — 251 markdown documents, 224 numbered decision records, every link, anchor, index entry and named suite resolves, and no document is orphaned.
 
+- [0225: rollback with data in it](0225-populated-rollback-drill.md) — a populated throwaway database loses 23 of its 30 rows to a single-app rollback and all of them to a full one, a reapply returns an identical schema and zero rows, only a copy taken beforehand brings rows back and only after the identity sequences are advanced, and a rollback blocked by one locked row leaves the database half undone.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

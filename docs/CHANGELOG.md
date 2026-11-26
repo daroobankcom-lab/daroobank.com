@@ -2,6 +2,49 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — measure what a rollback does to a database that has data in it
+
+**Changes:** ADR 0216 measured the rollback direction on throwaway databases and named its own
+limits twice: *"These are empty databases"* and *"No timing, locking or concurrency is
+measured"*. `docs/PHASE1_RELEASE_EVIDENCE.md` carried both as open, which left the question an
+operator actually has unanswered — not whether a rollback works, but what it costs.
+
+`daroobank/test_populated_rollback_drill.py` (7 tests, ~19.9 s) populates a throwaway PostgreSQL
+database with a pinned fixture — 30 synthetic rows across all 23 project tables plus one staff
+account that wrote them, satisfying every check constraint the schema enforces — and then rolls
+back. Rolling catalog alone destroys 23 of the 30 rows and leaves an import receipt claiming
+`rows=2, created=2` above an item table that no longer exists. Rolling all six apps back destroys
+every project row while `auth_user` keeps the account that wrote them. Reapplying returns an
+inventory identical to the first migration and all 23 tables empty. A copy of three tables taken
+beforehand replays in foreign-key order and restores those rows exactly, and the next insert then
+fails on a duplicate key until `setval(pg_get_serial_sequence(…), max(id))` advances the identity
+sequence the copy reused.
+
+The busy case uses a real second session holding `SELECT … FOR UPDATE` on one product row while
+`migrate catalog zero` runs with `lock_timeout = 2s`. It fails with `canceling statement due to
+lock timeout` and leaves the database **half undone**, because the plan is 11 migrations that are
+not ordered by app (`ingestion 0002` first, then pricing's two, then catalog 0008 down to 0001)
+and each migration commits on its own: 30 of 31 migrations still applied, 31 tables, 47 foreign
+keys, 28 of 30 rows, inspection `attention`. The step that died was
+`DROP TABLE "pricing_pricecandidatereview" CASCADE` waiting for an `AccessExclusiveLock` on
+`catalog_productpresentation`, because dropping a child table has to take the foreign key off its
+parent. Migrating forward repairs the schema and restores none of the rows; the same rollback
+completes once nothing holds the lock.
+
+Seven red checks were applied alone and reverted from backups: pinning the fixture at three
+product presentations (1 failure), asserting the staff account dies with a full rollback (1),
+asserting a reapply restores the 30 rows (1), asserting a single-app rollback destroys none (1),
+asserting a blocked rollback leaves 31 migrations applied (1), inserting into a restored table
+without advancing its sequence (1 error, duplicate key) and asserting that migrating forward
+brings the two dropped receipt items back (1).
+
+This is a measurement, not a recovery capability. Thirty rows is a fixture rather than a
+representative volume, one shape of concurrency is exercised, the copy round-trip covers three of
+23 tables through raw inserts that deliberately bypass the append-only models, Django's own apps
+are never rolled back, and no backup, restore tool, recovery objective, staging environment or
+rollback **plan** with an owner exists. See
+[ADR 0225](ARCHITECTURE_DECISIONS/0225-populated-rollback-drill.md).
+
 ## 2026-11-26 — pin the documentation graph so a broken link fails a test
 
 **Changes:** this repository documents itself heavily — 251 markdown files, 224 of them numbered

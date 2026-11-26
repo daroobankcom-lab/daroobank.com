@@ -81,6 +81,8 @@ All three were reverted from backups; `git status --short` showed only the new s
   back a migration in production drops tables and columns, and Django does not preserve
   their contents; a real rollback plan needs a backup and restore step that this suite does
   not exercise (the synthetic dump/restore drill is separate and opt-in).
+  [ADR 0225](0225-populated-rollback-drill.md) runs this drill again on populated databases
+  and quantifies the loss.
 - The two data migrations reverse to a no-op, so a rollback of catalog 0002 or 0004 leaves
   whatever the backfill wrote behind in any column that survives. The suite names that set;
   it does not fix it.
@@ -88,7 +90,9 @@ All three were reverted from backups; `git status --short` showed only the new s
   environment, its role permissions, its extensions and its tablespaces are not involved.
 - No timing, locking or concurrency is measured. Migrations here run against an idle
   database in about a second; a populated staging database is a different exercise, and
-  `ALTER TABLE` lock behavior is not tested.
+  `ALTER TABLE` lock behavior is not tested. ADR 0225 measures one shape of it: a rollback
+  attempted while a second session holds a row lock fails on `lock_timeout` and leaves the
+  database half undone. Duration at a representative volume is still unmeasured.
 - The suite rolls back the six project apps in reverse order and leaves Django's own apps
   applied. Rolling back `auth`, `contenttypes` or `sessions` is not measured.
 - The schema comparison covers columns, indexes and constraints in the `public` schema.

@@ -10,6 +10,10 @@ from django.db import close_old_connections
 from django.test import Client, TransactionTestCase, override_settings
 from django.urls import reverse
 
+from catalog.intake import stage_products
+from catalog.intake import valid_review_reason as product_reason
+from catalog.models import ProductCandidate, ProductCandidateReview
+from catalog.test_intake import make_csv
 from clinical.evidence import evidence_state
 from clinical.models import ClinicalDraftReview
 from clinical.services import create_draft
@@ -19,6 +23,8 @@ from pricing.models import PriceCandidate, PriceCandidateReview
 from pricing.reviews import valid_review_reason as price_reason
 from pricing.test_workflow import csv_bytes
 
+PRODUCT = dict(source_record_id='one', name_fa='فرآورده فرضی', name_en='Synthetic', manufacturer='سازنده فرضی',
+               strength='5 mg', dosage_form='قرص', package_description='10 عدد', irc='001')
 PRICE = dict(source_record_id='one', irc='001', manufacturer='سازنده فرضی', strength='5 mg',
              dosage_form='قرص', package_description='10 عدد', amount='100', currency='RIAL',
              category='retail', unit='package', effective_date='', source_published_date='')
@@ -38,9 +44,13 @@ class StaffInflightReviewWriteTests(TransactionTestCase):
         User = get_user_model()
         self.author = User.objects.create_user('synthetic-inflight-author', password='synthetic-only', is_staff=True)
         self.reviewer = User.objects.create_user('synthetic-inflight-reviewer', password='synthetic-only', is_staff=True)
-        for user, app in ((self.author, 'pricing'), (self.reviewer, 'pricing'),
+        for user, app in ((self.author, 'catalog'), (self.reviewer, 'catalog'),
+                          (self.author, 'pricing'), (self.reviewer, 'pricing'),
                           (self.author, 'clinical'), (self.reviewer, 'clinical')):
             user.user_permissions.add(*Permission.objects.filter(content_type__app_label=app))
+        stage_products(io.BytesIO(make_csv([PRODUCT])), 'منبع ساختگی', 'https://example.org/product',
+                       actor=self.author, commit=True, rights_attested=True)
+        self.product = ProductCandidate.objects.get()
         stage_csv(io.BytesIO(csv_bytes([PRICE])), 'منبع ساختگی', 'https://example.org/price',
                   staged_by=self.author, commit=True, rights_attested=True)
         self.candidate = PriceCandidate.objects.get()
@@ -55,6 +65,10 @@ class StaffInflightReviewWriteTests(TransactionTestCase):
     def price_payload(self):
         return {'decision': PriceCandidateReview.DEFER, 'reason': REASON, 'expected_review': 0,
                 'expected_product': 0, 'expected_product_hash': ''}
+
+    def product_payload(self):
+        return {'decision': ProductCandidateReview.DEFER, 'reason': REASON, 'expected_review': 0,
+                'expected_hash': self.product.payload_sha256}
 
     def draft_payload(self):
         return {'decision': ClinicalDraftReview.DECISIONS[0][0], 'reason': REASON, 'expected_review': 0,
@@ -153,4 +167,30 @@ class StaffInflightReviewWriteTests(TransactionTestCase):
         event = ClinicalDraftReview.objects.get()
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], reverse('staff_clinical_detail', args=[self.draft.pk]))
+        self.assertEqual(event.reviewer_id, self.reviewer.pk)
+
+    def test_password_invalidation_before_product_review_guard_denies_inflight_review(self):
+        client = self.reviewer_client('staff_product_detail', self.product.pk)
+        path = reverse('staff_product_review', args=[self.product.pk])
+        payload = self.product_payload()
+        self.assertEqual(client.post(path, payload).status_code, 403)  # CSRF negative control
+        self.assertFalse(ProductCandidateReview.objects.exists())
+        response = self._paused_post(client, path, payload, 'catalog.intake.valid_review_reason', product_reason,
+                                     self.invalidate_and_reactivate, ProductCandidateReview)
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(ProductCandidateReview.objects.exists())
+        fresh = client.post(path, payload, HTTP_X_CSRFTOKEN=client.cookies['csrftoken'].value)
+        self.assertEqual(fresh.status_code, 302)
+        self.assertTrue(fresh['Location'].startswith(reverse('staff_login') + '?'))
+        self.assertEqual(ProductCandidateReview.objects.count(), 0)
+
+    def test_flag_only_reactivation_before_product_review_guard_can_still_allow_inflight_review(self):
+        client = self.reviewer_client('staff_product_detail', self.product.pk)
+        path = reverse('staff_product_review', args=[self.product.pk])
+        payload = self.product_payload()
+        response = self._paused_post(client, path, payload, 'catalog.intake.valid_review_reason', product_reason,
+                                     self.disable_then_reactivate, ProductCandidateReview)
+        event = ProductCandidateReview.objects.get()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('staff_product_detail', args=[self.product.pk]))
         self.assertEqual(event.reviewer_id, self.reviewer.pk)

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — extend the shared actor recheck to catalog product review
+
+**Changes:** `catalog.intake.review_product` now rechecks its reviewer through the shared helper after locking the candidate row, and the staff product review view passes the request session's password hash. `catalog/test_review_actor_recheck.py` and two HTTP cases in `daroobank/test_staff_inflight_review_writes.py` cover stale/disabled/destaffed/deleted reviewers, removed permissions behind a primed cache, stale and malformed hashes, password rotation, a parked race and the CSRF negative control.
+
+**Limits:** The reviewer read is unlocked to preserve one lock order, so a credential change committed after it still races and a flag-only disable/reactivate still lets a parked review commit. Five services on five routes are covered; staging paths, other writes, permission serialization and durable session revocation remain open. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — cover the price and clinical review guards over HTTP
 
 **Changes:** `daroobank/test_staff_inflight_review_writes.py` parks CSRF-valid price and clinical review POSTs inside service input validation. Disable plus password invalidation plus reactivation before the guard now provably yields 403 with no review and a login redirect for the next request from that session; a flag-only disable/reactivate still commits, and a missing CSRF token is rejected.

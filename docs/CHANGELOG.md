@@ -2,6 +2,88 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — measure what rotating the one secret does, and price the rotation options
+
+ **Changes:** `docs/SECURITY.md` asks for *"encryption at rest where appropriate with isolated
+managed keys and rotation"*, `docs/DEPLOYMENT.md` tells an operator to *"Supply a unique randomly
+generated key through an approved secret manager"* and then concedes *"Changing a key affects
+existing signatures and sessions; no production rotation policy is implemented"*,
+`docs/OPERATIONS_RUNBOOK.md` tells an incident responder to *"rotate exposed credentials"* inside a
+checklist that calls itself *"mostly a prospective checklist"*, and
+`docs/PHASE1_RELEASE_EVIDENCE.md` carries *"secret manager, key generation/rotation and recovery"*
+as an open gate. The requirement was written down four times and the procedure existed nowhere, and
+the runbook went further than the others: it called `revoke_staff_sessions --all --apply` *"the
+state to want after a secret rotation"*, which is the one instruction this measurement contradicts.
+
+ `docs/SECRET_ROTATION_PLAN.md` now measures before it proposes: a `What is true today, measured`
+section in three subsections, eight numbered decisions, seven priced options — leave key handling
+as documented, write the procedure down only, add a read-only pre-rotation impact command, make
+rotation graceful with `SECRET_KEY_FALLBACKS`, give each purpose its own key material, take the key
+from an external secret manager or KMS, and declare rotation out of Phase 1 scope — a seven-item
+`Required behavior before any rotation` list and a verification list. The measurements, taken with a
+live `django.setup()` under `daroobank.synthetic_test_settings` on synthetic PostgreSQL data plus
+file reads: `SECRET_KEY` is `os.environ.get('DAROOBANK_SECRET_KEY', '')` and `daroobank/settings.py`
+is the only project module that reads it; in debug an empty value becomes the published
+35-character `'development-only-not-for-production'`, which `require_nondebug_secret` rejects, while
+a 53-character dictionary phrase passes it, because the check's own docstring says it *"cannot
+determine randomness or secrecy"*; of the 127 non-test project modules 9 call `salted_hmac` and none
+of the 9 passes an explicit `secret=`, so all of them take `settings.SECRET_KEY`, using 9 salts — 8
+named constants and one inline literal — of which 5 compose a per-purpose suffix; 6 modules sign
+through `django.core.signing` with the same secret; the session store signs its own rows under
+`django.contrib.sessions.SessionStore`; `SECRET_KEY_FALLBACKS` is `[]` and no project module names
+it; the 12 management commands include no rotate or rekey command; `LOGGING` is `{}` and no project
+module imports `logging`; and the lock holds 7 names and 78 hashes with no key-management package.
+
+ The rotation was then performed on one synthetic staff session. Before it, the account logged in,
+read `staff/prices/` for 200 and wrote one login window and one read window. After the key changed:
+the same request answered 302 to the login page; the `django_session` row kept its key and its
+expiry and decoded to `{}`; exactly one `"Session data corrupted"` warning reached
+`django.security.SuspiciousSession`, a logger with no handlers; `list_staff_sessions` reported
+`scanned: 1, sessions_matched: 0, sessions_unbound: 0` with no accounts, so the sessions a rotation
+invalidates disappear from the inventory rather than appearing in it;
+`revoke_staff_sessions --all --apply` reported `matched: 0, revoked: 0` and left the row behind;
+`cleanup_staff_login_windows --apply` reported `{"deleted": 0, "limit": 500}`, because its retention
+is 24 hours and the orphans were minutes old, and no command prunes `PublicReadWindow` at all; both
+window tables went 1 → 2 as the limiter counters restarted at zero; `recheck_actor` denied a guarded
+write carrying the pre-rotation hash; and the `password` column stayed byte-identical with the
+passphrase still verifying, while `get_session_auth_hash()`, the session fingerprint and the
+inventory alias for the same session key all moved. With the old key listed in
+`SECRET_KEY_FALLBACKS` the row decoded fully again and the signed cursor loaded, and the staff route
+still answered 302, because `daroobank/session_guard.authorization_fingerprint` embeds
+`get_session_auth_hash()` only; the inventory then showed the session as `bound: true,
+guard_would_end_it: true` under a different alias, and `scanned: 0` after the guard ran, because
+Django cycles the session key when a fallback matches and this project's guard deletes the cycled
+row.
+
+ `daroobank/test_secret_rotation_plan.py` (20 tests, ~7.4 s, 6 of them on the synthetic database)
+pins both halves: that the plan stays an unowned proposal with its sections, decisions, options and
+measured sentences intact and still quotes the five documents it answers; that every module, file
+and record it names exists, including the nine keyed sites by path and line; that the key surface
+stays as measured; and that the cascade stays as measured, by re-performing it. Fourteen regressions
+were applied alone and reverted from backups that were re-hashed afterwards, and all fourteen fail
+the suite, between 1 and 8 of the 20 tests each: dropping the proposal disclaimer (2), dropping a
+measured cascade number (1), dropping a numbered decision (1), dropping an option row (1), no longer
+quoting the release-evidence gate (1), misnaming a keyed site (1), configuring a fallback key in
+settings (2), replacing the debug constant (1), teaching the guard about fallback hashes (8),
+teaching `recheck_actor` about them (1), passing an explicit `secret=` at a keyed digest (3),
+renaming a salt (2), making the shape check measure entropy (1) and claiming in the deployment guide
+that a rotation policy exists (1).
+
+ No rotation control is implemented: no command, setting, fallback entry, fallback-aware guard or
+recheck, per-purpose key, logging configuration or dependency was added, and the deployment guide
+still says no production rotation policy is implemented. The prices are counted from inventories
+rather than prototyped — no rotation command was built and reverted, so no cascade of pin failures
+was run the way ADR 0227 measured 20 across 7 suites — and the rotation itself was performed once,
+on one synthetic account in a throwaway database, so it says nothing about the volume a real
+rotation produces or how long a mass logout takes to drain. No option was evaluated for security,
+lawfulness or operational cost; key custody was not measured, because no secret manager, KMS or key
+file exists in this tree; and no recovery path was exercised, so a lost key and a rotated key are
+alike only in what was measured of them. `docs/SECURITY.md`, `docs/DEPLOYMENT.md`,
+`docs/OPERATIONS_RUNBOOK.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/PHASE1_RELEASE_EVIDENCE.md` and
+`docs/TESTING_STRATEGY.md` now name the plan and the record, and the runbook no longer tells an
+operator that revoking every session is the state to want after a rotation. See
+[ADR 0231](ARCHITECTURE_DECISIONS/0231-secret-rotation-plan.md).
+
 ## 2026-11-26 — measure the authentication surface and price the MFA options
 
  **Changes:** `docs/SECURITY.md` asks for *"MFA for administrators"*, *"Argon2-compatible password

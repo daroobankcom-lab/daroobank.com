@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — cover the price and clinical review guards over HTTP
+
+**Changes:** `daroobank/test_staff_inflight_review_writes.py` parks CSRF-valid price and clinical review POSTs inside service input validation. Disable plus password invalidation plus reactivation before the guard now provably yields 403 with no review and a login redirect for the next request from that session; a flag-only disable/reactivate still commits, and a missing CSRF token is rejected.
+
+**Limits:** Two routes and selected orderings. These tests assert the views pass the session hash; they do not make revocation durable or race-free, and ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — share one write-actor recheck across four guarded services
 
 **Changes:** A new `daroobank/actor_recheck.py` helper reloads a write actor, repeats its active/staff/permission checks on the fresh instance and optionally binds the write to the session password hash, with an opt-in account-row lock. Source-claim creation and review now use it, and `pricing.reviews.record_preliminary_review` and `clinical.services.review_draft` gain the unlocked recheck plus session-hash binding, supplied by their staff views. See ADR 0195.

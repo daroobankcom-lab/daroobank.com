@@ -2,6 +2,45 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — record and pin that nothing logs a read
+
+**Changes:** ADR 0220 measured who a row names; the other half of an audit question had no
+answer and nothing said so. `SECURITY.md` asks for audit records carrying actor, role, target,
+decision, time and request correlation, `settings.py` opens by saying the staff portal stays
+development-only until MFA, throttling and audit exist, and the operations runbook told an
+incident responder to "review access/audit logs after restoration" — an instruction that cannot
+be followed inside this application.
+
+`daroobank/test_no_read_audit.py` (8 tests, ~0.9 s) pins the absence from four directions.
+Configuration: `settings.LOGGING` is `{}`, Django's default with no handler, logger or file,
+and `MIDDLEWARE` is exactly twelve pinned entries of which the seven project ones set privacy
+headers, resolve the proxy scheme or guard staff sessions — the guard deletes sessions; nothing
+records a request. Code: no module in the seven project packages imports `logging`, checked by
+parsing the AST, with a positive control that the same scan finds `catalog/intake.py` importing
+`json`. Schema: exactly the 32 tables ADRs 0216 and 0218 pin, by name, no `django_admin_log`,
+and no project model whose camel-case name contains an `access`, `audit`, `event`, `log`,
+`track` or `visit` token — matched on words so `StaffLoginWindow` does not match on "log" —
+while the four revision tables do carry `recorded_by_id` and `created_at`: writes are recorded,
+reads have no counterpart. Behavior: a fully permitted account GETting all 43 staff routes with
+a missing primary key answers 19×200, 18×404, 6×405 and never 403 and creates no row in any of
+the 23 project tables and no session row, an anonymous sweep of all 12 public routes answers
+8×200 and 4×404 and likewise writes nothing, and as a positive control the same counter sees an
+ORM insert and sees the one session row the login itself creates.
+
+Four red checks were applied alone and reverted: appending `import logging` and a module logger
+to `catalog/services.py`; adding a `LOGGING` dictionary to settings; adding an `AccessLog` model
+with its migration plus a middleware that writes one row per response — which fails the
+middleware pin, the 32-table inventory and both sweeps, counting 43 rows after the staff sweep
+and 12 after the public one; and adding the same model without a migration, which fails the
+model-name pin and errors the three database tests.
+
+No logging was added. Whether this product needs a read audit is a governance decision with
+retention, PHI and tamper-resistance consequences, and it stays open; what changed is that the
+gap is measured, and the runbook and `SECURITY.md` no longer imply an access log exists. The
+suite cannot see recording outside the process — a proxy access log, PostgreSQL statement
+logging, a host audit daemon or an APM agent — and `DEPLOYMENT.md` arranges none.
+See [ADR 0221](ARCHITECTURE_DECISIONS/0221-no-read-audit.md).
+
 ## 2026-11-26 — measure who a row names, and pin the two places where it names nobody
 
 **Changes:** ADR 0218 removed the component that would have kept a `django_admin_log` row for

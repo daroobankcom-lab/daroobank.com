@@ -440,4 +440,6 @@
 
 - [0220: actor attribution is a schema property](0220-actor-attribution-inventory.md) — 19 of the 23 project models name the account that wrote them behind a protected foreign key and a creation timestamp; the published catalog record names nobody, and a candidate staged from the command line can never be reviewed in the portal.
 
+- [0221: nothing records that a read happened](0221-no-read-audit.md) — `LOGGING` is empty, no module imports `logging`, no middleware records a request, no table can hold an access record, and sweeping all 55 routes creates no row; the absence is pinned, not fixed.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

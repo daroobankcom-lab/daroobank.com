@@ -408,4 +408,6 @@
 
 - [0204: staff denial parity](0204-staff-denial-parity.md) — denials for existing and missing rows are byte-identical, so existence is not an oracle.
 
+- [0205: identifier and method parity](0205-staff-identifier-and-method-parity.md) — thirteen identifier shapes and both method directions across five account shapes.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

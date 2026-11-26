@@ -35,9 +35,13 @@ class DatabaseConfigurationTests(SimpleTestCase):
         result = self.run_settings(POSTGRES_PORT='55432', POSTGRES_CONN_MAX_AGE='20')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), '[55432, 20]')
+        result = self.run_settings(POSTGRES_CONN_MAX_AGE='31536000')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), '[5432, 31536000]')
         for changes in ({'POSTGRES_PORT': '0'}, {'POSTGRES_PORT': '65536'},
-                        {'POSTGRES_CONN_MAX_AGE': '-1'}):
-            with self.subTest(changes=changes):
+                        {'POSTGRES_CONN_MAX_AGE': '-1'}, {'POSTGRES_CONN_MAX_AGE': '31536001'},
+                        {'POSTGRES_CONN_MAX_AGE': '9' * 1000}):
+            with self.subTest(setting=next(iter(changes)), length=len(next(iter(changes.values())))):
                 result = self.run_settings(**changes)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('Invalid PostgreSQL port or connection lifetime', result.stderr)

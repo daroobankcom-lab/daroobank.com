@@ -73,7 +73,9 @@ def required_database_setting(name):
 try:
     db_conn_max_age = int(os.environ.get('POSTGRES_CONN_MAX_AGE', '0'))
     db_port = int(os.environ.get('POSTGRES_PORT', '5432'))
-    if db_conn_max_age < 0 or not 1 <= db_port <= 65535:
+    # A finite cap also prevents huge integers from overflowing Django's
+    # monotonic close deadline when a database connection is opened.
+    if not 0 <= db_conn_max_age <= 31_536_000 or not 1 <= db_port <= 65535:
         raise ValueError
 except ValueError:
     # Python's int() error includes the original environment value; never echo

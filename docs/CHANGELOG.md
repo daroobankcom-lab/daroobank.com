@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — PostgreSQL connection lifetime bound
+
+**Changes:** `POSTGRES_CONN_MAX_AGE` now fails startup outside 0–31,536,000 seconds. Extremely large integers previously passed configuration and could overflow Django's connection deadline.
+
+**Limits:** The upper bound changes compatibility and is not a recommendation for long-lived connections or a network deadline. Real pooling and timeout policies need separate review.
+
 ## 2026-11-26 — selected maintenance traceback redaction
 
 **Changes:** Generic database failures in synthetic login-window cleanup and the PostgreSQL schema/access inspectors no longer chain driver errors into formatted tracebacks. The offline schedule command likewise suppresses chained parser errors, which may contain input. Synthetic canary tests include `--traceback` CLI runs.

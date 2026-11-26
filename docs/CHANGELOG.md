@@ -2,6 +2,41 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — document the staff login throttle and hold the command surface to the operator documents
+
+**Changes:** with `django.contrib.admin` deliberately absent (ADR 0218), management commands
+are the only administrative interface outside the staff portal, and an inventory of them
+against the operator documents had drifted. `cleanup_staff_login_windows` — the only way to
+keep `staff_security_staffloginwindow` from growing without bound — was named in no operator
+document, only inside ADR 0181 and ADR 0218. `revoke_staff_sessions --all` was documented
+nowhere; the runbook showed only `--username`. And the development guide's staff paragraph
+listed "login throttling" among capabilities that "remain missing" although a limiter exists
+behind `DAROOBANK_STAFF_LOGIN_THROTTLE=1`.
+
+The development guide gains a section on the opt-in throttle (ten attempts per client key in a
+rolling sixty seconds, a no-op inside a test transaction, not a production abuse control) and
+on both forms of `cleanup_staff_login_windows`, including the bounds the command sets for
+itself: debug-only, PostgreSQL in autocommit, a one-second lock timeout and a two-second
+statement timeout, at most 500 rows per run, oldest first, with each row's age rechecked after
+any lock wait. The "missing capabilities" sentence now says *production-grade login abuse
+protection* and names the development limiter as not being one. The runbook documents
+`--all --apply` alongside `--username` and states that both forms are read-only without
+`--apply`, delete at most one bounded batch and print one JSON object.
+
+`daroobank/test_command_documentation.py` (7 tests, ~0.01 s, no database) holds the documents
+to the registry: a pinned inventory of the twelve commands across five apps, command files and
+registered names as the same set, every command named in at least one operator document, all 24
+project-specific options mentioned in the documents that name their command (read from each
+command's live parser, so a new option is a documentation event), each of the four
+write-capable commands documented as read-only without its `--apply`/`--commit` flag and
+documenting that flag, every `manage.py <name>` mentioned in the README or the operator
+documents existing, and the operator documents not being empty. Deleting the new guide
+section, removing `--all` and adding an undocumented probe command together fail six
+assertions across five tests; replacing the deployment guide with a stub fails the emptiness
+guard. This checks that commands and options are *named*, not that the prose around them is
+correct, safe or current — a document may still describe `--apply` as read-only and pass.
+See [ADR 0219](ARCHITECTURE_DECISIONS/0219-documented-command-surface.md).
+
 ## 2026-11-26 — record why `django.contrib.admin` is not installed, and pin its absence
 
 **Changes:** the roadmap asks for an "auth/admin baseline" and the technology decision

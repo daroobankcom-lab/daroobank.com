@@ -436,4 +436,6 @@
 
 - [0218: no `django.contrib.admin`](0218-no-django-admin.md) — the staff portal is the only administrative surface, and the absence is pinned by seven tests.
 
+- [0219: every management command is documented where an operator looks](0219-documented-command-surface.md) — the twelve commands and their options are held to the development guide, the operations runbook and the deployment guide; naming is checked, correctness of the prose is not.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

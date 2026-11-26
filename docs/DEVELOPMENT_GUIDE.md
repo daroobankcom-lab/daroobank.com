@@ -98,7 +98,20 @@ Django prompts interactively for the password; do not place passwords in shell c
 
 Start the server in debug mode and visit `/staff/login/`, then `/staff/prices/`. The queue and detail pages are bounded/paginated and accessible only to active staff with that view permission. The pages show the source assertion, original currency, converted Rial amount, and both initial and recalculated current match suggestions; neither suggestion is a review or approval. The match filter and summary counts use the **initial** match status; an independent review filter uses the latest recorded triage decision. Summary counts remain global regardless of filters. Logout is POST-only with CSRF protection. The app never shows candidate prices in public pages or API.
 
-The staff portal is deliberately disabled when `DAROOBANK_DEBUG` is not `1`. This is not a production-ready staff system: MFA, login throttling, hardened credentials, tamper-resistant audit, final approvals, retention policy, production deployment and security validation remain missing. Debug mode can expose diagnostic data and the developer preview can be publicly reachable: never use it with real credentials, sensitive data or real patient information. No source licence has been granted by this implementation.
+The staff portal is deliberately disabled when `DAROOBANK_DEBUG` is not `1`. This is not a production-ready staff system: MFA, production-grade login abuse protection (the opt-in development limiter described below is not one), hardened credentials, tamper-resistant audit, final approvals, retention policy, production deployment and security validation remain missing. Debug mode can expose diagnostic data and the developer preview can be publicly reachable: never use it with real credentials, sensitive data or real patient information. No source licence has been granted by this implementation.
+
+## Development-only staff login throttle and window cleanup
+
+`DAROOBANK_STAFF_LOGIN_THROTTLE=1` together with `DAROOBANK_DEBUG=1` enables an opt-in limiter on the staff login form: at most ten attempts per client key in a rolling sixty-second window, recorded in the `staff_security_staffloginwindow` table. It is a synthetic development control, is a no-op inside a test transaction, and is **not** a production abuse control — no proxy identity, alerting or independently reviewed policy sits behind it. See [ADR 0181](ARCHITECTURE_DECISIONS/0181-development-staff-login-throttle.md), [Security](SECURITY.md) and [ADR 0219](ARCHITECTURE_DECISIONS/0219-documented-command-surface.md), which holds this document to the command registry.
+
+Enabled or not, window rows older than twenty-four hours are worth removing so the table does not grow without bound:
+
+```sh
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py cleanup_staff_login_windows            # read-only: how many rows are eligible
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py cleanup_staff_login_windows --apply    # delete one bounded batch
+```
+
+Both forms print one JSON object and nothing else. The command refuses to run outside a debug environment, requires PostgreSQL in autocommit (it will not run inside an open transaction), sets a one-second lock timeout and a two-second statement timeout locally, and touches at most 500 rows per run, oldest first, rechecking a row's age after any lock wait so a freshly reset window is never deleted. Without `--apply` it reports `{"eligible": n, "more": bool, "mode": "dry_run"}`; with `--apply` it reports `{"deleted": n, "mode": "delete"}`. Repeat the run to clear more than one batch.
 
 ## Development-only staging and preliminary review
 

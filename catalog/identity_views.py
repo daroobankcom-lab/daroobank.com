@@ -1,4 +1,5 @@
 """Development-only identity workspace; never publish or establish equivalence."""
+from django.contrib.auth import HASH_SESSION_KEY
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponseBadRequest
@@ -86,11 +87,16 @@ def create(request, kind):
         if valid and parts_valid:
             data = {key: form.cleaned_data[key] for key in fields}
             try:
-                if kind == 'ingredient': obj = create_ingredient(actor=request.user, data=data)
+                session_hash = request.session.get(HASH_SESSION_KEY)
+                if kind == 'ingredient': obj = create_ingredient(actor=request.user, data=data,
+                    session_auth_hash=session_hash)
                 elif kind == 'formulation': obj = create_formulation(actor=request.user, data=data,
-                    components=[part.cleaned_data for part in parts if part.cleaned_data])
-                elif kind == 'product': obj = create_product(actor=request.user, data=data, formulation_id=form.cleaned_data['formulation_id'])
-                else: obj = create_package(actor=request.user, data=data, product_id=form.cleaned_data['product_id'])
+                    components=[part.cleaned_data for part in parts if part.cleaned_data],
+                    session_auth_hash=session_hash)
+                elif kind == 'product': obj = create_product(actor=request.user, data=data,
+                    formulation_id=form.cleaned_data['formulation_id'], session_auth_hash=session_hash)
+                else: obj = create_package(actor=request.user, data=data, product_id=form.cleaned_data['product_id'],
+                    session_auth_hash=session_hash)
                 return redirect('staff_identity_detail', kind=kind, pk=obj.pk)
             except IdentityError as exc:
                 form.add_error(None, str(exc))
@@ -227,7 +233,8 @@ def revise_component(request, kind, pk):
                 child = revise_identity(actor=request.user, kind=kind, parent_id=parent.pk,
                     data={field: form.cleaned_data[field] for field in fields},
                     components=[part.cleaned_data for part in parts if part.cleaned_data] if parts is not None else None,
-                    change_reason=form.cleaned_data['change_reason'], expected_graph_hash=form.cleaned_data['expected_graph_hash'])
+                    change_reason=form.cleaned_data['change_reason'], expected_graph_hash=form.cleaned_data['expected_graph_hash'],
+                    session_auth_hash=request.session.get(HASH_SESSION_KEY))
                 return redirect('staff_identity_detail', kind=kind, pk=child.pk)
             except IdentityError as exc:
                 form.add_error(None, str(exc))
@@ -264,7 +271,8 @@ def revise(request, pk):
             child = revise_package(actor=request.user, parent_id=parent.pk,
                 data={key: form.cleaned_data[key] for key in PACKAGE_FIELDS},
                 change_reason=form.cleaned_data['change_reason'], expected_graph_hash=form.cleaned_data['expected_graph_hash'],
-                expected_review=form.cleaned_data['expected_review'])
+                expected_review=form.cleaned_data['expected_review'],
+                session_auth_hash=request.session.get(HASH_SESSION_KEY))
             return redirect('staff_identity_detail', kind='package', pk=child.pk)
         except IdentityError as exc:
             form.add_error(None, str(exc))
@@ -283,7 +291,8 @@ def review(request, pk):
     form = IdentityReviewForm(request.POST)
     if not form.is_valid(): return _detail(request, 'package', package, review_form=form, status=400)
     try:
-        review_package(actor=request.user, package_id=pk, **form.cleaned_data)
+        review_package(actor=request.user, package_id=pk, session_auth_hash=request.session.get(HASH_SESSION_KEY),
+                       **form.cleaned_data)
     except IdentityConflict as exc:
         form.add_error(None, str(exc))
         try:

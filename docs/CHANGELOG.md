@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — extend the actor recheck to the identity workspace writes
+
+**Changes:** All seven identity write services (`create_ingredient`, `create_formulation`, `create_product`, `create_package`, `revise_package`, `revise_identity`, `review_package`) accept an optional `session_auth_hash` and call the shared `recheck_actor` with their own permission pair before any row is written — inside the guarded transaction and before the first row lock, or before the single create call for the transaction-less ingredient path. The four identity staff write views pass the request session's password hash. `catalog/test_identity_actor_recheck.py` and `daroobank/test_staff_inflight_identity_writes.py` cover matching/omitted/stale hashes, password rotation, disabled/destaffed/deleted writers, permissions removed through a second instance, parked races and the CSRF negative control. See ADR 0198.
+
+**Limits:** The rechecks are unlocked point-in-time reads, so a parked package revision still commits after disable, password invalidation and reactivation, and a flag-only disable/reactivate still permits parked HTTP writes. Sixteen services across fourteen staff routes are covered; inspection, lineage and read services, the projection repair command, permission serialization and durable session revocation remain open. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — extend the actor recheck to the clinical write paths
 
 **Changes:** `clinical.services.create_draft` and `clinical.evidence.add_reference` accept an optional `session_auth_hash` and call the shared `recheck_actor` as the first statement inside their writer transactions, before the draft lock, so no row is written against a stale actor. The clinical create, revise and reference-create views pass the request session's password hash. `clinical/test_write_actor_recheck.py` and `daroobank/test_staff_inflight_clinical_writes.py` cover matching/omitted/stale hashes, password rotation, disabled/destaffed/deleted writers, a permission removed through a second instance, parked races and the CSRF negative control. See ADR 0197.

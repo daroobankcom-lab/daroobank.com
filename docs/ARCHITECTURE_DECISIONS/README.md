@@ -394,4 +394,6 @@
 
 - [0197: clinical write actor recheck](0197-clinical-write-actor-recheck.md) — draft create/revise and reference create rechecked before their locks.
 
+- [0198: identity write actor recheck](0198-identity-write-actor-recheck.md) — the seven identity workspace writes rechecked before their row locks.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

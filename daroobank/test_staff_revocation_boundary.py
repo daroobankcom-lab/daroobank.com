@@ -58,6 +58,13 @@ class StaffRevocationBoundaryTests(TestCase):
         before = [model.objects.count() for model in models]
         routes = (('staff_identity_create', {'kind': 'ingredient'}), ('staff_product_upload', {}),
                   ('staff_price_upload', {}), ('staff_clinical_create', {}), ('staff_source_create', {}))
+        # Negative control: confirm CSRF enforcement is actually in this stack.
+        from django.http import HttpResponseForbidden
+        with patch('django.middleware.csrf.CsrfViewMiddleware._reject', autospec=True,
+                   return_value=HttpResponseForbidden('synthetic csrf rejection')) as reject:
+            response = client.post(reverse('staff_product_upload'), {}, HTTP_X_CSRFTOKEN='bad')
+            self.assertEqual(response.status_code, 403)
+            reject.assert_called_once()
         for name, kwargs in routes:
             with self.subTest(name=name), patch('django.middleware.csrf.CsrfViewMiddleware._reject',
                                                 side_effect=AssertionError('CSRF was not accepted')):

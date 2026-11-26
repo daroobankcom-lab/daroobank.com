@@ -127,7 +127,7 @@ All of it from the suite, on synthetic accounts and a throwaway database.
   `daroobank/test_environment_documentation.py` pins, the 12 names Compose sets, the deployment
   guide's configuration reference and possibly one readiness check per key — and its first
   deployment performs every invalidation measured above, once per purpose.
-- An external manager needs a network path this repository does not have. Option F adds a dependency
+- An external manager needs a network path the application does not have. Option F adds a dependency
   to a lock CI installs with `--require-hashes` and audits with `pip-audit --strict` (7 names, 78
   hashes today), plus a custody model and a startup failure mode nobody has specified.
 

@@ -2,7 +2,7 @@
 
 ## Current local implementation
 
-Requires Python 3.11+ and PostgreSQL. Copy `.env.example` to `.env` and replace the placeholders with unique local values. Never commit credentials: `.env` and `.env.*` files are ignored by Git except `.env.example`, and ignore rules do not remove already tracked files. Compose loads `.env` automatically:
+Requires Python 3.11+ and PostgreSQL. Copy `.env.example` to `.env` and replace the placeholders with unique local values. The template holds every variable the application reads; [the deployment guide](DEPLOYMENT.md#configuration-reference) lists each one with its production expectation and what enforces it ([ADR 0222](ARCHITECTURE_DECISIONS/0222-documented-environment.md)). Never commit credentials: `.env` and `.env.*` files are ignored by Git except `.env.example`, and ignore rules do not remove already tracked files. Compose loads `.env` automatically:
 
 ```sh
 docker compose up --build

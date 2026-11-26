@@ -18,6 +18,28 @@ For a separately reviewed non-debug TLS proxy only, `DAROOBANK_TRUST_PROXY_SSL_H
 
 `DAROOBANK_HEALTH_PROBES_ENABLED=1` opts in to unauthenticated `/health/live/` and `/health/ready/` GET/HEAD paths; the default is off. Liveness only checks that the process can return a response, while readiness performs a narrow default PostgreSQL `SELECT 1`, not a complete service or migration check. A failure returns 503 without database details. Network/proxy restrictions, polling limits, host and HTTPS configuration, response deadlines, monitoring and incident ownership remain external responsibilities. A PostgreSQL statement timeout is not a hard request deadline. See [ADR 0180](ARCHITECTURE_DECISIONS/0180-opt-in-process-database-probes.md); enabling these paths is not production authorization. For the wider settings and migration shape, `manage.py check_deployment_readiness` reports ten required checks and the conditions that still need a decision in one JSON document; it is not monitoring, serves no request and does not replace these probes ([ADR 0217](ARCHITECTURE_DECISIONS/0217-deployment-readiness-report.md)).
 
+## Configuration reference
+
+Every environment variable the application reads, where it is enforced, and what a non-debug deployment is expected to set. `.env.example` is a development template and `compose.yaml` is a development stack; neither is a production configuration. `daroobank/test_environment_documentation.py` holds this table to the code, so a new variable is a documented event ([ADR 0222](ARCHITECTURE_DECISIONS/0222-documented-environment.md)).
+
+| Variable | Required | Expected in a non-debug deployment | Enforced by |
+|---|---|---|---|
+| `DAROOBANK_DEBUG` | no; off unless it is exactly `1` | must stay unset or `0`. `1` enables diagnostic pages, relaxes the host and secret guards, disables HSTS and exposes the staff portal, so a production process must never set it | `settings.py`; the readiness check `debug_disabled` ([ADR 0217](ARCHITECTURE_DECISIONS/0217-deployment-readiness-report.md)) |
+| `DAROOBANK_SECRET_KEY` | yes outside debug | a unique randomly generated value from an approved secret manager, never in Git or shell history. In debug an empty value falls back to a fixed development string | `require_nondebug_secret`, [ADR 0183](ARCHITECTURE_DECISIONS/0183-nondebug-config-guards.md) |
+| `DAROOBANK_ALLOWED_HOSTS` | yes outside debug | an explicit comma-separated list of authorized ASCII hostnames or bracketed IPv6 addresses, without ports or URLs; `*` is refused | `require_nondebug_hosts`, [ADR 0183](ARCHITECTURE_DECISIONS/0183-nondebug-config-guards.md) |
+| `DAROOBANK_HSTS_SECONDS` | no; ignored in debug | a positive integer of seconds, `0` through `31536000`, only after TLS, proxy and rollback review; browsers cache the policy | `parse_hsts_seconds`, [ADR 0185](ARCHITECTURE_DECISIONS/0185-opt-in-hsts.md) |
+| `DAROOBANK_TRUST_PROXY_SSL_HEADER` | no; ignored in debug | `1` only behind a separately reviewed TLS proxy that overwrites incoming forwarding headers | [ADR 0184](ARCHITECTURE_DECISIONS/0184-trusted-proxy-scheme.md) |
+| `DAROOBANK_TRUSTED_PROXY_CIDRS` | yes when the flag above is `1` | an explicit list of immediate-peer networks; the flag is refused without it | `require_trusted_proxy_networks`, [ADR 0184](ARCHITECTURE_DECISIONS/0184-trusted-proxy-scheme.md) |
+| `DAROOBANK_HEALTH_PROBES_ENABLED` | no; off unless `1` | `1` only where `/health/live/` and `/health/ready/` are network-restricted, since they are unauthenticated | [ADR 0180](ARCHITECTURE_DECISIONS/0180-opt-in-process-database-probes.md) |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_HOST` | yes | explicit values; the process refuses to start without each of them, and no default is invented | `required_database_setting` in `settings.py` |
+| `POSTGRES_PASSWORD` | yes for password authentication | from a secret manager; an empty value is accepted only where the server authenticates another way, which is not a reviewed production setup | `settings.py` |
+| `POSTGRES_PORT` | no; `5432` | an integer port | `settings.py` |
+| `POSTGRES_SSLMODE` | no; the driver default | `verify-full` for any connection that leaves the host, so the server certificate is checked and the link is encrypted in transit; unset means the driver decides | `settings.py` `OPTIONS` |
+| `POSTGRES_CONN_MAX_AGE` | no; `0` | integer seconds. Persistent connections need pooling, failover and idle-timeout review before they are used in production | `settings.py` |
+| `DAROOBANK_STAFF_LOGIN_THROTTLE` | development only | ignored unless debug is on, and not a production abuse control; window rows need maintenance ([development guide](DEVELOPMENT_GUIDE.md#development-only-staff-login-throttle-and-window-cleanup), [ADR 0181](ARCHITECTURE_DECISIONS/0181-development-staff-login-throttle.md)) | `settings.py` |
+
+`DJANGO_SETTINGS_MODULE` is the one variable the project only ever defaults, in `manage.py`, `daroobank/wsgi.py` and `tools/wait_for_database.py`; a deployment sets it explicitly to `daroobank.settings`.
+
 ## Proposed deployment topology
 
 TLS-terminating reverse proxy → independent Django web processes → PostgreSQL; separate scheduler and bounded worker processes → Redis queue and permitted source endpoints. Use private networks and least-privilege credentials; optionally private object storage for authorized payloads/images. Isolate worker resource quotas and egress so a crawl failure does not take down the web service. Choose provider/region only after review of Iranian connectivity, resilience, sanctions/vendor constraints, data residency and qualified local legal advice.

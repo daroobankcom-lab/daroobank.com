@@ -2,6 +2,56 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — document every environment variable where it is set, and pin the inventory
+
+**Changes:** the fail-closed behavior of each configuration variable was already measured
+(`test_nondebug_configuration.py`, `test_hsts_configuration.py`, `test_database_configuration.py`,
+ADR 0217), but nothing measured the documentation, and it had drifted where it matters most.
+`.env.example` named all fifteen variables the application reads and the development guide named
+the eleven a local operator sets, while `docs/DEPLOYMENT.md` — the document an operator follows
+for a non-debug deployment — named six. It never mentioned `DAROOBANK_DEBUG`, the switch that
+decides whether diagnostic pages are served, whether the host and secret guards apply, whether
+HSTS is sent and whether the staff portal exists, and it never mentioned a single `POSTGRES_*`
+variable, so whether the database connection is verified (`POSTGRES_SSLMODE`) and whether
+connections persist (`POSTGRES_CONN_MAX_AGE`) were documented only in files that say they are not
+production configuration.
+
+`docs/DEPLOYMENT.md` gains a configuration reference: all fifteen variables with whether each is
+required, what a non-debug deployment is expected to set, and what enforces it
+(`require_nondebug_secret`, `require_nondebug_hosts`, `parse_hsts_seconds`,
+`require_trusted_proxy_networks`, `required_database_setting`, or the decision record behind it),
+plus the note that `DJANGO_SETTINGS_MODULE` is the one variable the project only ever defaults.
+The development guide now links to it from the line that tells a reader to copy the template.
+
+`daroobank/test_environment_documentation.py` (8 tests, ~0.7 s, no database) reads the inventory
+from the code instead of a list anybody keeps: an AST scan of every project module collects each
+environment name used as a literal in `os.environ.get(...)`, `os.environ[...]`,
+`os.environ.setdefault(...)` or `required_database_setting(...)` and sorts it into four audiences
+— fifteen application reads (all in `settings.py`, twelve directly and three through the required
+database helper), four opt-in test switches each read by exactly one test module and each
+documented in the development guide, the testing strategy or the CI workflow, one default
+(`DJANGO_SETTINGS_MODULE`, in four modules) and one foreign variable the project reads
+(`GITHUB_ACTIONS`). It then holds each document to that inventory: `.env.example` names exactly
+the fifteen in both directions; `compose.yaml` sets exactly eleven variables, all of them read by
+the code, with the fail-fast `${VAR:?…}` form for the four that are required — once for the secret
+key and twice for each database credential, since both services need those; the deployment guide
+names all fourteen variables that are not development-only, says in the debug row's expectation
+cell that it stays unset or `0` and names `verify-full` in the TLS row; the development guide
+names the eleven a local operator sets and the two audiences together cover the inventory; and no
+`DAROOBANK_*` or `POSTGRES_*` name in the README, the operator documents, the testing strategy,
+the template, the Compose file or the CI workflow is a variable the code does not read.
+
+Six red checks were applied alone and reverted: deleting the `POSTGRES_SSLMODE` line from the
+template, appending a `DAROOBANK_RATE_LIMIT` sentence to the README, adding that read to
+`settings.py`, replacing both Compose occurrences of the required database password with a
+default, rewriting the debug row's expectation cell, and removing `verify-full` from the TLS row.
+Three earlier attempts at these red checks were themselves faulty — a prefix filter that missed a
+commented assignment, replacing only the first of two Compose occurrences, and removing one
+off-marker from a row that still said "off" in another column — which is why occurrences are now
+checked individually and the content checks read one table cell rather than a whole line. This
+checks names, not meaning: it cannot tell whether a documented default, range or warning is
+correct. See [ADR 0222](ARCHITECTURE_DECISIONS/0222-documented-environment.md).
+
 ## 2026-11-26 — record and pin that nothing logs a read
 
 **Changes:** ADR 0220 measured who a row names; the other half of an audit question had no

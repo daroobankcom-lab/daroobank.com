@@ -442,4 +442,6 @@
 
 - [0221: nothing records that a read happened](0221-no-read-audit.md) — `LOGGING` is empty, no module imports `logging`, no middleware records a request, no table can hold an access record, and sweeping all 55 routes creates no row; the absence is pinned, not fixed.
 
+- [0222: the environment is documented in one place per audience](0222-documented-environment.md) — fifteen variables, four opt-in test switches and one default, pinned from an AST inventory and held to the template, the Compose stack, the development guide and a new deployment configuration reference.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

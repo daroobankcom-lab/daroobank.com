@@ -23,6 +23,7 @@ shapes, and pins what the surface accepts:
 It records current behavior on a development-only portal with synthetic data. It is
 not a method-level security review.
 """
+import time
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import Client, TestCase, TransactionTestCase, override_settings
@@ -227,6 +228,22 @@ class StaffMethodSweepTests(TestCase):
                     self.assertEqual(len(set(denied)), 1)
                     self.assertEqual(denied[0], permitted,
                                      'The method answer differs by account.')
+
+    def test_the_comparison_ignores_the_per_second_expires_stamp(self):
+        # `never_cache` wraps the two class-based auth endpoints, so their answers
+        # carry an `Expires` header with second granularity. Two identical requests
+        # a second apart must still compare equal, otherwise every parity assertion
+        # that includes logout depends on the clock (ADR 0212).
+        for name in AUTH_ROUTES:
+            url = reverse(name)
+            first = self.request(self.full, url, 'OPTIONS')
+            self.assertIn('Expires', first.headers, f'{name} no longer stamps Expires; this guard is vacuous')
+            expected = comparable(first)
+            time.sleep(1.1)
+            second = self.request(self.full, url, 'OPTIONS')
+            with self.subTest(route=name):
+                self.assertNotEqual(first.headers['Expires'], second.headers['Expires'])
+                self.assertEqual(expected, comparable(second))
 
     def test_sweeping_every_method_writes_nothing(self):
         before = self.counts()

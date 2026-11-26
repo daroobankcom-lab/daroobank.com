@@ -38,3 +38,13 @@ A red check confirmed detection: widening `catalog/quality_views.py::quality_irc
 ## Selected evidence
 
 `daroobank/test_staff_method_sweep.py` (9 tests, roughly 20 seconds) passes on synthetic PostgreSQL in normal and optimized mode.
+
+## Correction (2026-11-26)
+
+`test_the_method_gate_runs_before_authorization` was timing-dependent: it compares
+`staff_logout` answers with `comparable()`, and `LogoutView` is wrapped in
+`never_cache`, which stamps `Expires` per second. Two identical requests straddling a
+second boundary compared unequal, which failed CI run `45832496897` while passing
+locally. `Expires` is now excluded from the shared comparison and a deterministic
+guard test was added to this suite. See
+[ADR 0212](0212-expires-parity-exclusion.md). The suite is 10 tests, roughly 22 s.

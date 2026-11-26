@@ -8,7 +8,7 @@ ADR 0201 established that an unauthorized account gets 403 for all 23 staff obje
 
 ## Decision
 
-Add `daroobank/test_staff_denial_parity.py`. It shares the row fixtures with ADR 0201 — `build_object_rows` was extracted from that suite so both compare the same real rows — and for every object route and every unauthorized account shape asserts that the response for an existing row and the response for a missing primary key are identical in **status, body bytes and all headers except `Date` and `Set-Cookie`**, which legitimately differ between two requests for reasons unrelated to authorization.
+Add `daroobank/test_staff_denial_parity.py`. It shares the row fixtures with ADR 0201 — `build_object_rows` was extracted from that suite so both compare the same real rows — and for every object route and every unauthorized account shape asserts that the response for an existing row and the response for a missing primary key are identical in **status, body bytes and all headers except `Date` and `Set-Cookie`** — and, since [ADR 0212](0212-expires-parity-exclusion.md), `Expires`, which the two class-based auth endpoints stamp with second granularity — which legitimately differ between two requests for reasons unrelated to authorization.
 
 Two further comparisons:
 

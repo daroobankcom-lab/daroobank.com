@@ -27,7 +27,11 @@ from .test_staff_authorization_objects import COUNTED_MODELS, OBJECT_ROUTES, bui
 MISSING_PK = 999_999_999
 # Headers that legitimately differ between two requests for reasons unrelated to
 # authorization: the session cookie is rotated per login and the date moves.
-VOLATILE_HEADERS = frozenset({'date', 'set-cookie'})
+# `Date` and `Set-Cookie` differ per response. `Expires` differs per *second* on the
+# two class-based auth endpoints, whose views are wrapped in `never_cache`; the 41
+# function-view routes never emit it. Comparing it made every parity assertion that
+# included logout timing-dependent, which failed in CI and passed locally (ADR 0212).
+VOLATILE_HEADERS = frozenset({'date', 'set-cookie', 'expires'})
 
 
 def missing_kwargs(name, existing):

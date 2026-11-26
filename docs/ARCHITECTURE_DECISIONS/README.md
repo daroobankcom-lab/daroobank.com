@@ -422,4 +422,6 @@
 
 - [0211: staff redirect targets](0211-staff-redirect-targets.md) — a caller-supplied `next` cannot aim login, logout or an anonymous redirect off-host.
 
+- [0212: `Expires` parity exclusion](0212-expires-parity-exclusion.md) — the per-second `never_cache` stamp on the two auth endpoints, excluded from byte-parity comparisons.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

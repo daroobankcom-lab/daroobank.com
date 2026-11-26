@@ -412,4 +412,6 @@
 
 - [0206: query-parameter parity](0206-staff-query-parameter-parity.md) — nine caller-controlled query shapes across all 41 staff routes.
 
+- [0207: the staff CSRF gate](0207-staff-csrf-gate-parity.md) — one canonical rejection across all 43 routes, and the method classification read from the decorators.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

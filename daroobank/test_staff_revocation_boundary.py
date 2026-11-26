@@ -1,7 +1,9 @@
 """Selected staff authorization checks after a staff flag is revoked."""
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import AllowAllUsersModelBackend
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import get_resolver, reverse
 
 
@@ -38,6 +40,31 @@ class StaffRevocationBoundaryTests(TestCase):
                     self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
                     checked += 1
         self.assertGreater(checked, 90)
+
+    def test_revoked_staff_posts_with_valid_csrf_do_not_write_selected_models(self):
+        from catalog.models import IngredientDraft, ProductCandidate
+        from clinical.models import ClinicalDraft
+        from pricing.models import PriceCandidate
+        from sources.models import SourceClaim
+
+        user = get_user_model().objects.create_user('synthetic-revoked-csrf', password='synthetic-only',
+                                                    is_staff=True, is_superuser=True)
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(user)
+        self.assertEqual(client.get(reverse('staff_login')).status_code, 200)
+        csrf = client.cookies['csrftoken'].value
+        get_user_model().objects.filter(pk=user.pk).update(is_staff=False)
+        models = (IngredientDraft, ProductCandidate, ClinicalDraft, PriceCandidate, SourceClaim)
+        before = [model.objects.count() for model in models]
+        routes = (('staff_identity_create', {'kind': 'ingredient'}), ('staff_product_upload', {}),
+                  ('staff_price_upload', {}), ('staff_clinical_create', {}), ('staff_source_create', {}))
+        for name, kwargs in routes:
+            with self.subTest(name=name), patch('django.middleware.csrf.CsrfViewMiddleware._reject',
+                                                side_effect=AssertionError('CSRF was not accepted')):
+                response = client.post(reverse(name, kwargs=kwargs), {}, HTTP_X_CSRFTOKEN=csrf)
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(response['Cache-Control'], 'private, no-store, max-age=0')
+        self.assertEqual([model.objects.count() for model in models], before)
 
     def test_reactivation_can_revive_an_existing_unexpired_session(self):
         # This demonstrates an unresolved default-backend limitation rather

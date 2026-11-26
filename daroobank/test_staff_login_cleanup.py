@@ -57,6 +57,26 @@ class StaffLoginCleanupTests(TransactionTestCase):
                 self.assertEqual(cursor.fetchone()[0], '9s')
             self.assertTrue(StaffLoginWindow.objects.filter(pk=key).exists())
 
+    def test_success_restores_session_timeouts_and_commits_one_batch(self):
+        key = 'd' * 64
+        StaffLoginWindow.objects.create(client_key=key, started_at=timezone.now() - timedelta(days=2), attempts=1)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SET lock_timeout = '7s'")
+                cursor.execute("SET statement_timeout = '8s'")
+            self.assertEqual(self.command('--apply')['deleted'], 1)
+            with connection.cursor() as cursor:
+                cursor.execute('SHOW lock_timeout')
+                self.assertEqual(cursor.fetchone()[0], '7s')
+                cursor.execute('SHOW statement_timeout')
+                self.assertEqual(cursor.fetchone()[0], '8s')
+            self.assertFalse(StaffLoginWindow.objects.filter(pk=key).exists())
+            self.assertTrue(connection.get_autocommit())
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute('RESET lock_timeout')
+                cursor.execute('RESET statement_timeout')
+
     def test_non_autocommit_is_refused_without_resetting_caller_state(self):
         connection.set_autocommit(False)
         try:

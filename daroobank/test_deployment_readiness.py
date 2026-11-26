@@ -14,6 +14,7 @@ writes of any kind.
 import io
 import json
 from contextlib import contextmanager
+from pathlib import Path
 from uuid import uuid4
 
 from django.core.management import call_command
@@ -213,6 +214,14 @@ class DeploymentReadinessTests(TransactionTestCase):
             self.assertIn(phrase, SCOPE, 'the scope line dropped a statement of its own limits')
         self.assertIn('not a certification', Command.help)
         self.assertIn('zero exit status is not a deployment', check_deployment_readiness.__doc__)
+
+    def test_the_command_is_named_where_an_operator_would_look(self):
+        root = Path(__file__).resolve().parent.parent
+        for relative in ('docs/DEPLOYMENT.md', 'docs/OPERATIONS_RUNBOOK.md'):
+            with self.subTest(document=relative):
+                text = (root / relative).read_text(encoding='utf-8')
+                self.assertIn('check_deployment_readiness', text)
+                self.assertIn('0217-deployment-readiness-report.md', text)
 
     def test_the_command_writes_nothing(self):
         before = {model: model.objects.count() for model in COUNTED_MODELS}

@@ -28,7 +28,13 @@ runs byte-identical, the secret value and its first 24 characters absent from th
 and no writes to the 14 counted domain models, the migration table or the database list.
 `daroobank` was added to `INSTALLED_APPS` so a command belonging to the project rather than
 to one domain app is discoverable; it declares no models, so the schema inventory ADR 0216
-pins is unchanged and 96 tests across the schema-sensitive suites still pass.
+pins is unchanged and 96 tests across the schema-sensitive suites still pass. The command is
+named in `docs/DEPLOYMENT.md` and in `docs/OPERATIONS_RUNBOOK.md`, which also gained a
+deployment-readiness section and, under the security/privacy incident steps, the staff-session
+containment procedure that uses `list_staff_sessions` and `revoke_staff_sessions`;
+`docs/AUTHORIZATION_REVIEW.md` was added to the README document index, and one test now fails
+if either the runbook and deployment guide stop naming the readiness command or the README
+stops linking the review.
 
 **Limits:** a zero exit status is **not** a deployment authorization. The report describes
 the shape of one process's settings and one database connection; it serves no request and

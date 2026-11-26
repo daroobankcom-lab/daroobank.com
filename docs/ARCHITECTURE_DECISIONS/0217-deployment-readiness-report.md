@@ -67,6 +67,7 @@ still pass.
 | Two runs of an unchanged configuration | byte-identical JSON; keys are exactly `failed`, `ready`, `required`, `review`, `scope`, and the required ids appear in declaration order |
 | Secret handling | neither the secret value nor its first 24 characters appears anywhere in the output |
 | Writes | none: the 14 counted domain models and the `django_migrations` row count are unchanged, and no throwaway probe database is left behind |
+| Discoverability | the command is named in `docs/DEPLOYMENT.md` (probes section and release gates) and in `docs/OPERATIONS_RUNBOOK.md`, which also gained a deployment-readiness section and, in the security/privacy incident section, the containment steps that use `list_staff_sessions` and `revoke_staff_sessions`. One test fails if either document stops naming the command and its ADR |
 
 ## Red checks
 

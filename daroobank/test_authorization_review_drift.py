@@ -206,6 +206,11 @@ class AuthorizationReviewDriftTests(SimpleTestCase):
                 self.assertEqual((row[1], row[2], row[3]), ('', '', ''),
                                  'owners and dates must not be invented here; the project assigns them')
 
+    def test_the_review_is_linked_from_the_readme_index(self):
+        readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+        self.assertIn('docs/AUTHORIZATION_REVIEW.md', readme,
+                      'the review is not discoverable from the repository README')
+
     def test_the_review_is_linked_from_the_evidence_checklist(self):
         evidence = (ROOT / 'docs' / 'PHASE1_RELEASE_EVIDENCE.md').read_text(encoding='utf-8')
         self.assertIn('AUTHORIZATION_REVIEW.md', evidence,

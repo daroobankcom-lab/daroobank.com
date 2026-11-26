@@ -2,6 +2,42 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — measure migration rollback and reapply on throwaway databases
+
+**Changes:** `daroobank/test_migration_reversibility.py` adds 7 tests (~5.7 s) covering the
+direction the Phase 1 data-model gate names but nothing had measured. Each test creates its
+own throwaway PostgreSQL database (`daroobank_migration_probe_<12 hex>`), migrates it,
+rolls back and reapplies, and drops it in a `finally`; one test asserts no probe database is
+left behind. The probe connection is registered dynamically instead of being added to
+`DATABASES`, because a test case may only reach the aliases it declares and Django allows
+runtime connections — declaring the alias instead makes every migration call fail with
+`DatabaseOperationForbidden`. The existing model-derived inspection is reused by patching
+`postgresql_inspection.connection`, so a freshly migrated probe database must report
+`no_selected_issues` and a rolled-back one `attention`. Measured: 16 migrations over six
+apps, each app one linear chain from its `0001_initial`; exactly two data operations, both
+`RunPython`, both reversing to `migrations.RunPython.noop`; a fresh database holding 32
+tables (23 project tables), 276 columns, 108 indexes, 136 constraints, 50 foreign keys and
+31 applied migrations; `migrate catalog zero` unapplying exactly the 11 migrations derived
+from the graph as its dependents (catalog's 8, pricing's 2, ingestion's 1) and leaving 16
+tables, 17 foreign keys and no foreign key without its target table; a full rollback of all
+six apps leaving only Django's own tables; and the reapply reproducing an identical column,
+index and constraint inventory. `makemigrations --check --dry-run` now also runs inside the
+suite, mirroring the CI step. The cascade expectation is derived from
+`MigrationGraph.backwards_plan` over every catalog migration — nothing depends on catalog's
+leaf, so the leaf alone yields an empty plan.
+
+**Limits:** every database in this suite is empty, so nothing here shows a rollback with
+data in it; Django drops tables and columns without preserving their contents, and a real
+rollback plan still needs a backup and restore step, an environment, an order and an owner.
+The two no-op reverses mean a rollback of catalog 0002 or 0004 leaves the backfilled rows
+behind. PostgreSQL only, one server, one role that may create databases, no staging
+environment. No timing, locking or concurrency is measured, and rollback of Django's own
+apps is not. The comparison covers columns, indexes and constraints in the `public` schema.
+Three red checks: a model field with no migration fails three tests, removing a no-op
+reverse fails one and errors two with
+`django.db.migrations.exceptions.IrreversibleError`, and adding an empty migration fails
+four.
+
 ## 2026-11-26 — collect the endpoint-by-endpoint authorization inventory, generated from the resolver
 
 **Changes:** the Phase 1 checklist has carried an open gate reading "complete

@@ -430,4 +430,6 @@
 
 - [0215: the generated authorization review](0215-generated-authorization-review.md) — the endpoint inventory the Phase 1 review asks for, derived from the resolver and drift-checked; its judgement stays unsigned.
 
+- [0216: migration reversibility](0216-migration-reversibility.md) — rollback and reapply measured on throwaway PostgreSQL databases, with the dependent-app cascade derived from the migration graph.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

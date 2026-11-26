@@ -434,4 +434,6 @@
 
 - [0217: the deployment readiness report](0217-deployment-readiness-report.md) — ten required settings and database checks plus the undecided conditions, in one read-only JSON report; a zero exit status is not an authorization.
 
+- [0218: no `django.contrib.admin`](0218-no-django-admin.md) — the staff portal is the only administrative surface, and the absence is pinned by seven tests.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

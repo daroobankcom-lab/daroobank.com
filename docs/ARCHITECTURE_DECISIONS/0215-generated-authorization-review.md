@@ -113,6 +113,9 @@ Both were reverted from backups; `git diff --stat` was clean afterwards.
   suite still sends requests to every route it claims.
 - The tables describe the URL surface only. Management commands, middleware behavior,
   signals and background jobs are not endpoints and are not listed.
+- The inventory read route names from the top level of the resolver, which raises on a
+  mounted `include()`; [ADR 0218](0218-no-django-admin.md) made it walk nested resolvers
+  and report an unprobed non-staff route as uncovered instead of raising.
 - The document is a rendering of a DEBUG-only portal: `STAFF_PORTAL_ENABLED = DEBUG`, and
   every `/staff/…` request is answered 404 when the flag is off. Describing these routes
   precisely is not a recommendation to expose them.

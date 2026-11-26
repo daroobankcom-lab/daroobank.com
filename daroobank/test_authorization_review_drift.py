@@ -17,7 +17,7 @@ from django.test import SimpleTestCase
 from django.urls import get_resolver
 
 from .authorization_review import (AUTH_ORDER, BEGIN, END, generated_block, public_rows, render_review,
-                                   staff_rows)
+                                   route_names, staff_rows)
 from .test_staff_method_sweep import EXPECTED_ALLOW
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -82,8 +82,9 @@ class AuthorizationReviewDriftTests(SimpleTestCase):
                          'docs/AUTHORIZATION_REVIEW.md drifted; re-run the generator in its header.')
 
     def test_the_header_counts_match_the_resolver(self):
-        staff = {pattern.name for pattern in get_resolver().url_patterns if pattern.name.startswith('staff_')}
-        public = {pattern.name for pattern in get_resolver().url_patterns if not pattern.name.startswith('staff_')}
+        names = route_names()
+        staff = {name for name in names if name.startswith('staff_')}
+        public = {name for name in names if not name.startswith('staff_')}
         block = generated_block(document())
         header = block.splitlines()[1]
         self.assertIn(f'**{len(staff)} staff routes**', header)
@@ -125,7 +126,7 @@ class AuthorizationReviewDriftTests(SimpleTestCase):
     def test_the_staff_table_covers_exactly_the_resolver(self):
         block = generated_block(document())
         rows = named_rows(block, '## Staff routes')
-        live = {pattern.name for pattern in get_resolver().url_patterns if pattern.name.startswith('staff_')}
+        live = {name for name in route_names() if name.startswith('staff_')}
         self.assertEqual(set(rows) - live, set(), 'the review lists routes the resolver does not serve')
         self.assertEqual(live - set(rows), set(), 'the resolver serves routes the review omits')
         # The same coverage, asserted on the derived rows rather than on the document.
@@ -152,7 +153,7 @@ class AuthorizationReviewDriftTests(SimpleTestCase):
     def test_the_non_staff_table_covers_exactly_the_resolver(self):
         block = generated_block(document())
         rows = named_rows(block, '## Non-staff routes')
-        live = {pattern.name for pattern in get_resolver().url_patterns if not pattern.name.startswith('staff_')}
+        live = {name for name in route_names() if not name.startswith('staff_')}
         self.assertEqual(set(rows), live)
         probes = sum(int(row[2]) for row in rows.values())
         from .test_public_route_privacy_matrix import PUBLIC_ROUTES

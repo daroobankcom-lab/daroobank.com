@@ -2,6 +2,48 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — record why `django.contrib.admin` is not installed, and pin its absence
+
+**Changes:** the roadmap asks for an "auth/admin baseline" and the technology decision
+record names Django's admin as a reason to pick Django, but the implementation never
+installed it and nothing recorded why — the shape of an omission that gets "fixed" later
+with one line in `INSTALLED_APPS`. ADR 0218 records the decision: the administrative
+surface is the hand-built staff portal, whose 43 routes are measured across ADRs 0199–0217
+and collected in the generated authorization review, and the admin would add a second
+surface with its own login and password-change routes, `is_superuser`-driven permissions, a
+`django_admin_log` table, a route per model per action, and none of that measurement — plus
+two template context processors that Django's own system checks demand and that would apply
+to every public render. `daroobank/test_no_django_admin.py` adds 7 tests (~1.1 s) pinning
+the absence: exactly eleven installed app labels with none containing `admin`; seven admin
+paths raising `Resolver404` while `/staff/login/` resolves; `GET /admin/` answering a
+byte-identical 179-byte plain 404 to an anonymous caller and to a logged-in superuser with
+no `administrator`, `Django admin`, `Log in`, `csrfmiddlewaretoken` or `username` marker;
+only `django_content_type`, `django_migrations` and `django_session` among the `django_*`
+tables, no table matching `%admin%`, 32 tables in total; no module in the seven project
+packages importing the admin, checked by parsing the AST with a positive control that the
+same scan finds `django.contrib.sessions` imports; every named route in the resolver being
+one of the 43 staff routes or one of the 12 probed public routes; and the five operational
+commands still registered with their app labels. Two supporting fixes came out of the red
+check: `daroobank/authorization_review.py` now walks nested resolvers instead of raising
+`AttributeError` on a mounted `include()`, and reports a non-staff route with no probe row
+as uncovered instead of raising `KeyError` — the generated review is byte-identical for the
+current flat URLconf. The "no third surface" assertion takes its public set from the ADR
+0202 probe matrix rather than from the walked inventory, or a newly mounted surface would
+define itself as public and the check would pass.
+
+**Limits:** this pins an absence, not the adequacy of what replaces it; the review's
+judgement is still unsigned. The app-label assertion fails on any installed-app change,
+including a legitimate one, which is deliberate but means the judgement lives in editing the
+test. The AST scan cannot see `importlib` loading, an app pulled in by a third-party
+package, or an admin mounted from an included URLconf. The 179-byte assertion pins today's
+not-found page. Not installing the admin also gives up `django_admin_log`: domain review
+rows record who staged and reviewed each candidate and ADRs 0192–0199 recheck the actor
+inside those writes, but there is no general administrative change log, and that gap belongs
+to the governance gate. One red check: installing and mounting the admin — with the messages
+app, middleware and the two context processors — fails all seven tests plus three in the
+review drift suite, and without the context processors `manage.py test` stops at `admin.E402`
+and `admin.E404` before the suite runs at all.
+
 ## 2026-11-26 — report the settings a deployment has to get right, in one read-only command
 
 **Changes:** `manage.py check_deployment_readiness` collects what `health/ready/` (one

@@ -61,9 +61,28 @@ BASE_EVIDENCE = ('0200', '0206', '0207', '0208', '0209', '0210', '0213')
 OBJECT_EVIDENCE = ('0201', '0204', '0205')
 
 
+def _walk(resolver, prefix=''):
+    """Yield (name, pattern) for every route below a resolver, including nested ones.
+
+    A mounted ``include()`` — the Django admin, or any app that ships its own URLs — puts a
+    ``URLResolver`` among the top-level patterns, and a resolver has no ``name``. Walking
+    keeps the inventory complete instead of raising, which is what a drift guard is for.
+    """
+    for entry in resolver.url_patterns:
+        if hasattr(entry, 'url_patterns'):
+            yield from _walk(entry, prefix + str(entry.pattern))
+        elif entry.name is not None:
+            yield entry.name, prefix + str(entry.pattern)
+
+
 def patterns():
-    """Map every route name to the URL pattern the resolver serves for it."""
-    return {pattern.name: str(pattern.pattern) for pattern in get_resolver().url_patterns}
+    """Map every named route to the URL pattern the resolver serves for it."""
+    return dict(_walk(get_resolver()))
+
+
+def route_names():
+    """Every named route the resolver serves, wherever it is mounted."""
+    return set(patterns())
 
 
 def group_of(name):
@@ -137,10 +156,12 @@ def public_rows():
     for name, pattern in urls.items():
         if name.startswith('staff_'):
             continue
+        # A non-staff route with no probe row is reported as uncovered rather than
+        # raising: the review's job is to show the gap, and the drift test rejects it.
         yield {
-            'name': name, 'pattern': display_pattern(pattern), 'probes': probes[name],
-            'statuses': ', '.join(str(status) for status in sorted(statuses[name])),
-            'evidence': '0202',
+            'name': name, 'pattern': display_pattern(pattern), 'probes': probes.get(name, 0),
+            'statuses': ', '.join(str(status) for status in sorted(statuses.get(name, ()))) or 'none',
+            'evidence': '0202' if name in probes else 'none',
         }
 
 

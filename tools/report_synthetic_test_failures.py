@@ -20,7 +20,9 @@ def main(path):
             if not match:
                 continue
             kind, method, test_path = match.groups()
-            name = f'{test_path}.{method}'
+            # unittest normally includes the method at the end of the dotted
+            # path; tolerate callers that provide only a class path as well.
+            name = test_path if test_path.endswith('.' + method) else f'{test_path}.{method}'
             if len(name) > 250 or (kind, name) in seen:
                 continue
             seen.add((kind, name))

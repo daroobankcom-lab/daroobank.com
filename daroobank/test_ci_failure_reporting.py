@@ -23,7 +23,7 @@ class CiFailureReportingTests(SimpleTestCase):
         canary = 'synthetic-private-subtest-canary'
         output = self.report('FAIL: test_boundary (daroobank.test_module.Case) (value=' + canary + ')\n'
                              'FAIL: test_boundary (daroobank.test_module.Case) (value=another)\n'
-                             'ERROR: test_second (catalog.tests.OtherCase)\n'
+                             'ERROR: test_second (catalog.tests.OtherCase.test_second)\n'
                              '  password=' + canary + '\n'
                              'FAIL: test_bad (::error::inject)\n')
         self.assertEqual(output.splitlines(), [

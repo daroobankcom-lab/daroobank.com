@@ -46,6 +46,33 @@ class ProjectionRepairStdinTests(TestCase):
                 self.assertEqual(result['status'], 'repaired')
                 self.assertEqual(ProductPresentation.objects.get(pk=self.product.pk).irc_normalized, '002')
 
+    def test_short_reads_do_not_truncate_token_or_hide_a_second_line(self):
+        class ShortRead(io.StringIO):
+            def read(self, size=-1):
+                return super().read(min(size, 7))
+        with patch('sys.stdin', ShortRead(self.token + '\nextra')):
+            with patch('catalog.management.commands.repair_catalog_projection.apply_projection') as apply:
+                with self.assertRaises(CommandError):
+                    self.call(commit=True, confirm_synthetic=True, token_stdin=True)
+                apply.assert_not_called()
+        with patch('sys.stdin', ShortRead(self.token + '\n')):
+            self.assertEqual(self.call(commit=True, confirm_synthetic=True, token_stdin=True)['status'], 'repaired')
+
+    def test_stream_that_never_ends_is_bounded_when_data_remains_available(self):
+        class EndlessStream:
+            def __init__(self):
+                self.reads = 0
+            def isatty(self):
+                return False
+            def read(self, size):
+                self.reads += 1
+                return 'x'
+        stream = EndlessStream()
+        with patch('sys.stdin', stream):
+            with self.assertRaises(CommandError):
+                self.call(commit=True, confirm_synthetic=True, token_stdin=True)
+        self.assertEqual(stream.reads, MAX_TOKEN_LENGTH + 3)
+
     def test_bad_modes_are_rejected_before_stdin_read_and_without_writes(self):
         cases = [dict(token_stdin=True), dict(token_stdin=True, commit=True),
                  dict(token_stdin=True, confirm_synthetic=True),

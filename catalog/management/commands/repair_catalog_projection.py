@@ -12,11 +12,21 @@ def _read_token_from_stdin():
         if sys.stdin.isatty():
             raise CommandError('Projection token input is unavailable or invalid.')
         # Allow room for CRLF and one extra character to detect oversized data.
-        token = sys.stdin.read(MAX_TOKEN_LENGTH + 3)
+        # Some streams return short reads before EOF; keep reading without ever
+        # accepting a hidden second line or buffering beyond the fixed bound.
+        remaining = MAX_TOKEN_LENGTH + 3
+        chunks = []
+        while remaining:
+            chunk = sys.stdin.read(remaining)
+            if not isinstance(chunk, str) or len(chunk) > remaining:
+                raise CommandError('Projection token input is unavailable or invalid.')
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        token = ''.join(chunks)
     except (AttributeError, OSError, UnicodeError, ValueError):
         raise CommandError('Projection token input is unavailable or invalid.') from None
-    if not isinstance(token, str):
-        raise CommandError('Projection token input is unavailable or invalid.')
     if token.endswith('\r\n'):
         token = token[:-2]
     elif token.endswith('\n'):

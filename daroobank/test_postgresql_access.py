@@ -230,7 +230,11 @@ class PostgreSQLAccessInspectionTests(TransactionTestCase):
             with self.assertRaisesMessage(CommandError, 'PostgreSQL access inspection could not be completed.') as error:
                 call_command('inspect_postgresql_access', stdout=io.StringIO())
             self.assertNotIn('synthetic-secret-canary', str(error.exception))
-            self.assertIsInstance(error.exception.__cause__, DatabaseError)
+            # The raw exception remains introspectable but is deliberately
+            # suppressed from normal and --traceback formatted output.
+            self.assertIsNone(error.exception.__cause__)
+            self.assertIsInstance(error.exception.__context__, DatabaseError)
+            self.assertTrue(error.exception.__suppress_context__)
 
     def test_command_rejects_other_backend_before_query(self):
         with patch('catalog.management.commands.inspect_postgresql_access.connection') as db, \

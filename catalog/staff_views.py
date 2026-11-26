@@ -1,4 +1,5 @@
 """Development-only staff product intake, never public publishing."""
+from django.contrib.auth import HASH_SESSION_KEY
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
@@ -74,7 +75,8 @@ def upload(request):
         try:
             if data['action'] == 'stage':
                 result, receipt = stage_product_with_receipt(data['csv_file'], data['source_name'], data['source_url'],
-                                                            actor=request.user, rights_attested=data['rights_attested'])
+                                                            actor=request.user, rights_attested=data['rights_attested'],
+                                                            session_auth_hash=request.session.get(HASH_SESSION_KEY))
                 result['receipt_id'] = receipt.pk
             else:
                 result = stage_products(data['csv_file'], data['source_name'], data['source_url'], actor=request.user)
@@ -145,7 +147,8 @@ def review(request, pk):
     if not form.is_valid():
         return detail_response(request, candidate, form=form, status=400)
     try:
-        review_product(candidate_id=pk, actor=request.user, **form.cleaned_data)
+        review_product(candidate_id=pk, actor=request.user,
+                       session_auth_hash=request.session.get(HASH_SESSION_KEY), **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
         candidate = get_candidate(pk)

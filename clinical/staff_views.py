@@ -1,4 +1,5 @@
 """Private development-only editorial triage; never publish."""
+from django.contrib.auth import HASH_SESSION_KEY
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
@@ -82,7 +83,8 @@ def create(request):
     status = 200
     if request.method == 'POST' and form.is_valid():
         try:
-            draft = create_draft(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS})
+            draft = create_draft(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS},
+                                 session_auth_hash=request.session.get(HASH_SESSION_KEY))
             return redirect('staff_clinical_detail', pk=draft.pk)
         except DraftError as exc:
             form.add_error(None, str(exc))
@@ -108,7 +110,8 @@ def revise(request, pk):
         try:
             draft = create_draft(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS},
                 parent_id=parent.pk, expected_parent_hash=form.cleaned_data['expected_parent_hash'],
-                change_reason=form.cleaned_data['change_reason'])
+                change_reason=form.cleaned_data['change_reason'],
+                session_auth_hash=request.session.get(HASH_SESSION_KEY))
             return redirect('staff_clinical_detail', pk=draft.pk)
         except DraftError as exc:
             form.add_error(None, str(exc))
@@ -240,7 +243,8 @@ def review(request, pk):
     if not form.is_valid():
         return detail_response(request, draft, form=form, status=400)
     try:
-        review_draft(actor=request.user, draft_id=pk, **form.cleaned_data)
+        review_draft(actor=request.user, draft_id=pk, session_auth_hash=request.session.get(HASH_SESSION_KEY),
+                     **form.cleaned_data)
     except DraftConflict as exc:
         form.add_error(None, str(exc))
         draft = get_draft(pk)
@@ -268,7 +272,8 @@ def reference_create(request, pk):
             add_reference(actor=request.user, draft_id=draft.pk,
                 data={key: form.cleaned_data[key] for key in ASSERTION_FIELDS},
                 expected_draft_hash=form.cleaned_data['expected_draft_hash'],
-                expected_evidence_hash=form.cleaned_data['expected_evidence_hash'])
+                expected_evidence_hash=form.cleaned_data['expected_evidence_hash'],
+                session_auth_hash=request.session.get(HASH_SESSION_KEY))
             return redirect('staff_clinical_detail', pk=draft.pk)
         except DraftError as exc:
             form.add_error(None, str(exc))

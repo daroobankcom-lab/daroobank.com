@@ -31,5 +31,5 @@ Use [PostgreSQL-native backups and isolated restore drills](docs/DEVELOPMENT_GUI
 - [System architecture](docs/SYSTEM_ARCHITECTURE.md) · [Technology decisions](docs/TECH_STACK_DECISIONS.md) · [Decision records](docs/ARCHITECTURE_DECISIONS/README.md)
 - [Database schema](docs/DATABASE_SCHEMA.md) · [ER diagram](docs/ERD.md) · [API design](docs/API_DESIGN.md)
 - [Crawler architecture](docs/CRAWLER_ARCHITECTURE.md) · [Data sources](docs/DATA_SOURCES.md) · [Price model](docs/PRICE_DATA_MODEL.md)
-- [Clinical content standards](docs/CLINICAL_CONTENT_STANDARDS.md) · [Security](docs/SECURITY.md)
+- [Clinical content standards](docs/CLINICAL_CONTENT_STANDARDS.md) · [Security](docs/SECURITY.md) · [Authorization review](docs/AUTHORIZATION_REVIEW.md)
 - [Deployment](docs/DEPLOYMENT.md) · [Development guide](docs/DEVELOPMENT_GUIDE.md) · [Testing](docs/TESTING_STRATEGY.md) · [Operations](docs/OPERATIONS_RUNBOOK.md) · [Roadmap](docs/ROADMAP.md)

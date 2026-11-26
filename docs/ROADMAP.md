@@ -13,6 +13,8 @@ The local RTL web and product-search slice has started Phase 1. Local CSV candid
 | 6 Consultation | Separate domain, verified professionals, consent, privacy/security and legal review; gradual messaging/scheduling/call rollout under flags. | Qualified Iranian counsel, professional verification and incident operations; no default recordings. |
 | 7 Expansion | Mobile, institutional scoped APIs, integrations and analytics as justified by usage. | Data rights, SLAs, privacy and measured scale. |
 
+For a phase-one evidence and outstanding-decision checklist, see [Phase 1 release evidence](PHASE1_RELEASE_EVIDENCE.md). It distinguishes limited development evidence from unresolved operational gates; it is not production approval.
+
 ## Resource estimate and decisions
 
 Indicative engineering effort: foundation 4–8 engineer-weeks, catalog/editorial 12–24, pricing 8–16, ingestion 10–20 after access. These are broad estimates, not schedules, and exclude clinical content production, legal/licensing, UX, operations, QA and external waiting. A multidisciplinary team and a few reviewed pilot drugs should validate workflows before catalog expansion. Consultation/AI are not included and require separate sizing. Obtain decisions on clinical governance, source agreements, operating budget, hosting/privacy policy and production authorization at their respective gates.

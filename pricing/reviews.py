@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
+from daroobank.actor_recheck import recheck_actor
 from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_review_reason
@@ -80,7 +81,8 @@ def _lock_latest_review(candidate):
             .order_by('-pk').select_for_update().only('pk').first())
 
 
-def record_preliminary_review(*, candidate_id, actor, decision, reason, expected_review, expected_product, expected_product_hash):
+def record_preliminary_review(*, candidate_id, actor, decision, reason, expected_review, expected_product,
+                              expected_product_hash, session_auth_hash=None):
     if not actor or not actor.is_authenticated or not actor.is_active or not actor.is_staff or not actor.has_perm('pricing.view_pricecandidate') or not actor.has_perm('pricing.review_pricecandidate'):
         raise PermissionDenied
     if (type(candidate_id) is not int or not 1 <= candidate_id <= MAX_PK
@@ -93,6 +95,11 @@ def record_preliminary_review(*, candidate_id, actor, decision, reason, expected
         raise ReviewConflict('شناسه تطبیق معتبر نیست.')
     with write_conflict_boundary(ReviewConflict):
         candidate = bounded_candidates(PriceCandidate.objects.select_for_update()).get(pk=candidate_id)
+        # Re-verify the reviewer after taking the candidate lock. The read is
+        # deliberately unlocked to keep one lock order across services, so it is a
+        # point-in-time check and a later credential change still races. ADR 0195.
+        recheck_actor(actor, ('pricing.view_pricecandidate', 'pricing.review_pricecandidate'),
+                      session_auth_hash=session_auth_hash)
         materialize_candidate(candidate)
         if not candidate.staged_by_id or not candidate.source_rights_attested:
             raise ReviewConflict('این رکورد فاقد ثبت‌کننده یا اظهار مجوز است و در این مسیر قابل بررسی نیست.')

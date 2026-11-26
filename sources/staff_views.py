@@ -1,4 +1,5 @@
 """Development-only registry of unverified source claims."""
+from django.contrib.auth import HASH_SESSION_KEY
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
@@ -117,7 +118,8 @@ def create(request):
     status = 200
     if request.method == 'POST' and form.is_valid():
         try:
-            claim, _created = record_claim(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS})
+            claim, _created = record_claim(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS},
+                                           session_auth_hash=request.session.get(HASH_SESSION_KEY))
             return redirect('staff_source_detail', pk=claim.pk)
         except ClaimConflict as exc:
             form.add_error(None, str(exc))
@@ -172,7 +174,8 @@ def review(request, pk):
     if not form.is_valid():
         return detail_response(request, claim, form=form, status=400)
     try:
-        review_claim(actor=request.user, claim_id=pk, **form.cleaned_data)
+        review_claim(actor=request.user, claim_id=pk, session_auth_hash=request.session.get(HASH_SESSION_KEY),
+                     **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
         claim = get_claim(pk)

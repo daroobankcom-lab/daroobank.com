@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Prefetch, prefetch_related_objects
 
 from daroobank.account_checks import current_account_ids
+from daroobank.actor_recheck import recheck_actor
 from daroobank.write_conflict_boundary import write_conflict_boundary
 
 from .draft_reads import bounded_draft_own_text, materialize_draft_own_text
@@ -122,7 +123,8 @@ def inspection_evidence_statuses(drafts):
             for pk, (status, ids) in results.items()}
 
 
-def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_evidence_hash):
+def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_evidence_hash,
+                  session_auth_hash=None):
     require_staff(actor, VIEW, ADD)
     validate_reference(data)
     if (type(draft_id) is not int or not 1 <= draft_id <= 9_223_372_036_854_775_807
@@ -130,6 +132,10 @@ def add_reference(*, actor, draft_id, data, expected_draft_hash, expected_eviden
             or not isinstance(expected_evidence_hash, str) or not HASH.fullmatch(expected_evidence_hash)):
         raise DraftError('شناسه پیش‌نویس یا فهرست ارجاع معتبر نیست.')
     with write_conflict_boundary(DraftConflict):
+        # Re-verify the writer before the draft lock. The read is deliberately
+        # unlocked to keep one lock order across services, so it is a point-in-time
+        # check and a credential change committed afterwards still races. ADR 0197.
+        recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash)
         try:
             draft = bounded_draft_own_text(ClinicalDraft.objects.select_for_update(of=('self',))).get(pk=draft_id)
         except ClinicalDraft.DoesNotExist as exc:

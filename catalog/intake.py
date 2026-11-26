@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.transaction import TransactionManagementError
 
 from daroobank.account_checks import current_account_exists
+from daroobank.actor_recheck import recheck_actor
 from daroobank.bounded_read import read_bounded_bytes
 from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from daroobank.write_conflict_boundary import write_conflict_boundary
@@ -111,7 +112,8 @@ def _find_or_create_candidate(**kwargs):
     return ProductCandidate.objects.only('pk').get_or_create(**kwargs)
 
 
-def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False, on_staged=None):
+def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False, on_staged=None,
+                   session_auth_hash=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.add_productcandidate')
     if type(commit) is not bool:
@@ -126,6 +128,12 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
     with write_conflict_boundary(StagingConflict):
         if commit:
             lock_source_stage('product', source_url)
+            # Re-verify the stager before any row is written. The read is
+            # deliberately unlocked to keep one lock order across services, so it is
+            # a point-in-time check and a later credential change still races.
+            # Preview mode writes nothing and is not rechecked here. ADR 0195.
+            recheck_actor(actor, ('catalog.view_productcandidate', 'catalog.add_productcandidate'),
+                          session_auth_hash=session_auth_hash)
             for row in rows:
                 digest = fingerprint(source_name, source_url, row)
                 candidate, created = _find_or_create_candidate(
@@ -162,7 +170,8 @@ def _lock_latest_review(candidate):
             .order_by('-pk').select_for_update().only('pk').first())
 
 
-def review_product(*, candidate_id, actor, decision, reason, expected_review, expected_hash):
+def review_product(*, candidate_id, actor, decision, reason, expected_review, expected_hash,
+                   session_auth_hash=None):
     if actor is None:
         raise PermissionDenied
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.review_productcandidate')
@@ -173,6 +182,11 @@ def review_product(*, candidate_id, actor, decision, reason, expected_review, ex
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
     with write_conflict_boundary(ReviewConflict):
         candidate = bounded_candidates(ProductCandidate.objects.select_for_update()).get(pk=candidate_id)
+        # Re-verify the reviewer after taking the candidate lock. The read is
+        # deliberately unlocked to keep one lock order across services, so it is a
+        # point-in-time check and a later credential change still races. ADR 0195.
+        recheck_actor(actor, ('catalog.view_productcandidate', 'catalog.review_productcandidate'),
+                      session_auth_hash=session_auth_hash)
         materialize_candidate(candidate)
         if candidate.staged_by_id == actor.pk:
             raise PermissionDenied

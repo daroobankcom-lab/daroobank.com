@@ -184,6 +184,18 @@ class StaffWorkspaceTests(TestCase):
         self.client.force_login(self.user)
         self.assertContains(self.client.get(reverse('staff_workspace')), f'href="{reverse("staff_identity_list")}"')
         self.user.user_permissions.remove(perm)
+        # Removing the permission ends the session rather than only hiding the link: the
+        # workspace and the destination both answer an anonymous caller, so the revoked
+        # access cannot come back if the permission is granted again.
+        login = reverse('staff_login')
+        for name in ('staff_workspace', 'staff_identity_list'):
+            with self.subTest(route=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 302)
+                self.assertTrue(response['Location'].startswith(login), response['Location'])
+        self.assertNotIn('_auth_user_id', self.client.session)
+        # A fresh login with the permission still removed shows neither link nor access.
+        self.client.force_login(get_user_model().objects.get(pk=self.user.pk))
         self.assertNotContains(self.client.get(reverse('staff_workspace')), f'href="{reverse("staff_identity_list")}"')
         self.assertEqual(self.client.get(reverse('staff_identity_list')).status_code, 403)
 

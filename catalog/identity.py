@@ -12,6 +12,7 @@ from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_accounts
+from daroobank.actor_recheck import recheck_actor
 from daroobank.review_content_bounds import bounded_review_fields, materialize_review_fields
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import (IngredientDraft, FormulationDraft, FormulationComponent,
@@ -209,13 +210,17 @@ def safe_snapshot(item, function):
         return None
 
 
-def create_ingredient(*, actor, data):
+def create_ingredient(*, actor, data, session_auth_hash=None):
     require_staff(actor, VIEW, ADD)
     validate_data(data, INGREDIENT_FIELDS)
+    # Re-verify the writer against the database before creating the row. The read
+    # is deliberately unlocked to keep one lock order across services, so it is a
+    # point-in-time check and a later credential change still races. ADR 0198.
+    recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash)
     return IngredientDraft.objects.create(**data, recorded_by=actor, payload_sha256=digest({**data, 'recorded_by_id': actor.pk}))
 
 
-def create_formulation(*, actor, data, components):
+def create_formulation(*, actor, data, components, session_auth_hash=None):
     require_staff(actor, VIEW, ADD)
     validate_data(data, FORMULATION_FIELDS)
     if not isinstance(components, list) or not 1 <= len(components) <= MAX_COMPONENTS:
@@ -224,6 +229,8 @@ def create_formulation(*, actor, data, components):
     ids = [row['ingredient_id'] for row in components]
     if len(set(ids)) != len(ids): raise IdentityError('هر ماده فقط یک بار مجاز است.')
     with _identity_atomic():
+        # Re-verify the writer before locking ingredient rows. ADR 0198.
+        recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash)
         ingredients = {item.pk: item for item in IngredientDraft.objects.select_for_update().filter(pk__in=ids).order_by('pk')}
         if set(ids) != set(ingredients): raise IdentityConflict('ماده انتخاب‌شده در دسترس نیست.')
         try:
@@ -241,11 +248,13 @@ def create_formulation(*, actor, data, components):
         return formulation
 
 
-def create_product(*, actor, data, formulation_id):
+def create_product(*, actor, data, formulation_id, session_auth_hash=None):
     require_staff(actor, VIEW, ADD)
     validate_data(data, PRODUCT_FIELDS)
     if not _valid_id(formulation_id): raise IdentityError('شناسه فرمولاسیون معتبر نیست.')
     with _identity_atomic():
+        # Re-verify the writer before locking the formulation row. ADR 0198.
+        recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash)
         form = FormulationDraft.objects.select_for_update().filter(pk=formulation_id).first()
         if not form: raise IdentityConflict('فرمولاسیون در دسترس یا سازگار نیست.')
         _lock_formulation_components(form)
@@ -257,11 +266,13 @@ def create_product(*, actor, data, formulation_id):
             formulation_sha256=form.payload_sha256, payload_sha256=digest(payload))
 
 
-def create_package(*, actor, data, product_id):
+def create_package(*, actor, data, product_id, session_auth_hash=None):
     require_staff(actor, VIEW, ADD)
     validate_data(data, PACKAGE_FIELDS)
     if not _valid_id(product_id): raise IdentityError('شناسه فرآورده معتبر نیست.')
     with _identity_atomic():
+        # Re-verify the writer before locking the product row. ADR 0198.
+        recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash)
         product = IdentityProductDraft.objects.select_for_update().filter(pk=product_id).first()
         if not product: raise IdentityConflict('فرآورده در دسترس یا سازگار نیست.')
         formulation = _lock_product_formulation(product)
@@ -366,7 +377,8 @@ def _revision_payload(parent_id, child_id, recorded_by_id, change_reason, parent
             'child_graph_sha256': child_graph_sha256}
 
 
-def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash, expected_review):
+def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash, expected_review,
+                   session_auth_hash=None):
     """Create a new assertion and an immediate-parent link; parallel branches are allowed."""
     require_staff(actor, VIEW, ADD)
     validate_data(data, PACKAGE_FIELDS)
@@ -375,6 +387,8 @@ def revise_package(*, actor, parent_id, data, change_reason, expected_graph_hash
         raise IdentityConflict('اطلاعات نسخه جدید معتبر نیست.')
     change_reason = change_reason.strip()
     with _identity_atomic():
+        # Re-verify the writer before locking the parent package row. ADR 0198.
+        recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash)
         parent = IdentityPackageDraft.objects.select_for_update().filter(pk=parent_id).first()
         if parent is None: raise IdentityConflict('بسته پیشین در دسترس نیست.')
         product = _lock_package_product(parent)
@@ -434,7 +448,8 @@ def _component_values(graph):
     return [{field: part[field] for field in COMPONENT_FIELDS} for part in graph['components']]
 
 
-def revise_identity(*, actor, kind, parent_id, data, change_reason, expected_graph_hash, components=None):
+def revise_identity(*, actor, kind, parent_id, data, change_reason, expected_graph_hash, components=None,
+                    session_auth_hash=None):
     """Create a new synthetic assertion and immediate correction link, never rewire dependants."""
     require_staff(actor, VIEW, ADD)
     if not isinstance(kind, str) or kind not in _COMPONENT_REVISIONS:
@@ -451,6 +466,8 @@ def revise_identity(*, actor, kind, parent_id, data, change_reason, expected_gra
         raise IdentityError('اجزا برای این نوع رکورد مجاز نیست.')
     change_reason = change_reason.strip()
     with _identity_atomic():
+        # Re-verify the writer before locking the parent row. ADR 0198.
+        recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash)
         parents = model.objects.select_for_update(of=('self',))
         parent = parents.filter(pk=parent_id).first()
         if parent is None: raise IdentityConflict('رکورد پیشین در دسترس نیست.')
@@ -523,13 +540,16 @@ def valid_identity_revision(kind, link, child_id):
         return False
 
 
-def review_package(*, actor, package_id, decision, reason, expected_review, expected_graph_hash):
+def review_package(*, actor, package_id, decision, reason, expected_review, expected_graph_hash,
+                   session_auth_hash=None):
     require_staff(actor, VIEW, REVIEW)
     if (not _valid_id(package_id) or not isinstance(decision, str) or decision not in dict(IdentityPackageReview.DECISIONS)
             or not valid_review_reason(reason) or type(expected_review) is not int or not 0 <= expected_review <= MAX_ID
             or not _is_hash(expected_graph_hash)):
         raise IdentityConflict('اطلاعات بازبینی معتبر نیست.')
     with _identity_atomic():
+        # Re-verify the reviewer before locking the package row. ADR 0198.
+        recheck_actor(actor, (VIEW, REVIEW), session_auth_hash=session_auth_hash)
         package = IdentityPackageDraft.objects.select_for_update().filter(pk=package_id).first()
         if not package: raise IdentityConflict('بسته در دسترس نیست.')
         product = _lock_package_product(package)

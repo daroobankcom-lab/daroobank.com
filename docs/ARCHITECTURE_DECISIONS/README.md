@@ -358,4 +358,106 @@
 
 - [0179: disabled raw inputs](0179-disabled-raw-inputs.md) — shared form compatibility.
 
+- [0180: opt-in process and database probes](0180-opt-in-process-database-probes.md) — narrow operational foundation.
+
+- [0181: development staff-login throttle](0181-development-staff-login-throttle.md) — opt-in synthetic defense in depth.
+
+- [0182: repeated staff-login credentials](0182-repeated-staff-login-credentials.md) — narrow form hardening.
+
+- [0183: non-debug config guards](0183-nondebug-config-guards.md) — explicit secret and host configuration.
+
+- [0184: trusted proxy scheme](0184-trusted-proxy-scheme.md) — explicit, default-off configuration.
+
+- [0185: opt-in HSTS](0185-opt-in-hsts.md) — explicit header duration, not a TLS deployment.
+
+- [0186: staff password input bound](0186-staff-password-input-bound.md) — development form limit before authentication.
+
+- [0187: bounded login-window maintenance](0187-bounded-login-window-maintenance.md) — selected server-side timeouts, not a scheduler or full deadline.
+
+- [0188: non-debug frame guard order](0188-nondebug-frame-guard-order.md) — covers selected early Django responses.
+
+- [0189: known-path early error privacy](0189-known-path-early-error-privacy.md) — selected early Django errors receive existing privacy headers.
+
+- [0190: synthetic repair token via stdin](0190-synthetic-repair-token-stdin.md) — avoid one command's token argument exposure.
+
+- [0191: staff session revocation gap](0191-staff-session-revocation-gap.md) — unresolved reactivation/regrant behavior.
+
+- [0192: source-claim account-status serialization](0192-source-claim-account-status-serialization.md) — narrow PostgreSQL write ordering, not general revocation.
+
+- [0193: source-claim session hash binding](0193-source-claim-session-hash-binding.md) — one guarded write rechecks the session's password hash; still not revocation.
+
+- [0194: source-review actor and session recheck](0194-source-review-actor-session-recheck.md) — unlocked reviewer recheck preserving one lock order; still not revocation.
+
+- [0195: shared write-actor recheck](0195-shared-write-actor-recheck.md) — one helper reused by guarded review services; unlocked rechecks still race.
+
+- [0196: staging write actor recheck](0196-staging-write-actor-recheck.md) — the same helper on the bulk staging paths, plus corrected stale-cache evidence.
+
+- [0197: clinical write actor recheck](0197-clinical-write-actor-recheck.md) — draft create/revise and reference create rechecked before their locks.
+
+- [0198: identity write actor recheck](0198-identity-write-actor-recheck.md) — the seven identity workspace writes rechecked before their row locks.
+
+- [0199: staff write route guard inventory](0199-staff-write-route-guard-inventory.md) — in-flight tests for all fourteen write routes plus a drift guard.
+
+- [0200: staff authorization matrix](0200-staff-authorization-matrix.md) — every staff route against six synthetic account shapes.
+
+- [0201: staff authorization against existing rows](0201-staff-authorization-existing-rows.md) — the same matrix over real rows, so denials do not become an existence oracle.
+
+- [0202: public-route privacy matrix](0202-public-route-privacy-matrix.md) — every non-staff route inventoried and checked for private-data leakage.
+
+- [0203: staff grant paths](0203-staff-grant-paths.md) — group grants, the superuser bypass, an alternate backend and stale in-memory actors.
+
+- [0204: staff denial parity](0204-staff-denial-parity.md) — denials for existing and missing rows are byte-identical, so existence is not an oracle.
+
+- [0205: identifier and method parity](0205-staff-identifier-and-method-parity.md) — thirteen identifier shapes and both method directions across five account shapes.
+
+- [0206: query-parameter parity](0206-staff-query-parameter-parity.md) — nine caller-controlled query shapes across all 41 staff routes.
+
+- [0207: the staff CSRF gate](0207-staff-csrf-gate-parity.md) — one canonical rejection across all 43 routes, and the method classification read from the decorators.
+
+- [0208: session lifecycle](0208-staff-session-lifecycle.md) — logout, cookie replay, password change and expiry walked across all 41 routes.
+
+- [0209: staff method sweep](0209-staff-method-sweep.md) — six HTTP methods across all 43 routes, with no destructive method accepted.
+
+- [0210: staff header inventory](0210-staff-header-inventory.md) — one closed header inventory across 1 204 staff responses, for every account shape.
+
+- [0211: staff redirect targets](0211-staff-redirect-targets.md) — a caller-supplied `next` cannot aim login, logout or an anonymous redirect off-host.
+
+- [0212: `Expires` parity exclusion](0212-expires-parity-exclusion.md) — the per-second `never_cache` stamp on the two auth endpoints, excluded from byte-parity comparisons.
+
+- [0213: durable session invalidation](0213-durable-session-invalidation.md) — a session bound to its account's state, ended by any change to it; closes the ADR 0191 revival scenario.
+
+- [0214: session inventory](0214-session-inventory.md) — a read-only report of which sessions exist and which the guard would end, with no session material in it.
+
+- [0215: the generated authorization review](0215-generated-authorization-review.md) — the endpoint inventory the Phase 1 review asks for, derived from the resolver and drift-checked; its judgement stays unsigned.
+
+- [0216: migration reversibility](0216-migration-reversibility.md) — rollback and reapply measured on throwaway PostgreSQL databases, with the dependent-app cascade derived from the migration graph.
+
+- [0217: the deployment readiness report](0217-deployment-readiness-report.md) — ten required settings and database checks plus the undecided conditions, in one read-only JSON report; a zero exit status is not an authorization.
+
+- [0218: no `django.contrib.admin`](0218-no-django-admin.md) — the staff portal is the only administrative surface, and the absence is pinned by seven tests.
+
+- [0219: every management command is documented where an operator looks](0219-documented-command-surface.md) — the twelve commands and their options are held to the development guide, the operations runbook and the deployment guide; naming is checked, correctness of the prose is not.
+
+- [0220: actor attribution is a schema property](0220-actor-attribution-inventory.md) — 19 of the 23 project models name the account that wrote them behind a protected foreign key and a creation timestamp; the published catalog record names nobody, and a candidate staged from the command line can never be reviewed in the portal.
+
+- [0221: nothing records that a read happened](0221-no-read-audit.md) — `LOGGING` is empty, no module imports `logging`, no middleware records a request, no table can hold an access record, and sweeping all 55 routes creates no row; the absence is pinned, not fixed.
+
+- [0222: the environment is documented in one place per audience](0222-documented-environment.md) — fifteen variables, four opt-in test switches and one default, pinned from an AST inventory and held to the template, the Compose stack, the development guide and a new deployment configuration reference.
+
+- [0223: abuse protection is external](0223-no-abuse-protection.md) — the only rate limit is the opt-in debug-only login window, 48 sequential public reads all answer 200, no request-size ceiling is configured, and the deployment guide now assigns rate and size limits to the edge.
+
+- [0224: the documentation graph resolves](0224-documentation-graph.md) — 251 markdown documents, 224 numbered decision records, every link, anchor, index entry and named suite resolves, and no document is orphaned.
+
+- [0225: rollback with data in it](0225-populated-rollback-drill.md) — a populated throwaway database loses 23 of its 30 rows to a single-app rollback and all of them to a full one, a reapply returns an identical schema and zero rows, only a copy taken beforehand brings rows back and only after the identity sequences are advanced, and a rollback blocked by one locked row leaves the database half undone.
+
+- [0226: CI verifies every dependency and produces no artifact](0226-ci-artifact-gate.md) — one workflow, two jobs, 22 steps, five actions pinned to commit SHAs, both lock files hash-pinned with a negative control, and zero artifact uploads, image pushes, SBOMs, signatures, digests, staging environments or exported outputs.
+
+- [0227: the read-audit decision and its measured price](0227-read-audit-plan.md) — a proposal names the six decisions that block read auditing, and a reverted prototype of the in-application option measures 20 pin failures across 7 suites and a 33-table schema.
+
+- [0228: an opt-in limit on public reads](0228-public-read-limit.md) — a second opt-in limiter counts 120 public reads per keyed client in a rolling minute and refuses an over-limit one with 429 and a `Retry-After`, storing a keyed digest, a window start and a count, failing open when the counter is unreachable, and moving 19 pins and the schema to 33 tables.
+
+- [0229: the two write paths that name nobody](0229-attribution-gap-plan.md) — the published catalog record and command-line price staging are measured again, three facts ADR 0220 did not measure are added, and a proposal with no owner prices six options and lists seven decisions.
+
+- [0230: the MFA plan and the measured price of a second factor](0230-mfa-implementation-plan.md) — the authentication surface is measured instead of described: one login view rendering two credential fields, no factor state in any model or module, a stock `auth.User`, nothing between the password and the session, a session fingerprint that binds account state and no client dimension, two address-keyed opt-in limiters that are not lockouts, no cryptographic library, a hash-pinned audited lock and a 33-table schema; an unowned proposal prices six options and lists seven decisions, and no factor is implemented.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

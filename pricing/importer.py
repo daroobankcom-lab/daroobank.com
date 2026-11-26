@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 
 from daroobank.account_checks import current_account_exists
+from daroobank.actor_recheck import recheck_actor
 from daroobank.bounded_read import read_bounded_bytes
 from daroobank.candidate_content_bounds import bounded_candidates, materialize_candidate
 from daroobank.validation import has_control_or_surrogate, valid_private_source_url
@@ -237,7 +238,8 @@ def _find_or_create_candidate(**kwargs):
     return PriceCandidate.objects.only('pk').get_or_create(**kwargs)
 
 
-def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None, on_staged=None):
+def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=False, staged_by=None,
+              on_staged=None, session_auth_hash=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
     if type(commit) is not bool:
         raise ImportValidationError('Commit mode must be an explicit boolean.')
@@ -260,6 +262,16 @@ def stage_csv(path, source_name, source_url, *, commit=False, rights_attested=Fa
     with write_conflict_boundary(StagingConflict):
         if commit:
             lock_source_stage('price', source_url)
+            # Re-verify the stager before any row is written. The read is
+            # deliberately unlocked to keep one lock order across services, so it is
+            # a point-in-time check and a later credential change still races.
+            # Preview mode writes nothing and is not rechecked here. Actor-less
+            # staging (original importer and CLI paths) keeps its existing behavior
+            # and is not rechecked; it is already outside the staff web route.
+            # ADR 0195.
+            if staged_by is not None:
+                recheck_actor(staged_by, ('pricing.view_pricecandidate', 'pricing.add_pricecandidate'),
+                              session_auth_hash=session_auth_hash)
         for row, currency, amount, effective, published in rows:
             identity = tuple(normalize_search(row[field]) for field in IDENTITY_FIELDS)
             if identity not in suggestions:

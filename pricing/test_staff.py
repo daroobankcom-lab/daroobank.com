@@ -223,10 +223,22 @@ class StaffPriceAccessTests(TestCase):
         self.assertEqual(response['Location'], reverse('staff_workspace'))
         self.assertEqual(client.get(reverse('staff_workspace')).status_code, 200)
         self.assertEqual(client.get(reverse('staff_prices')).status_code, 403)
-        # A later demotion is checked at the destination on the next request.
+        # A later demotion ends the session on the next staff request instead of being
+        # re-checked at each destination, so restoring the flag cannot revive it.
         self.staff_no_permission.is_staff = False
         self.staff_no_permission.save(update_fields=['is_staff'])
-        self.assertEqual(client.get(reverse('staff_workspace')).status_code, 403)
+        login = reverse('staff_login')
+        for name in ('staff_workspace', 'staff_prices'):
+            with self.subTest(route=name):
+                response = client.get(reverse(name))
+                self.assertEqual(response.status_code, 302)
+                self.assertTrue(response['Location'].startswith(login), response['Location'])
+        self.assertNotIn('_auth_user_id', client.session)
+        # The demoted account can still authenticate; it is simply not staff any more.
+        self.staff_no_permission.is_staff = True
+        self.staff_no_permission.save(update_fields=['is_staff'])
+        client.force_login(get_user_model().objects.get(pk=self.staff_no_permission.pk))
+        self.assertEqual(client.get(reverse('staff_workspace')).status_code, 200)
         self.assertEqual(client.get(reverse('staff_prices')).status_code, 403)
 
     def test_wrong_password_and_staff_pages_not_indexed(self):

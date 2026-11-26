@@ -22,6 +22,7 @@ class Command(BaseCommand):
                 result = apply_projection(presentation_id=options['presentation_id'], token=token, synthetic_confirmed=confirmed)
             else:
                 result = preview_projection(presentation_id=options['presentation_id'])
-        except ProjectionRepairError as exc:
-            raise CommandError('Projection request is unavailable, invalid, unsafe or stale.') from exc
+        except ProjectionRepairError:
+            # Token or database errors can contain private values in tracebacks.
+            raise CommandError('Projection request is unavailable, invalid, unsafe or stale.') from None
         self.stdout.write(json.dumps(result, ensure_ascii=True, sort_keys=True))

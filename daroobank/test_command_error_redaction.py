@@ -34,6 +34,38 @@ class CommandErrorRedactionTests(TransactionTestCase):
                 self.assertIn(expected, formatted)
                 self.assertNotIn(canary, formatted + output.getvalue() + errors.getvalue())
 
+    def test_projection_and_cursor_failures_do_not_chain_sensitive_details(self):
+        from catalog.projection_repair import ProjectionRepairError
+        from catalog.quality_irc import InvalidIRCCursor
+        cases = (
+            ('repair_catalog_projection', 'catalog.management.commands.repair_catalog_projection.preview_projection',
+             ProjectionRepairError, {'presentation_id': 1}, 'Projection request is unavailable'),
+            ('inspect_catalog_irc', 'catalog.management.commands.inspect_catalog_irc.inspect_irc',
+             InvalidIRCCursor, {'anchor_id': 1}, 'Presentation or cursor is invalid'),
+        )
+        for command, target, error_class, args, expected in cases:
+            with self.subTest(command=command):
+                canary = 'synthetic-private-token-canary-' + command
+                with patch(target, side_effect=error_class(canary)):
+                    with self.assertRaisesMessage(CommandError, expected) as caught:
+                        call_command(command, stdout=io.StringIO(), **args)
+                formatted = ''.join(traceback.format_exception(caught.exception))
+                self.assertNotIn(canary, formatted)
+
+    def test_projection_cli_traceback_does_not_echo_invalid_token(self):
+        canary = 'synthetic-private-projection-token-canary'
+        env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG') if key in os.environ}
+        env.update(DJANGO_SETTINGS_MODULE='daroobank.settings', DAROOBANK_DEBUG='1',
+                   POSTGRES_DB='synthetic', POSTGRES_USER='synthetic', POSTGRES_HOST='not-connected',
+                   POSTGRES_PORT='5432')
+        result = subprocess.run([sys.executable, 'manage.py', 'repair_catalog_projection', '--traceback',
+                                 '--id', '1', '--commit', '--confirm-synthetic', '--token', canary],
+                                cwd=Path(__file__).resolve().parent.parent, env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Projection request is unavailable', result.stderr)
+        self.assertNotIn(canary, result.stdout + result.stderr)
+
     def test_schedule_cli_traceback_does_not_echo_invalid_instant(self):
         canary = 'synthetic-instant-private-canary'
         env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG') if key in os.environ}

@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — suppress selected catalog command traceback chains
+
+**Changes:** Catalog IRC inspection and synthetic projection repair no longer chain selected cursor/token errors into their command tracebacks. Synthetic canaries test both commands, including one real CLI invocation.
+
+**Limits:** Command-line arguments may remain visible to the operating system and shell; service exceptions, other errors and logs are not sanitized by this change.
+
 ## 2026-11-26 — bound selected login-window maintenance waits
 
 **Changes:** Synthetic cleanup now refuses outer/non-autocommit transactions and runs with PostgreSQL-local lock and statement timeouts. Timeout and connection-reuse tests exercise selected failures and the refreshed-row race remains covered.

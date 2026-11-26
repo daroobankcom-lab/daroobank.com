@@ -13,6 +13,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         try:
             report = inspect_irc(anchor_id=options['anchor_id'], cursor=options['cursor'])
-        except (QualityAnchorNotFound, InvalidIRCCursor) as exc:
-            raise CommandError('Presentation or cursor is invalid or stale.') from exc
+        except (QualityAnchorNotFound, InvalidIRCCursor):
+            # Signing failures may include the original cursor value.
+            raise CommandError('Presentation or cursor is invalid or stale.') from None
         self.stdout.write(json.dumps(report, ensure_ascii=False, sort_keys=True))

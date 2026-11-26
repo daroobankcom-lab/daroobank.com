@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — optional stdin for synthetic projection repair token
+
+**Changes:** The one-row repair command accepts a bounded token via non-terminal stdin as an alternative to the legacy argument. Invalid combinations and non-debug use fail before reading.
+
+**Limits:** Preview output, token files, other processes, pipes and logs still need protection; this is not authorization or a production tool. See ADR 0190.
+
 ## 2026-11-26 — privacy headers on selected early errors
 
 **Changes:** The existing outer known-path middleware now applies staff/public privacy headers to selected early errors as well as redirects, including invalid-host 400 responses.

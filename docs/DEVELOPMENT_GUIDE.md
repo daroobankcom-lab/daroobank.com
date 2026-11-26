@@ -128,9 +128,11 @@ For an isolated synthetic development database, `repair_catalog_projection` prev
 
 ```sh
 DAROOBANK_DEBUG=1 .venv/bin/python manage.py repair_catalog_projection --id 1
-# Replace the placeholder with the token from the immediately preceding preview.
-DAROOBANK_DEBUG=1 .venv/bin/python manage.py repair_catalog_projection --id 1 --commit --confirm-synthetic --token '<preview-token>'
+# After reviewing the preview, provide its exact token via a protected non-terminal stream.
+DAROOBANK_DEBUG=1 .venv/bin/python manage.py repair_catalog_projection --id 1 --commit --confirm-synthetic --token-stdin < /path/to/protected-synthetic-token-file
 ```
+
+`--token-stdin` accepts a bounded single line from a non-terminal stream; it rejects multiple lines, terminals, oversized data and simultaneous `--token`. Provide a token only after the preview is reviewed and the required commit/attestation flags are present. This avoids placing the token in the repair command's argument list, but the preview output, source file, pipeline, OS-level access and logs still need protection; an open pipe can also block waiting for input. The legacy `--token` option remains supported but exposes its value in process arguments and potentially shell history. Never use real data or credentials in this synthetic tool.
 
 Commit rechecks the signature, ten-minute expiry, database configuration and full observed row/expected projections while holding a row lock. A changed or deleted row, invalid token or unsafe source identity fails without a repair; preview again rather than guessing. The attestation is not proof that the data are synthetic. Only differing derived `search_text`/`irc_normalized` fields are changed, using a deliberate ORM update without model save signals. This can affect public search and price matching even though no publication flag changes. There is no automatic batch, repair audit, authorization or rollback log; backup and independently review any database before any administrative operation. Shell history, process listings and logs may expose IDs and tokens. The signature is not encryption or an authorization mechanism. Selected database write conflicts roll back and produce a generic error; the tool does not retry, and failures at a surrounding transaction's eventual commit are outside this boundary. `DEBUG` is a development gate, not a security boundary, and must never be enabled against real data for this tool. See [ADR 0024](ARCHITECTURE_DECISIONS/0024-synthetic-projection-repair.md) and [ADR 0063](ARCHITECTURE_DECISIONS/0063-projection-repair-conflict-boundary.md) for consistency checks, lock limits and remaining risks.
 

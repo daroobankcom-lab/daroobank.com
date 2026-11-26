@@ -1,0 +1,9 @@
+# ADR 0190: synthetic projection-repair token via stdin
+
+Status: optional development-only CLI input path, not authorization or a production repair procedure.
+
+The synthetic one-row projection repair retains its read-only preview, explicit `--commit` and `--confirm-synthetic` gates, signature, short expiry, database/row binding and stale rechecks described in [ADR 0024](0024-synthetic-projection-repair.md). A new mutually exclusive `--token-stdin` option reads at most 515 characters from a non-terminal stream, accepting an exact token with at most one LF or CRLF terminator. It rejects terminals, multiple lines, oversized/empty input, invalid flag combinations and non-debug use before reading. Errors are generic and do not intentionally echo the token. The existing `--token` option remains available for compatibility.
+
+The new path avoids placing the token in **this repair command's** argument vector. It does not secure preview output, files, shell history, pipeline producer arguments, logs, process memory, OS access or a compromised host. The preview itself prints the token, and a token saved to a file needs access controls and cleanup. The command can block waiting for stdin or EOF; there is no complete deadline. A signed token is not encryption or an authorization mechanism. The development debug flag is not proof of isolation; never use real data or production credentials with this tool.
+
+Synthetic tests exercise argument validation before input, non-debug rejection, bounded reads, multiline and terminal failures, no selected traceback echo, and programmatic repair. A fresh CLI process uses a randomly named isolated synthetic PostgreSQL database to verify a valid token is consumed and a repeat is stale. These tests do not prove universal race safety, OS confidentiality, backup integrity or production readiness.

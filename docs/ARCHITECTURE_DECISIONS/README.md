@@ -378,4 +378,6 @@
 
 - [0189: known-path early error privacy](0189-known-path-early-error-privacy.md) — selected early Django errors receive existing privacy headers.
 
+- [0190: synthetic repair token via stdin](0190-synthetic-repair-token-stdin.md) — avoid one command's token argument exposure.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

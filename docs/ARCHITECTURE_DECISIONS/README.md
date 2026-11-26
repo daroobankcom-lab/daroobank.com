@@ -424,4 +424,6 @@
 
 - [0212: `Expires` parity exclusion](0212-expires-parity-exclusion.md) — the per-second `never_cache` stamp on the two auth endpoints, excluded from byte-parity comparisons.
 
+- [0213: durable session invalidation](0213-durable-session-invalidation.md) — a session bound to its account's state, ended by any change to it; closes the ADR 0191 revival scenario.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

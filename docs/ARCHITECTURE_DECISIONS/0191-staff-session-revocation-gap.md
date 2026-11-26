@@ -1,6 +1,8 @@
 # ADR 0191: known staff-session revocation gap
 
-Status: **unresolved production release blocker**; observation and selected tests only, not a revocation implementation.
+Status: **the revival scenario named below is closed by [ADR 0213](0213-durable-session-invalidation.md)**; the residual gaps listed there remain open, and the rest of this record is unchanged observation rather than a revocation implementation.
+
+Superseded in part (2026-11-26): a session is now bound at login to a digest of the account state and `StaffSessionGuardMiddleware` flushes it on any difference, read from the account the session names rather than from `request.user`. Deactivation, staff-flag removal, permission and group changes, account deletion and password changes therefore end the session and its row, and restoring the state does not revive it; the two tests that used to demonstrate the gap now assert the opposite. Still open here: a transition no request observes (which is what the `revoke_staff_sessions` command is for), in-flight requests that already passed the guard, backend removal from settings, MFA, replay protection, session inventory and any production procedure.
 
 The development staff portal uses Django's default database-backed sessions and authentication backend. Selected synthetic tests show that an existing session is denied staff access while the user's `is_staff` flag is false, and a deactivated user is redirected to login. However, if the account is reactivated or the staff flag is restored before the session expires, the same previously established session can again access the development workspace. Observing a denial while a flag is off is therefore **not durable session revocation**.
 

@@ -89,7 +89,9 @@ class StaffWriteRouteInventoryTests(SimpleTestCase):
 
     def test_inventory_documents_a_partial_mitigation(self):
         # The covered guards deny a credential change committed before the recheck;
-        # they do not revoke sessions, and flag-only reactivation still writes.
+        # they are not durable revocation of an in-flight write, which the session
+        # guard handles at the request boundary (ADR 0213), and a parked write whose
+        # flags were only toggled can still commit.
         security = (ROOT / 'docs' / 'SECURITY.md').read_text(encoding='utf-8')
         self.assertIn('not durable revocation', security.lower().replace('**', ''))
         self.assertIn('0191-staff-session-revocation-gap.md', security)

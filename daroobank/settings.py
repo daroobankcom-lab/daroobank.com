@@ -47,6 +47,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # After AuthenticationMiddleware: ends a staff session whose account state
+    # changed since login, which the session-auth hash alone does not cover.
+    'daroobank.middleware.StaffSessionGuardMiddleware',
 ]
 if not DEBUG:
     # Wrap early HTTPS redirects, disabled-staff 404s and ordinary responses.

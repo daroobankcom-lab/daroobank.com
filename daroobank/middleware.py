@@ -2,7 +2,10 @@ import re
 from ipaddress import IPv6Address, ip_address
 
 from django.conf import settings
+from django.contrib.auth import logout
 from django.http import HttpResponseNotFound
+
+from .session_guard import session_matches_account
 
 
 # The current server-rendered slice has no executable inline scripts or styles.
@@ -155,3 +158,26 @@ class StaffPrivacyHeadersMiddleware:
         if is_staff_path:
             _staff_headers(response)
         return response
+
+class StaffSessionGuardMiddleware:
+    """End a staff session whose account state changed after it was established.
+
+    Django's own session-auth hash covers the password field only, so deactivating an
+    account or removing a permission left an unexpired session that a later
+    reactivation or regrant revived (ADR 0191). This compares the authorization state
+    the session was bound to against the account's current state and flushes the
+    session on any difference, which makes the rest of the request anonymous: every
+    staff route then answers with the 302 to the login page that an expired session
+    already produces, so no route learns a new denial path.
+
+    It runs only on staff paths, after AuthenticationMiddleware, so public reads pay
+    no extra queries and no behavior change.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if _is_staff_path(request.path_info) and not session_matches_account(request):
+            logout(request)
+        return self.get_response(request)

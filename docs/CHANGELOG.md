@@ -2,6 +2,50 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — pin what CI verifies and what it never produces
+
+**Changes:** `docs/DEPLOYMENT.md` asks the release gates to *"Pin and scan dependencies and base
+images, generate SBOM where practical, run tests/migrations on staging"*, and the Phase 1 evidence
+carries *"immutable production artifacts and image digests"* plus *"staging/release gates"* as
+open. The dependency half of that sentence is implemented and was already partly measured; the
+artifact half was neither, and no suite read `.github/workflows/checks.yml` at all — the action
+pinning lived only in prose in `docs/TESTING_STRATEGY.md`, so a widened permission, an unpinned
+action or a published image could land in a diff no test reads, and the continuing absence of a
+gate was equally invisible.
+
+`daroobank/test_ci_artifact_gate.py` (9 tests, ~0.004 s, no database) reads the workflow,
+`Dockerfile`, `compose.yaml`, the five `tools/` modules and the three requirement files and pins
+both halves. What is immutable: one workflow of two jobs and 22 steps triggering only on push and
+pull request, exactly `contents: read` at the top level and no job-level permissions, all five
+action references pinned to 40-character commit SHAs with their versions commented, both checkouts
+disabling credential persistence, 7 packages and 78 hashes in `requirements.txt` plus 2 packages
+and 4 hashes in `requirements-build.txt`, `--require-hashes` on the install and on a negative
+control that requires pip to reject a zeroed hash, `tools.verify_runtime_lock` running first, and
+`pip-audit --strict` run against both the lock and the packages installed inside the built image.
+
+What does not exist: zero occurrences of `upload-artifact`, `build-push-action`, `buildx`,
+`docker push`, `sbom`, `syft`, `cyclonedx`, `cosign`, `sigstore`, `attest`, `@sha256:`, `ghcr`,
+`retention-days`, `id-token`, `packages:` or `GITHUB_OUTPUT` anywhere in CI; `needs:` and
+`environment:` both zero, so no job gates another and none runs in a protected environment; ten
+`::error::` annotations and 35 `$RUNNER_TEMP` references as the whole output of a run. All four
+base-image references are mutable tags — `postgres:16` three times, `python:3.11-slim` once — so
+the same commit can build a different image, and the only image this repository can build is
+untagged, has no `USER`, serves through `runserver`, calls itself a development image on its first
+line, and is destroyed by `docker compose down -v` inside the run that built it.
+
+Seven red checks were applied alone and reverted from backups: unpinning one checkout to a tag
+(1 failure), adding an `upload-artifact` step with `retention-days` (5), widening permissions with
+`packages: write` and `id-token: write` (3), adding a `release:` trigger (2), digest-pinning the
+postgres service image (3), installing without `--require-hashes` (1) and adding a non-root `USER`
+to the Dockerfile (1).
+
+Parsing is textual because the exact runtime lock carries no YAML library, which makes indentation
+part of the contract; the suite sees only this repository's CI, so a registry policy or an external
+pipeline could implement part of this gate unobserved; absence of a named token is not absence of a
+capability; and nothing is checked against a registry or a runner. The gate itself stays open —
+this makes its absence fail loudly instead of quietly. See
+[ADR 0226](ARCHITECTURE_DECISIONS/0226-ci-artifact-gate.md).
+
 ## 2026-11-26 — measure what a rollback does to a database that has data in it
 
 **Changes:** ADR 0216 measured the rollback direction on throwaway databases and named its own

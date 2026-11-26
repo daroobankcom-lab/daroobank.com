@@ -374,4 +374,6 @@
 
 - [0187: bounded login-window maintenance](0187-bounded-login-window-maintenance.md) — selected server-side timeouts, not a scheduler or full deadline.
 
+- [0188: non-debug frame guard order](0188-nondebug-frame-guard-order.md) — covers selected early Django responses.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

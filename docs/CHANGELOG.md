@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — frame protection on early non-debug responses
+
+**Changes:** Non-debug frame middleware now wraps the HTTPS redirect and disabled-staff gate; fresh-process tests cover early and ordinary responses and Django's explicit exemptions.
+
+**Limits:** Debug previews remain embeddable, view exemptions remain effective, and upstream/static responses are outside this Django header policy; see ADR 0188.
+
 ## 2026-11-26 — suppress selected catalog command traceback chains
 
 **Changes:** Catalog IRC inspection and synthetic projection repair no longer chain selected cursor/token errors into their command tracebacks. Synthetic canaries test both commands, including one real CLI invocation.

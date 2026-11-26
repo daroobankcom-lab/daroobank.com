@@ -49,7 +49,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 ]
 if not DEBUG:
-    MIDDLEWARE.append('django.middleware.clickjacking.XFrameOptionsMiddleware')
+    # Wrap early HTTPS redirects, disabled-staff 404s and ordinary responses.
+    # Keep it absent in debug so the development preview can be embedded.
+    MIDDLEWARE.insert(1, 'django.middleware.clickjacking.XFrameOptionsMiddleware')
     SECURE_SSL_REDIRECT = True
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True

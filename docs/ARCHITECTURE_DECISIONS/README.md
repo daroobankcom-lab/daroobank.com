@@ -396,4 +396,6 @@
 
 - [0198: identity write actor recheck](0198-identity-write-actor-recheck.md) — the seven identity workspace writes rechecked before their row locks.
 
+- [0199: staff write route guard inventory](0199-staff-write-route-guard-inventory.md) — in-flight tests for all fourteen write routes plus a drift guard.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

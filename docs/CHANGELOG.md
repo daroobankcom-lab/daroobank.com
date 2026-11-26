@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — cover every staff write route with an in-flight guard test
+
+**Changes:** `daroobank/test_staff_inflight_revision_writes.py` adds synchronized HTTP tests for the three remaining revision routes (clinical revise, identity package revise, identity component correction), parking each CSRF-valid POST at the service-level `require_staff` the views import by name and asserting 403 with unchanged row counts after disable, password invalidation and reactivation, a login redirect for the next request, a still-commits flag-only case and a CSRF negative control. `daroobank/test_staff_write_route_inventory.py` enumerates all 43 `staff_*` route names and requires each to be mapped to a covering test module — which must name the route and park a password invalidation — or explicitly classified as read-only, download or auth. No production code changed. See ADR 0199.
+
+**Limits:** The inventory is name-based: it does not prove a route's write is guarded or that reads are safe, and its park point is a test seam that depends on views importing `require_staff` by name. The guards themselves are unchanged partial mitigations; every flag-only case still asserts the write commits. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — extend the actor recheck to the identity workspace writes
 
 **Changes:** All seven identity write services (`create_ingredient`, `create_formulation`, `create_product`, `create_package`, `revise_package`, `revise_identity`, `review_package`) accept an optional `session_auth_hash` and call the shared `recheck_actor` with their own permission pair before any row is written — inside the guarded transaction and before the first row lock, or before the single create call for the transaction-less ingredient path. The four identity staff write views pass the request session's password hash. `catalog/test_identity_actor_recheck.py` and `daroobank/test_staff_inflight_identity_writes.py` cover matching/omitted/stale hashes, password rotation, disabled/destaffed/deleted writers, permissions removed through a second instance, parked races and the CSRF negative control. See ADR 0198.

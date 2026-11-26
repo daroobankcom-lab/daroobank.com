@@ -1,0 +1,9 @@
+# ADR 0191: known staff-session revocation gap
+
+Status: **unresolved production release blocker**; observation and selected tests only, not a revocation implementation.
+
+The development staff portal uses Django's default database-backed sessions and authentication backend. Selected synthetic tests show that an existing session is denied staff access while the user's `is_staff` flag is false, and a deactivated user is redirected to login. However, if the account is reactivated or the staff flag is restored before the session expires, the same previously established session can again access the development workspace. Observing a denial while a flag is off is therefore **not durable session revocation**.
+
+In a selected synthetic test, changing the password through Django before reactivation makes the old session fail the session-auth-hash check on its next request. This is evidence of Django's behavior in that scenario, not a complete revocation or incident procedure: an already-running request, alternate backends, other credentials, direct writes, reauthentication, session storage, recovery and operational races are outside its scope. There is no account lifecycle UI, centralized session inventory, bulk revocation service or durable per-account session generation in this project.
+
+Before production, choose and independently review an account/session lifecycle design that invalidates existing credentials and sessions when access is removed, including off/on transitions between requests, multiple workers, concurrent logins and in-flight requests. Define authenticated administrative actions, audit, recovery, key rotation, affected session stores and tests for direct/bulk changes or explicitly prohibit them with enforceable controls. Combine this with the proposed MFA and incident-response work; neither this record nor a password-change test authorizes production or real users.

@@ -318,7 +318,7 @@ Product and price CSV tests reject six selected raw controls at both edges of ev
 
 ## Revoked staff access
 
-`daroobank/test_staff_revocation_boundary.py` exercises named staff routes with GET, HEAD and empty POST after a synthetic authenticated account's staff flag is revoked, even though it still has superuser permissions. Login/logout are excluded; POST requests use the test client's default CSRF behavior. This does not prove race-free revocation, validate all permission combinations or protect direct services or other authentication backends.
+`daroobank/test_staff_revocation_boundary.py` exercises named staff routes with GET, HEAD and empty POST after a synthetic authenticated account's staff flag is revoked, even though it still has superuser permissions, and checks deactivation under the default backend. Selected tests also demonstrate that an old session can become usable again after reactivation or staff regrant; a password change invalidates it on a later request in one synthetic scenario. Login/logout are excluded from the route matrix; POST requests use the test client's default CSRF behavior. This does not prove durable or race-free revocation, validate all permission combinations or protect direct services or other authentication backends; see [ADR 0191](ARCHITECTURE_DECISIONS/0191-staff-session-revocation-gap.md).
 
 ## Synthetic projection-repair token input
 

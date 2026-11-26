@@ -380,4 +380,6 @@
 
 - [0190: synthetic repair token via stdin](0190-synthetic-repair-token-stdin.md) — avoid one command's token argument exposure.
 
+- [0191: staff session revocation gap](0191-staff-session-revocation-gap.md) — unresolved reactivation/regrant behavior.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

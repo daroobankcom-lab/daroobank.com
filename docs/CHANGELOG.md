@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — document unresolved staff-session revocation gap
+
+**Finding:** Synthetic tests show that reactivating an account or restoring its staff flag can make an existing unexpired session usable again. A selected password-change test invalidates an old session on a later request but is not a complete incident or revocation procedure.
+
+**Status:** Durable session revocation remains a production blocker; see ADR 0191.
+
 ## 2026-11-26 — revoked-staff boundary regression
 
 **Changes:** A synthetic existing-session test exercises named staff routes after the staff flag is revoked, including an account that retains superuser permissions.

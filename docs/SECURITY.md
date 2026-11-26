@@ -23,6 +23,10 @@ MFA for administrators, secure sessions, CSRF, Argon2-compatible password hashin
 
 Audits record actor, role, target, before/after versions or hashes, decision, time and request correlation, without PHI in general logs. Protect audit from modification by application roles and monitor unauthorized access. Separate production and non-production data; synthetic data only in tests. Backups encrypted, access controlled and regularly restore-tested.
 
+## Known staff-session revocation gap
+
+In the development portal, disabling an account or removing its staff flag denies selected requests while that state remains in effect, but reactivation or regranting staff can make the same unexpired session usable again. This is **not durable revocation**. A synthetic password-change test invalidates an old session on its next request, but does not establish an operational incident procedure or cover all authentication backends and races. See [ADR 0191](ARCHITECTURE_DECISIONS/0191-staff-session-revocation-gap.md); account lifecycle and session revocation remain production blockers.
+
 ## Privacy and incident response
 
 Data minimization and purpose limitation; record consent, role access, legal basis, retention and deletion/withdrawal policy with legal review. Do not put PHI in metrics, search URLs, errors or analytics. Segregate consultation data, apply per-case access and audit, and do not record audio/video by default; recording requires explicit consent and legal justification. Define incident severity, containment, notification and recovery owners before launch. Retention periods and deletion exceptions are pending legal decision, not invented here. See [runbook](OPERATIONS_RUNBOOK.md).

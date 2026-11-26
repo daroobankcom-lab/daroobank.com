@@ -398,4 +398,6 @@
 
 - [0199: staff write route guard inventory](0199-staff-write-route-guard-inventory.md) — in-flight tests for all fourteen write routes plus a drift guard.
 
+- [0200: staff authorization matrix](0200-staff-authorization-matrix.md) — every staff route against six synthetic account shapes.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

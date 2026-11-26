@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — add an endpoint-by-endpoint staff authorization matrix
+
+**Changes:** `daroobank/test_staff_authorization_matrix.py` declares one row for each of the 41 staff routes (all `staff_*` names except login and logout) with its URL arguments, the method that reaches its authorization check and its requirement — staff only, all of a permission set, or any of a permission set. Expectations are derived from that declaration for six account shapes: anonymous (302 to login), active non-staff (403), staff without the requirement (403), staff with it (never 403, and a 302 must not go to login), and a deactivated full-permission account (302 or 403, never content). Denials must still carry staff privacy headers, exact shape counts are pinned, and a coverage assertion enumerates the live URL resolver so a new route cannot appear undeclared. No production code changed. See ADR 0200.
+
+**Limits:** The matrix records and enforces current behavior; it does not judge whether each requirement is the right one, and the expectations are declared by the same authors as the code. Direct permission grants only — groups, superuser shortcuts, alternate backends and cross-request caching are out of scope. Authorized requests are asserted only to be not-403 with a missing primary key, so object-existence, ownership and row-level scoping differences are not covered. The deactivated-account denial is a login redirect, not durable revocation; ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — cover every staff write route with an in-flight guard test
 
 **Changes:** `daroobank/test_staff_inflight_revision_writes.py` adds synchronized HTTP tests for the three remaining revision routes (clinical revise, identity package revise, identity component correction), parking each CSRF-valid POST at the service-level `require_staff` the views import by name and asserting 403 with unchanged row counts after disable, password invalidation and reactivation, a login redirect for the next request, a still-commits flag-only case and a CSRF negative control. `daroobank/test_staff_write_route_inventory.py` enumerates all 43 `staff_*` route names and requires each to be mapped to a covering test module — which must name the route and park a password invalidation — or explicitly classified as read-only, download or auth. No production code changed. See ADR 0199.

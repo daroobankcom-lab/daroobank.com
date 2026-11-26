@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.db.transaction import TransactionManagementError
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare
 
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_account_exists
@@ -102,7 +103,7 @@ def _find_or_create_claim(**kwargs):
     return SourceClaim.objects.only('pk').get_or_create(**kwargs)
 
 
-def record_claim(*, actor, data):
+def record_claim(*, actor, data, session_auth_hash=None):
     require_staff(actor, VIEW, ADD)
     validate_data(data)
     digest = fingerprint(data)
@@ -116,6 +117,13 @@ def record_claim(*, actor, data):
         # A fresh model instance avoids permission caches on the request actor.
         # Permission/group changes are not locked and can still race this check.
         require_staff(current_actor, VIEW, ADD)
+        # A caller that supplies the session's authentication hash binds this
+        # write to that session's password state; a mismatch denies even an
+        # active, permitted account. Omitted hashes keep direct service calls
+        # working and are not authenticated by this check.
+        if session_auth_hash is not None and not (isinstance(session_auth_hash, str)
+                and constant_time_compare(session_auth_hash, current_actor.get_session_auth_hash())):
+            raise PermissionDenied
         claim, created = _find_or_create_claim(source_url=data['source_url'], payload_sha256=digest,
                                                              defaults={**data, 'recorded_by': actor})
         if not created:

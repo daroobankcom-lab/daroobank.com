@@ -80,6 +80,41 @@ class ClaimActorStatusBoundaryTests(TransactionTestCase):
             record_claim(actor=self.actor, data=DATA)
         self.assertFalse(SourceClaim.objects.exists())
 
+    def test_matching_session_hash_allows_write_and_omitted_hash_keeps_service_calls(self):
+        user = get_user_model().objects.create_user('synthetic-session-hash', password='synthetic-only', is_staff=True)
+        user.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                  codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        claim, created = record_claim(actor=user, data=DATA, session_auth_hash=user.get_session_auth_hash())
+        self.assertTrue(created)
+        self.assertEqual(claim.recorded_by_id, user.pk)
+        SourceClaim.objects.all().delete()
+        # Direct service callers keep the previous behavior when no hash is given.
+        self.assertTrue(record_claim(actor=user, data=DATA)[1])
+
+    def test_stale_or_malformed_session_hash_is_denied_for_an_active_staff_actor(self):
+        user = get_user_model().objects.create_user('synthetic-stale-hash', password='synthetic-only', is_staff=True)
+        user.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                  codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        for stale in ('synthetic-not-a-real-hash', '', 12345, ['synthetic']):
+            with self.subTest(stale=type(stale).__name__):
+                with self.assertRaises(PermissionDenied):
+                    record_claim(actor=user, data=DATA, session_auth_hash=stale)
+        self.assertFalse(SourceClaim.objects.exists())
+
+    def test_password_changed_before_guard_denies_the_previous_session_hash(self):
+        user = get_user_model().objects.create_user('synthetic-rotated-hash', password='synthetic-only', is_staff=True)
+        user.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                  codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        previous = user.get_session_auth_hash()
+        current = get_user_model().objects.get(pk=user.pk)
+        current.set_password('synthetic-rotated')
+        current.save(update_fields=['password'])
+        with self.assertRaises(PermissionDenied):
+            record_claim(actor=current, data=DATA, session_auth_hash=previous)
+        self.assertFalse(SourceClaim.objects.exists())
+        self.assertTrue(record_claim(actor=current, data=DATA,
+                                     session_auth_hash=current.get_session_auth_hash())[1])
+
     def test_permission_removed_after_fresh_check_can_still_race_write(self):
         # The account lock does not lock permission/group membership changes.
         user = get_user_model().objects.create_user('synthetic-permission-race', is_staff=True)

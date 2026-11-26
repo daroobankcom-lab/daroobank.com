@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — bind the source-claim write to the session password hash
+
+**Changes:** `record_claim` accepts an optional `session_auth_hash`; the development staff create view passes the request session's authentication hash, and the guarded transaction compares it in constant time with the freshly locked account's current hash, denying a mismatch or non-string value with 403. A synchronized synthetic test now shows disable, password invalidation and reactivation committing before the guard are denied. See ADR 0193.
+
+**Limits:** One service and one route are covered; review and other writes are untouched. The hash reflects the password only, so a flag-only disable/reactivate still lets the parked write commit, permission/group changes still race, and there is no durable session revocation. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — document reactivation race around the source-claim guard
 
 **Finding:** A synchronized synthetic HTTP test shows that when account disable, password invalidation and reactivation all commit before the guarded source-claim write, the in-flight already-authorized old session still creates the claim; its next request is denied and the CSRF negative control stays intact.

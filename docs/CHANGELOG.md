@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — recheck source-claim permissions on a fresh actor
+
+**Changes:** The selected source-claim transaction rechecks required permissions on its freshly loaded actor, rather than relying only on a possibly cached request actor.
+
+**Limits:** Permission or group removal after the recheck can still race and allow the write. This is not durable permission revocation; see ADR 0192.
+
 ## 2026-11-26 — serialize source-claim account status with selected writes
 
 **Changes:** The PostgreSQL source-claim recording transaction locks and checks its actor's current active/staff flags before creating or replaying a claim. Synthetic tests cover both account-update orderings and key-share compatibility.

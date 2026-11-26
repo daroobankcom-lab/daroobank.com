@@ -112,10 +112,10 @@ def record_claim(*, actor, data):
         # specific and does not serialize permission/group or session changes.
         if type(actor.pk) is not int or not 1 <= actor.pk <= MAX_PK:
             raise PermissionDenied
-        state = (get_user_model().objects.select_for_update(no_key=True)
-                 .filter(pk=actor.pk).values_list('is_active', 'is_staff').first())
-        if state != (True, True):
-            raise PermissionDenied
+        current_actor = get_user_model().objects.select_for_update(no_key=True).filter(pk=actor.pk).first()
+        # A fresh model instance avoids permission caches on the request actor.
+        # Permission/group changes are not locked and can still race this check.
+        require_staff(current_actor, VIEW, ADD)
         claim, created = _find_or_create_claim(source_url=data['source_url'], payload_sha256=digest,
                                                              defaults={**data, 'recorded_by': actor})
         if not created:

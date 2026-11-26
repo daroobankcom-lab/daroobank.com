@@ -4,7 +4,7 @@ from threading import Event
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
 from django.db import OperationalError, close_old_connections, connection, transaction
 from django.test import TransactionTestCase
@@ -40,8 +40,7 @@ class ClaimActorStatusBoundaryTests(TransactionTestCase):
             record_claim(actor=self.actor, data=DATA)
         self.assertFalse(SourceClaim.objects.exists())
 
-    def test_cached_permissions_can_outlive_a_permission_removal(self):
-        # Documents a separate unresolved boundary, not desired authorization.
+    def test_permission_removed_before_guard_is_denied_despite_stale_actor_cache(self):
         user = get_user_model().objects.create_user('synthetic-permission-cache', is_staff=True)
         permissions = Permission.objects.filter(content_type__app_label='sources',
                                                  codename__in=['view_sourceclaim', 'add_sourceclaim'])
@@ -50,7 +49,68 @@ class ClaimActorStatusBoundaryTests(TransactionTestCase):
         self.assertTrue(user.has_perm('sources.view_sourceclaim'))
         user.user_permissions.remove(*permissions)
         self.assertFalse(get_user_model().objects.get(pk=user.pk).has_perm('sources.add_sourceclaim'))
-        claim, created = record_claim(actor=user, data=DATA)
+        with self.assertRaises(PermissionDenied):
+            record_claim(actor=user, data=DATA)
+        self.assertFalse(SourceClaim.objects.exists())
+
+    def test_group_removals_before_guard_are_denied_despite_stale_actor_cache(self):
+        user = get_user_model().objects.create_user('synthetic-group-cache', is_staff=True)
+        group = Group.objects.create(name='synthetic-source-group')
+        permissions = list(Permission.objects.filter(content_type__app_label='sources',
+                                                     codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        group.permissions.add(*permissions)
+        user.groups.add(group)
+        self.assertTrue(user.has_perm('sources.add_sourceclaim'))
+        self.assertTrue(user.has_perm('sources.view_sourceclaim'))
+        self.assertTrue(record_claim(actor=user, data=DATA)[1])
+        SourceClaim.objects.all().delete()
+        user.groups.remove(group)
+        with self.assertRaises(PermissionDenied):
+            record_claim(actor=user, data=DATA)
+        user.groups.add(group)
+        group.permissions.remove(*permissions)
+        with self.assertRaises(PermissionDenied):
+            record_claim(actor=user, data=DATA)
+        self.assertFalse(SourceClaim.objects.exists())
+
+    def test_superuser_removal_before_guard_is_denied_despite_stale_actor(self):
+        self.assertTrue(self.actor.has_perm('sources.add_sourceclaim'))
+        get_user_model().objects.filter(pk=self.actor.pk).update(is_superuser=False)
+        with self.assertRaises(PermissionDenied):
+            record_claim(actor=self.actor, data=DATA)
+        self.assertFalse(SourceClaim.objects.exists())
+
+    def test_permission_removed_after_fresh_check_can_still_race_write(self):
+        # The account lock does not lock permission/group membership changes.
+        user = get_user_model().objects.create_user('synthetic-permission-race', is_staff=True)
+        permissions = list(Permission.objects.filter(content_type__app_label='sources',
+                                                     codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        user.user_permissions.add(*permissions)
+        ready, resume = Event(), Event()
+
+        def pause(*args, **kwargs):
+            ready.set()
+            if not resume.wait(10):
+                raise TimeoutError('Synthetic permission-race writer did not resume')
+            return _find_or_create_claim(*args, **kwargs)
+
+        def writer():
+            close_old_connections()
+            try:
+                return record_claim(actor=get_user_model().objects.get(pk=user.pk), data=DATA)
+            finally:
+                close_old_connections()
+
+        with patch('sources.services._find_or_create_claim', side_effect=pause):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(writer)
+                try:
+                    self.assertTrue(ready.wait(10), 'Writer did not reach insertion')
+                    user.user_permissions.remove(*permissions)
+                    self.assertFalse(get_user_model().objects.get(pk=user.pk).has_perm('sources.add_sourceclaim'))
+                finally:
+                    resume.set()
+                claim, created = future.result(timeout=15)
         self.assertTrue(created)
         self.assertEqual(claim.recorded_by_id, user.pk)
 

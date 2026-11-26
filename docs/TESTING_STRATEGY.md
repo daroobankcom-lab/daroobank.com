@@ -318,7 +318,7 @@ Product and price CSV tests reject six selected raw controls at both edges of ev
 
 ## Selected maintenance error redaction
 
-`daroobank/test_command_error_redaction.py` injects synthetic driver canaries into login-window cleanup and PostgreSQL schema/access inspectors, and exercises `--traceback` for cleanup. This only covers selected caught database failures and formatted tracebacks, not server logs or arbitrary diagnostics.
+`daroobank/test_command_error_redaction.py` injects synthetic driver canaries into login-window cleanup and PostgreSQL schema/access inspectors, and exercises `--traceback` for cleanup and an invalid schedule instant. This covers selected caught errors and formatted tracebacks, not command arguments visible to the OS, server logs or arbitrary diagnostics.
 
 ## Development staff password bound
 

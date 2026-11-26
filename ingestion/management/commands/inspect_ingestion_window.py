@@ -19,6 +19,7 @@ class Command(BaseCommand):
         try:
             at = datetime.fromisoformat(options['at']) if options['at'] else datetime.now(timezone.utc)
             plan = inspect_window(at=at, start=options['start'], end=options['end'], zone=options['timezone'])
-        except (ScheduleError, ValueError, OverflowError) as exc:
-            raise CommandError('Invalid or unresolvable schedule or instant.') from exc
+        except (ScheduleError, ValueError, OverflowError):
+            # Parser and timezone exceptions may contain the submitted value.
+            raise CommandError('Invalid or unresolvable schedule or instant.') from None
         self.stdout.write(json.dumps(plan.as_dict(), ensure_ascii=False, sort_keys=True))

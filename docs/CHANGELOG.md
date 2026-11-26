@@ -4,7 +4,7 @@ Entries describe the state at each change; later entries can supersede earlier l
 
 ## 2026-11-26 — selected maintenance traceback redaction
 
-**Changes:** Generic database failures in synthetic login-window cleanup and the PostgreSQL schema/access inspectors no longer chain driver errors into formatted tracebacks. Synthetic canary tests include a `--traceback` CLI run.
+**Changes:** Generic database failures in synthetic login-window cleanup and the PostgreSQL schema/access inspectors no longer chain driver errors into formatted tracebacks. The offline schedule command likewise suppresses chained parser errors, which may contain input. Synthetic canary tests include `--traceback` CLI runs.
 
 **Limits:** This does not scrub database/server logs, other commands, direct exception introspection or unexpected exception types; operators must still control diagnostic access and logging.
 

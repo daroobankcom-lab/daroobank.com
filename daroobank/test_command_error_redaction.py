@@ -34,6 +34,19 @@ class CommandErrorRedactionTests(SimpleTestCase):
                 self.assertIn(expected, formatted)
                 self.assertNotIn(canary, formatted + output.getvalue() + errors.getvalue())
 
+    def test_schedule_cli_traceback_does_not_echo_invalid_instant(self):
+        canary = 'synthetic-instant-private-canary'
+        env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG') if key in os.environ}
+        env.update(DJANGO_SETTINGS_MODULE='daroobank.settings', DAROOBANK_DEBUG='1',
+                   POSTGRES_DB='synthetic', POSTGRES_USER='synthetic', POSTGRES_HOST='not-connected',
+                   POSTGRES_PORT='5432')
+        result = subprocess.run([sys.executable, 'manage.py', 'inspect_ingestion_window', '--traceback', '--at', canary],
+                                cwd=Path(__file__).resolve().parent.parent, env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Invalid or unresolvable schedule or instant.', result.stderr)
+        self.assertNotIn(canary, result.stdout + result.stderr)
+
     def test_cli_traceback_does_not_print_selected_driver_message(self):
         canary = 'synthetic-cli-driver-private-canary'
         env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG') if key in os.environ}

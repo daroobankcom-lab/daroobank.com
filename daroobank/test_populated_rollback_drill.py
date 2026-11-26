@@ -7,7 +7,7 @@ which means the question an operator actually has before a destructive step is s
 happens to the rows?
 
 This drill answers it on a throwaway PostgreSQL database that the test populates itself, one row
-or more in each of the 23 project tables plus one staff account, and then rolls back:
+or more in each of the 24 project tables plus one staff account, and then rolls back:
 
 * rolling one app back destroys the rows of every table the cascade removes, and leaves a receipt
   whose items are gone — a history that is internally inconsistent rather than merely shorter;
@@ -45,7 +45,7 @@ from clinical.models import ClinicalDraft, ClinicalDraftReview, ClinicalReferenc
 from ingestion.models import ImportReceipt, ImportReceiptItem
 from pricing.models import PriceCandidate, PriceCandidateReview
 from sources.models import SourceClaim, SourceClaimReview
-from staff_security.models import StaffLoginWindow
+from staff_security.models import PublicReadWindow, StaffLoginWindow
 
 from .test_migration_reversibility import (PROJECT_APPS, applied, foreign_keys, inspect, inventory,
                                            migrate, project_tables, rows, tables,
@@ -78,6 +78,7 @@ POPULATED = {
     'pricing_pricecandidatereview': 1,
     'sources_sourceclaim': 1,
     'sources_sourceclaimreview': 1,
+    'staff_security_publicreadwindow': 1,
     'staff_security_staffloginwindow': 1,
 }
 CATALOG_CASCADE_TABLES = ('catalog_', 'pricing_', 'ingestion_importreceiptitem')
@@ -202,6 +203,10 @@ def populate(alias):
 
     StaffLoginWindow.objects.using(alias).create(
         client_key='a' * 64, started_at=django_timezone.now(), attempts=1)
+    # The read limiter's counter table is in the drill too: an operator who backs up or rolls
+    # back has to know it exists, even though it holds no data worth restoring (ADR 0228).
+    PublicReadWindow.objects.using(alias).create(
+        client_key='b' * 64, started_at=django_timezone.now(), reads=1)
     return user, published, candidate
 
 
@@ -235,7 +240,7 @@ class PopulatedRollbackDrillTests(TransactionTestCase):
             populate(alias)
             counts = row_counts(alias)
             self.assertEqual(counts, POPULATED, 'the drill fixture no longer fills the schema it measures')
-            self.assertEqual(len(counts), 23)
+            self.assertEqual(len(counts), 24)
             self.assertEqual(total(alias), sum(POPULATED.values()))
             self.assertEqual(inspect(alias)['status'], 'no_selected_issues',
                              'the populated database does not match the models')
@@ -247,12 +252,12 @@ class PopulatedRollbackDrillTests(TransactionTestCase):
             before = row_counts(alias)
             destroyed = sum(count for table, count in before.items()
                             if table.startswith(CATALOG_CASCADE_TABLES))
-            self.assertEqual(len(applied(alias)), 31)
+            self.assertEqual(len(applied(alias)), 32)
 
             migrate(alias, 'catalog', 'zero')
 
             after = row_counts(alias)
-            self.assertEqual(len(applied(alias)), 20, 'the cascade ADR 0216 measures changed')
+            self.assertEqual(len(applied(alias)), 21, 'the cascade ADR 0216 measures changed')
             gone = sorted(set(before) - set(after))
             self.assertEqual([name for name in gone if not name.startswith(CATALOG_CASCADE_TABLES)], [],
                              'a table outside the cascade disappeared')
@@ -266,7 +271,8 @@ class PopulatedRollbackDrillTests(TransactionTestCase):
             self.assertEqual(after['sources_sourceclaim'], 1)
             self.assertEqual(after['clinical_clinicaldraft'], 1)
             self.assertEqual(after['staff_security_staffloginwindow'], 1)
-            self.assertEqual(len(tables(alias)), 16)
+            self.assertEqual(after['staff_security_publicreadwindow'], 1)
+            self.assertEqual(len(tables(alias)), 17)
             self.assertEqual(len(foreign_keys(alias)), 17)
             self.assertEqual(inspect(alias)['status'], 'attention')
 
@@ -389,12 +395,12 @@ class PopulatedRollbackDrillTests(TransactionTestCase):
 
             # Step one had already committed; step two died dropping a table whose foreign key
             # points at the locked row, because dropping a child table locks its parent too.
-            self.assertEqual(len(applied(alias)), 30, 'a blocked rollback unapplied nothing')
+            self.assertEqual(len(applied(alias)), 31, 'a blocked rollback unapplied nothing')
             self.assertEqual(sorted(set(plan) - set(applied(alias))), [plan[0]],
                              'the blocked plan should have undone only its first migration')
             self.assertNotIn('ingestion_importreceiptitem', tables(alias))
             self.assertIn('catalog_productpresentation', tables(alias))
-            self.assertEqual(len(tables(alias)), 31)
+            self.assertEqual(len(tables(alias)), 32)
             self.assertEqual(len(foreign_keys(alias)), 47)
             after = row_counts(alias)
             self.assertEqual(sum(after.values()), sum(before.values()) - 2,
@@ -410,8 +416,8 @@ class PopulatedRollbackDrillTests(TransactionTestCase):
 
             # The same command completes once nothing holds the lock.
             migrate(alias, 'catalog', 'zero')
-            self.assertEqual(len(applied(alias)), 20)
-            self.assertEqual(len(tables(alias)), 16)
+            self.assertEqual(len(applied(alias)), 21)
+            self.assertEqual(len(tables(alias)), 17)
 
     def test_migrating_forward_repairs_the_schema_and_not_the_rows(self):
         with throwaway_database() as alias:
@@ -438,7 +444,7 @@ class PopulatedRollbackDrillTests(TransactionTestCase):
 
             migrate(alias)
 
-            self.assertEqual(len(applied(alias)), 31)
+            self.assertEqual(len(applied(alias)), 32)
             self.assertEqual(inventory(alias), schema_before, 'forward migrate did not restore the schema')
             self.assertEqual(inspect(alias)['status'], 'no_selected_issues')
             after = row_counts(alias)

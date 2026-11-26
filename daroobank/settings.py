@@ -12,6 +12,10 @@ STAFF_PORTAL_ENABLED = DEBUG
 HEALTH_PROBES_ENABLED = os.environ.get('DAROOBANK_HEALTH_PROBES_ENABLED') == '1'
 # Synthetic development control only, not MFA or a production access policy.
 STAFF_LOGIN_THROTTLE_ENABLED = DEBUG and os.environ.get('DAROOBANK_STAFF_LOGIN_THROTTLE') == '1'
+# Opt-in only: abuse protection belongs at the edge (see docs/DEPLOYMENT.md). This
+# limits public reads per keyed client window; it is not load-tested and is not a
+# production defense.
+PUBLIC_READ_LIMIT_ENABLED = os.environ.get('DAROOBANK_PUBLIC_READ_LIMIT') == '1'
 SECRET_KEY = os.environ.get('DAROOBANK_SECRET_KEY', '')
 if DEBUG:
     if not SECRET_KEY:
@@ -46,6 +50,8 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'daroobank.middleware.PublicReadPrivacyHeadersMiddleware',
     'daroobank.middleware.StaffPrivacyHeadersMiddleware',
+    # Before the session middleware: a refused read must not create a session row.
+    'daroobank.middleware.PublicReadLimitMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

@@ -8,12 +8,14 @@ before a public deployment.
 
 What is true today:
 
-* the only rate-limiting behavior in the project is the opt-in, debug-only staff login limiter
-  (ADR 0181): one call site, one `429` in the whole codebase, no `Retry-After` on it, and a
-  `503` for the unavailable case;
-* no middleware, view or decorator limits any public request — 40 sequential anonymous reads of
-  the catalog, the search page and the search API all answer 200 with no rate-limit header and
-  write nothing;
+* two limiters exist and both are opt-in and off by default. The staff login limiter (ADR 0181)
+  is debug-only, has one call site, refuses with a `429` that names no retry delay, and answers
+  `503` when the counter is unavailable. The public read limiter (ADR 0228) is one middleware
+  above the session layer, counts reads per keyed client, refuses with a `429` and a
+  `Retry-After`, and serves the read when the counter is unavailable;
+* with both limiters off, which is the default and what every test environment sets, nothing
+  limits any public request — 48 sequential anonymous reads of the catalog, the search page and
+  the search API all answer 200 with no rate-limit header and write nothing;
 * no request-size ceiling is configured: `DATA_UPLOAD_MAX_MEMORY_SIZE` and
   `FILE_UPLOAD_MAX_MEMORY_SIZE` are Django's defaults and `settings.py` sets neither, no project
   module mentions 413, and the upload limits that do exist (1 MiB for product intake, 2 MiB for
@@ -45,7 +47,7 @@ from pricing.models import PriceCandidate
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT_DIRS = ('catalog', 'clinical', 'daroobank', 'ingestion', 'pricing', 'sources',
                 'staff_security', 'tools')
-LIMITER_WORDS = ('ratelimit', 'rate_limit', 'throttle', 'limiter')
+LIMITER_WORDS = ('ratelimit', 'rate_limit', 'throttle', 'limit')
 PUBLIC_READS = (
     ('home', {}),
     ('about', {}),
@@ -98,23 +100,28 @@ def limiter_class_names():
 
 
 class AbuseProtectionShapeTests(SimpleTestCase):
-    def test_the_login_limiter_is_the_only_rate_limit_and_is_opt_in(self):
+    def test_rate_refusals_come_from_exactly_the_two_opt_in_limiters(self):
         self.assertFalse(settings.STAFF_LOGIN_THROTTLE_ENABLED,
                          'the synthetic environment enabled the login limiter')
-        self.assertEqual(modules_containing('429'), ['pricing/staff_views.py'],
-                         'a second place now refuses requests by rate')
-        self.assertEqual(modules_containing('Retry-After'), [],
-                         'the project refuses by rate without telling a client when to retry, or that changed')
+        self.assertFalse(settings.PUBLIC_READ_LIMIT_ENABLED,
+                         'the synthetic environment enabled the read limiter')
+        self.assertEqual(modules_containing('429'), ['daroobank/middleware.py', 'pricing/staff_views.py'],
+                         'a third place now refuses requests by rate')
+        self.assertEqual(modules_containing('Retry-After'), ['daroobank/middleware.py'],
+                         'the read limiter tells a client when to retry and the login refusal still does not')
         self.assertEqual(modules_importing('staff_security.throttle'), ['pricing/staff_views.py'],
                          'the login limiter is now applied somewhere else')
-        self.assertEqual(limiter_class_names(), [],
-                         'a limiter class appeared outside the opt-in login window')
+        self.assertEqual(modules_importing('staff_security.read_limit'), ['daroobank/middleware.py'],
+                         'the read limiter is now applied somewhere else')
+        self.assertEqual(limiter_class_names(), ['daroobank/middleware.py:PublicReadLimitMiddleware'],
+                         'a limiter class appeared outside the two opt-in ones')
 
-    def test_no_middleware_limits_requests(self):
+    def test_the_only_limiting_middleware_is_the_opt_in_read_limiter(self):
         self.assertEqual(tuple(settings.MIDDLEWARE), MIDDLEWARE)
-        for entry in MIDDLEWARE:
-            with self.subTest(middleware=entry):
-                self.assertEqual([word for word in LIMITER_WORDS if word in entry.lower()], [])
+        limiting = [entry for entry in MIDDLEWARE
+                    if any(word in entry.lower() for word in LIMITER_WORDS)]
+        self.assertEqual(limiting, ['daroobank.middleware.PublicReadLimitMiddleware'],
+                         'a middleware entry other than the opt-in read limiter can limit a request')
 
     def test_no_request_size_ceiling_is_configured(self):
         text = (ROOT / 'daroobank' / 'settings.py').read_text(encoding='utf-8')
@@ -134,7 +141,11 @@ class AbuseProtectionShapeTests(SimpleTestCase):
 
 
 class PublicReadRateTests(TestCase):
-    def test_public_reads_are_never_refused_for_rate_and_write_nothing(self):
+    def test_public_reads_are_unlimited_and_write_nothing_while_both_limiters_are_off(self):
+        # The default configuration, and what the synthetic environment sets: with the read
+        # limiter off, a repeated anonymous read is counted nowhere and refused for no reason.
+        self.assertFalse(settings.PUBLIC_READ_LIMIT_ENABLED)
+        self.assertFalse(settings.STAFF_LOGIN_THROTTLE_ENABLED)
         before = {label: model.objects.count() for label, model in sorted(project_models().items())}
         seen = 0
         for name, query in PUBLIC_READS:

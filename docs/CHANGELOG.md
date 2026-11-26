@@ -2,6 +2,64 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — add an opt-in limit on public reads that records nothing
+
+**Changes:** ADR 0223 measured that nothing in this application limits a public request: 48
+sequential anonymous reads of six routes all answered 200, no module sent `Retry-After`, and the
+only limiter was the debug-only staff login window of ADR 0181, so rate limiting was assigned to
+the edge. `docs/SECURITY.md` lists rate limits among the controls this product is supposed to have
+and the Phase 1 evidence carries abuse protection as open, which left an operator with nothing to
+turn on — including on a development preview that is reachable from the public internet.
+
+This adds a second limiter, opt-in and off by default in every environment.
+`staff_security/read_limit.py` counts public reads in a fixed window of 120 per keyed client in a
+rolling 60 seconds, under a one-second lock timeout and a two-second statement timeout in one
+atomic block; `PublicReadLimitMiddleware` sits directly above `SessionMiddleware`, counts only
+`GET`, never a staff path and never a health probe, and refuses an over-limit read with **429**, an
+empty body, a `Retry-After` delay and the public privacy headers, which it sets itself because a
+refusal is produced before URL resolution; `DAROOBANK_PUBLIC_READ_LIMIT=1` turns it on, with no
+debug term, because a floor that cannot be enabled in a non-debug deployment is not a control.
+
+`staff_security_publicreadwindow` stores exactly three columns — a keyed digest of the normalized
+address under the scope `staff_security.public_read.v1`, a window start and a count. No path,
+route, query, user agent, account or per-read timestamp is stored, and because the login window's
+scope is `staff_security.login.client.v1` the two tables cannot be joined on a shared key. ADR
+0221's property therefore survives: with the limiter on, a read increments a counter; with it off —
+the default — 48 repeated reads still write nothing in any of the 24 project tables. An unkeyable
+address, a non-PostgreSQL backend, an open transaction, a backwards clock and any `DatabaseError`
+all return `unavailable` and **serve the read**, the deliberate opposite of the login limiter's
+fail-closed 503: on a public path, refusing every read because a counter table is unreachable turns
+one database problem into an outage.
+
+The change moved 19 pins, measured by running the whole suite against a copy of the tree holding it
+(1658 tests, 622.8 s, 20 failures — the twentieth was pre-existing, the decision index listing 0227
+above 0226, and was fixed on its own). ADR 0221's suite moves four (middleware 12 → 13, project
+middleware 7 → 8, models 23 → 24, tables 32 → 33), ADR 0223's two (one module answering 429 → two,
+`Retry-After` in none → one, plus the limiting middleware now pinned rather than absent), ADR 0216's
+four (`staff_security` 1 → 2 migrations and 16 → 17 in total, applied 31 → 32, a fresh database
+33 tables / 279 columns / 111 indexes / 138 constraints, 17 tables left after `catalog zero`), ADR
+0225's five (the fixture fills 24 tables and 31 rows, and the applied, blocked-rollback and forward
+counts each move by one), and ADRs 0220, 0222, 0217, 0218 and 0227 one each.
+
+`daroobank/test_public_read_limit.py` (11 tests, ~1.2 s) pins the shape and both states: the
+constants, the middleware's position, the key's derivation and its separation from the login key,
+the six unkeyable addresses, 48 unlimited reads that write nothing, one keyed row for five reads,
+the refusal's status, empty body, delay and headers, the absence of any request marker in the table,
+window rollover, a backwards clock, the excluded paths and methods, and a failing database that
+serves the read. Eight red checks were applied alone and reverted from backups, each verified byte
+for byte: enabling the limiter by default (5 failures across three suites), returning the raw
+address as the key (4), adding a `path` column (1 failure and 3 errors), deleting `Retry-After` (1
+error), counting `POST` (1), failing closed (1), moving the middleware below the session layer (3)
+and deleting the health-probe exclusion (6).
+
+Not load-tested, and not a substitute for the edge provision `docs/DEPLOYMENT.md` still requires —
+that guide now says "no rate limit that is on by default" and names this limiter as defense in
+depth. One row per distinct client key is kept forever and no command prunes it, so whoever enables
+the limiter owns that maintenance; the key is whatever `REMOTE_ADDR` the server sees, so a proxy
+that does not set it per client gives every reader one shared window; failing open means the limit
+is not a guarantee; and the refusal is an empty 429 with no explanation. See
+[ADR 0228](ARCHITECTURE_DECISIONS/0228-public-read-limit.md).
+
 ## 2026-11-26 — write down the read-audit decision and measure its price
 
 **Changes:** ADR 0221 measured that nothing records a read and declined to add logging, because an

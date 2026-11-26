@@ -32,7 +32,7 @@ from django.test import TransactionTestCase
 from . import postgresql_inspection
 
 PROJECT_APPS = ('catalog', 'clinical', 'ingestion', 'pricing', 'sources', 'staff_security')
-MIGRATION_COUNTS = {'catalog': 8, 'clinical': 2, 'ingestion': 2, 'pricing': 2, 'sources': 1, 'staff_security': 1}
+MIGRATION_COUNTS = {'catalog': 8, 'clinical': 2, 'ingestion': 2, 'pricing': 2, 'sources': 1, 'staff_security': 2}
 # Data migrations whose declared reverse is a no-op: Django will not raise on rollback,
 # but the rows the forward direction wrote are not removed by it.
 NOOP_REVERSES = {('catalog', '0002_productpresentation_irc_normalized'),
@@ -189,12 +189,12 @@ class MigrationReversibilityTests(TransactionTestCase):
             per_app = project_tables(alias)
             self.assertEqual({app: len(names) for app, names in per_app.items()},
                              {'catalog': 13, 'clinical': 3, 'ingestion': 2, 'pricing': 2,
-                              'sources': 2, 'staff_security': 1})
-            self.assertEqual(len(applied(alias)), 31, 'the applied migration count changed')
+                              'sources': 2, 'staff_security': 2})
+            self.assertEqual(len(applied(alias)), 32, 'the applied migration count changed')
             self.assertEqual(len(foreign_keys(alias)), 50, 'the foreign key count changed')
-            self.assertEqual(len(tables(alias)), 32)
+            self.assertEqual(len(tables(alias)), 33)
             self.assertEqual({kind: len(value) for kind, value in inventory(alias).items()},
-                             {'columns': 276, 'indexes': 108, 'constraints': 136},
+                             {'columns': 279, 'indexes': 111, 'constraints': 138},
                              'the representative schema this rollback plan is measured against changed')
 
     def test_rolling_back_one_app_cascades_to_exactly_its_dependents(self):
@@ -216,9 +216,9 @@ class MigrationReversibilityTests(TransactionTestCase):
             per_app = project_tables(alias)
             self.assertEqual({app: len(names) for app, names in per_app.items()},
                              {'catalog': 0, 'clinical': 3, 'ingestion': 1, 'pricing': 0,
-                              'sources': 2, 'staff_security': 1},
+                              'sources': 2, 'staff_security': 2},
                              'dependents kept their tables after the app they depend on was rolled back')
-            self.assertEqual(len(tables(alias)), 16)
+            self.assertEqual(len(tables(alias)), 17)
             self.assertEqual(len(foreign_keys(alias)), 17)
             # Nothing may be left pointing at a table that no longer exists.
             remaining = set(tables(alias))

@@ -137,7 +137,7 @@ class DeploymentReadinessTests(TransactionTestCase):
         self.assertEqual(code, 1)
         self.assertEqual(report['failed'], ['migrations_applied'])
         detail = next(item['detail'] for item in report['required'] if item['id'] == 'migrations_applied')
-        self.assertIn('31 migrations are not applied', detail)
+        self.assertIn('32 migrations are not applied', detail)
 
     def test_an_applied_migration_with_no_file_fails_the_report(self):
         with throwaway_database() as alias:

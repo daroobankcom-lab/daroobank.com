@@ -3,7 +3,9 @@ from ipaddress import IPv6Address, ip_address
 
 from django.conf import settings
 from django.contrib.auth import logout
-from django.http import HttpResponseNotFound
+from django.http import HttpResponse, HttpResponseNotFound
+
+from staff_security.read_limit import consume_read
 
 from .session_guard import session_matches_account
 
@@ -30,6 +32,10 @@ class ContentSecurityPolicyMiddleware:
 
 def _is_staff_path(path):
     return path == '/staff' or path.startswith('/staff/')
+
+
+def _is_health_probe_path(path):
+    return path == '/health' or path.startswith('/health/')
 
 
 def _is_public_read_path(path):
@@ -180,4 +186,34 @@ class StaffSessionGuardMiddleware:
     def __call__(self, request):
         if _is_staff_path(request.path_info) and not session_matches_account(request):
             logout(request)
+        return self.get_response(request)
+
+
+class PublicReadLimitMiddleware:
+    """Refuse an over-limit public read with 429 and a `Retry-After` delay.
+
+    Opt-in and off by default; `docs/DEPLOYMENT.md` assigns abuse protection to
+    the edge, and this middleware is not a substitute for it. It sits above the
+    session middleware so a refused read creates no session row, and it sets the
+    public privacy headers itself, because a refusal is produced before URL
+    resolution and so never reaches the middleware that would set them. Staff
+    paths and health probes are not limited: the staff portal has its own login
+    window, and a probe that is rate limited cannot report anything. An
+    unavailable limiter serves the read, because on a public path failing closed
+    would turn one database problem into an outage.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if (settings.PUBLIC_READ_LIMIT_ENABLED and request.method == 'GET'
+                and not _is_staff_path(request.path_info)
+                and not _is_health_probe_path(request.path_info)):
+            outcome, retry_after = consume_read(request.META.get('REMOTE_ADDR'))
+            if outcome == 'limited':
+                response = HttpResponse(status=429)
+                response['Retry-After'] = str(retry_after)
+                _public_headers(response)
+                return response
         return self.get_response(request)

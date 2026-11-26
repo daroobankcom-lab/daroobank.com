@@ -86,7 +86,7 @@ class NoDjangoAdminTests(TestCase):
         self.assertEqual(django_tables, ['django_content_type', 'django_migrations', 'django_session'],
                          'django_admin_log appeared, so the admin app was installed and migrated')
         self.assertEqual(admin_tables, 0)
-        self.assertEqual(total, 32, 'the table inventory ADR 0216 pins changed')
+        self.assertEqual(total, 33, 'the table inventory ADR 0216 pins changed')
 
     def test_no_project_module_imports_the_admin(self):
         # Parsed imports rather than a text search, so this file's own prose about the

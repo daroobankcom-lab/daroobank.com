@@ -95,6 +95,7 @@ UNATTRIBUTED = {
     'catalog.FormulationComponent': 'a child of FormulationDraft, attributed through its parent',
     'ingestion.ImportReceiptItem': 'a child of ImportReceipt, attributed through its parent',
     'staff_security.StaffLoginWindow': 'a synthetic throttle row keyed by an address digest',
+    'staff_security.PublicReadWindow': 'a synthetic read-counter row keyed by an address digest',
 }
 PARENTS = {'catalog.FormulationComponent': ('formulation', 'catalog.FormulationDraft'),
            'ingestion.ImportReceiptItem': ('receipt', 'ingestion.ImportReceipt')}
@@ -145,7 +146,7 @@ def modules_naming(model_name):
 class ActorInventoryTests(SimpleTestCase):
     def test_the_actor_inventory_is_pinned(self):
         models_by_label = project_models()
-        self.assertEqual(len(models_by_label), 23, 'the project model count changed')
+        self.assertEqual(len(models_by_label), 24, 'the project model count changed')
         attributed = {label for label, model in models_by_label.items() if user_fields(model)}
         self.assertEqual(attributed, set(ACTORS))
         self.assertEqual(set(models_by_label) - attributed, set(UNATTRIBUTED))

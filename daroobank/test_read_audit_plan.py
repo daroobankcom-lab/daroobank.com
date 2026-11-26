@@ -150,13 +150,13 @@ class NothingImplementedTests(SimpleTestCase):
         self.assertFalse((ROOT / 'daroobank' / 'read_audit.py').exists(),
                          'a read-audit module exists while the plan says nothing is implemented')
         self.assertNotIn('READ_AUDIT', read(SETTINGS))
-        self.assertEqual(len(settings.MIDDLEWARE), 12)
+        self.assertEqual(len(settings.MIDDLEWARE), 13)
         for entry in settings.MIDDLEWARE:
             for token in RECORD_LIKE:
                 self.assertNotIn(token, camel_words(entry.rsplit('.', 1)[-1]),
                                  f'{entry} is named like an access record')
         project_models = [model for model in apps.get_models() if model._meta.app_label in PROJECT_APPS]
-        self.assertEqual(len(project_models), 23, 'the project model count changed')
+        self.assertEqual(len(project_models), 24, 'the project model count changed')
         self.assertEqual([model.__name__ for model in project_models
                           if any(token in camel_words(model.__name__) for token in RECORD_LIKE)], [],
                          'a project model is named like an access record')

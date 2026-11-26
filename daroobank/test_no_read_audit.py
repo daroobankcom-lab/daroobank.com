@@ -1,6 +1,6 @@
 """Nothing in this system records that a read happened.
 
-ADR 0220 measured the write side of attribution: 19 of the 23 project models name the account
+ADR 0220 measured the write side of attribution: 19 of the project models name the account
 that appended them, behind a protected foreign key and a creation timestamp. This suite
 measures the other side, and the answer is that there is nothing to measure — no access log, no
 audit table, no logger, no middleware that records a request, and no row created by reading.
@@ -11,10 +11,11 @@ raises "who looked at this?" as a real question, and because an absence that nob
 is indistinguishable from an absence nobody noticed.
 
 The measurements are: `LOGGING` is empty and no project module imports `logging`; the middleware
-stack is exactly the twelve entries that set headers, resolve sessions and guard staff state;
-no table in the schema can hold an access record, while the four revision tables that do exist
+stack is exactly the thirteen entries that set headers, resolve sessions, guard staff state and
+count reads for an opt-in limiter that is off by default; no table in the schema can hold an
+access record, while the four revision tables that do exist
 record writes; a sweep of every staff route with a fully permitted account, and of every public
-route anonymously, creates no row in any of the 23 project tables and no session row; and, as a
+route anonymously, creates no row in any of the 24 project tables and no session row; and, as a
 positive control, the same counter does see an insert and does see the session a login creates.
 
 This pins that reads are unrecorded. It does not judge whether that is acceptable, and it cannot
@@ -48,6 +49,9 @@ MIDDLEWARE = (
     'django.middleware.security.SecurityMiddleware',
     'daroobank.middleware.PublicReadPrivacyHeadersMiddleware',
     'daroobank.middleware.StaffPrivacyHeadersMiddleware',
+    # Opt-in and off by default; it counts reads per keyed client and can refuse
+    # one, but stores no path, route, query, agent or account (ADR 0228).
+    'daroobank.middleware.PublicReadLimitMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -68,7 +72,8 @@ SCHEMA_TABLES = (
     'clinical_clinicaldraftreview', 'clinical_clinicalreferenceassertion', 'django_content_type',
     'django_migrations', 'django_session', 'ingestion_importreceipt',
     'ingestion_importreceiptitem', 'pricing_pricecandidate', 'pricing_pricecandidatereview',
-    'sources_sourceclaim', 'sources_sourceclaimreview', 'staff_security_staffloginwindow',
+    'sources_sourceclaim', 'sources_sourceclaimreview', 'staff_security_publicreadwindow',
+    'staff_security_staffloginwindow',
 )
 MISSING_PK = 999_999_999
 KIND = 'ingredient'
@@ -154,14 +159,19 @@ class ReadAuditAbsenceTests(SimpleTestCase):
             with self.subTest(middleware=entry):
                 self.assertEqual([word for word in RECORD_WORDS if word in entry.lower()], [])
         project_entries = tuple(entry for entry in MIDDLEWARE if entry.startswith('daroobank.'))
-        self.assertEqual(len(project_entries), 7)
-        self.assertIn('daroobank.middleware.StaffSessionGuardMiddleware', project_entries,
-                      'the one project middleware that acts on a request is the session guard')
+        self.assertEqual(len(project_entries), 8)
+        # Two project middleware act on a request rather than only setting headers: the
+        # session guard, which ends a session, and the opt-in read limiter, which counts
+        # reads and can refuse one. Neither records what was read (ADR 0228).
+        self.assertIn('daroobank.middleware.StaffSessionGuardMiddleware', project_entries)
+        self.assertIn('daroobank.middleware.PublicReadLimitMiddleware', project_entries)
+        self.assertFalse(settings.PUBLIC_READ_LIMIT_ENABLED,
+                         'the synthetic environment enabled the read limiter')
 
 
 class ReadAuditSchemaTests(TestCase):
     def test_no_project_model_is_named_like_an_access_record(self):
-        self.assertEqual(len(project_models()), 23)
+        self.assertEqual(len(project_models()), 24)
         matched = sorted({label for label in project_models()
                           for word in RECORD_WORDS if word in camel_tokens(label)})
         self.assertEqual(matched, [], 'a model appeared whose name suggests it records access')

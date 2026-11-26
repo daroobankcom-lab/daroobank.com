@@ -1,10 +1,10 @@
 """Every environment variable the application reads is documented where it is set.
 
-Configuration is the part of this project an operator touches without reading code: fifteen
+Configuration is the part of this project an operator touches without reading code: sixteen
 environment variables decide whether debug mode is on, which hosts are served, whether the
 staff portal exists, whether health probes are reachable, whether HSTS is sent, whether a proxy
 header is trusted, and how the database is reached — including whether that connection is
-encrypted. All fifteen are read in one module, `daroobank/settings.py`, and the fail-closed
+encrypted. All sixteen are read in one module, `daroobank/settings.py`, and the fail-closed
 shape of each is measured elsewhere (`test_nondebug_configuration.py`,
 `test_hsts_configuration.py`, `test_database_configuration.py`, and the readiness report of
 ADR 0217).
@@ -44,12 +44,13 @@ DOCUMENTS = ('README.md', DEPLOYMENT_GUIDE, DEVELOPMENT_GUIDE, 'docs/OPERATIONS_
              'docs/SECURITY.md', 'docs/TESTING_STRATEGY.md', ENVIRONMENT_FILE, COMPOSE_FILE,
              '.github/workflows/checks.yml')
 
-# The fifteen variables the application reads, and the module that reads each of them.
+# The sixteen variables the application reads, and the module that reads each of them.
 READS = {
     'DAROOBANK_ALLOWED_HOSTS': 'daroobank/settings.py',
     'DAROOBANK_DEBUG': 'daroobank/settings.py',
     'DAROOBANK_HEALTH_PROBES_ENABLED': 'daroobank/settings.py',
     'DAROOBANK_HSTS_SECONDS': 'daroobank/settings.py',
+    'DAROOBANK_PUBLIC_READ_LIMIT': 'daroobank/settings.py',
     'DAROOBANK_SECRET_KEY': 'daroobank/settings.py',
     'DAROOBANK_STAFF_LOGIN_THROTTLE': 'daroobank/settings.py',
     'DAROOBANK_TRUSTED_PROXY_CIDRS': 'daroobank/settings.py',
@@ -80,9 +81,9 @@ DEVELOPMENT_ONLY = frozenset({'DAROOBANK_STAFF_LOGIN_THROTTLE'})
 PRODUCTION = frozenset(READS) - DEVELOPMENT_ONLY
 # What the local Compose stack passes to the application service.
 COMPOSE_SETS = frozenset({'DAROOBANK_ALLOWED_HOSTS', 'DAROOBANK_DEBUG', 'DAROOBANK_HEALTH_PROBES_ENABLED',
-                          'DAROOBANK_SECRET_KEY', 'DAROOBANK_STAFF_LOGIN_THROTTLE', 'POSTGRES_CONN_MAX_AGE',
-                          'POSTGRES_DB', 'POSTGRES_HOST', 'POSTGRES_PASSWORD', 'POSTGRES_PORT',
-                          'POSTGRES_USER'})
+                          'DAROOBANK_PUBLIC_READ_LIMIT', 'DAROOBANK_SECRET_KEY',
+                          'DAROOBANK_STAFF_LOGIN_THROTTLE', 'POSTGRES_CONN_MAX_AGE', 'POSTGRES_DB',
+                          'POSTGRES_HOST', 'POSTGRES_PASSWORD', 'POSTGRES_PORT', 'POSTGRES_USER'})
 # Required variables, and how many Compose services set them: the database service needs the
 # three connection settings too, while only the application service reads the secret key.
 COMPOSE_REQUIRED = {'DAROOBANK_SECRET_KEY': 1, 'POSTGRES_DB': 2, 'POSTGRES_PASSWORD': 2,

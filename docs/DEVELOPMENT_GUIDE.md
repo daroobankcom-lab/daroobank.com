@@ -113,6 +113,12 @@ DAROOBANK_DEBUG=1 .venv/bin/python manage.py cleanup_staff_login_windows --apply
 
 Both forms print one JSON object and nothing else. The command refuses to run outside a debug environment, requires PostgreSQL in autocommit (it will not run inside an open transaction), sets a one-second lock timeout and a two-second statement timeout locally, and touches at most 500 rows per run, oldest first, rechecking a row's age after any lock wait so a freshly reset window is never deleted. Without `--apply` it reports `{"eligible": n, "more": bool, "mode": "dry_run"}`; with `--apply` it reports `{"deleted": n, "mode": "delete"}`. Repeat the run to clear more than one batch.
 
+## Opt-in public read limit
+
+`DAROOBANK_PUBLIC_READ_LIMIT=1` enables a fixed-window limit on public reads: at most 120 GETs per client key in a rolling sixty-second window, recorded in the `staff_security_publicreadwindow` table, after which a read is refused with 429, an empty body and a `Retry-After` delay. It works in debug and outside it, is off by default, and is not a substitute for the reverse-proxy rate limiting that `docs/DEPLOYMENT.md` requires. The key is an HMAC of the normalized `REMOTE_ADDR` under a scope of its own, so the table holds no address, path, query or account and cannot be joined with the login window. Staff paths and health probes are exempt, non-GET requests are not counted, and a limiter that cannot reach the database serves the read instead of refusing it. The local Compose stack passes the variable to the application service with a default of `0`, as it does the login throttle, so a value set only in an uncommitted `.env` still reaches the process.
+
+Unlike the login window, no management command prunes these rows: `cleanup_staff_login_windows` handles only `staff_security_staffloginwindow`. Enable the read limit only where someone has decided how the table is maintained ([ADR 0228](ARCHITECTURE_DECISIONS/0228-public-read-limit.md)).
+
 ## Development-only staging and preliminary review
 
 An active staff user needs both `pricing.view_pricecandidate` and `pricing.add_pricecandidate` to use `/staff/prices/import/`. Choose preview (no writes) or stage; staging requires an explicit attestation of permission for collection and internal storage. This is a self-assertion, not a licence check. Only validated structured fields are stored; the original file is not retained by the application. Django may temporarily buffer uploads during a request, and the 2 MiB validation limit is not a reverse-proxy request-size or malware-scanning control.

@@ -75,6 +75,7 @@ it produced.
   measurement is that Django has already spooled whatever arrives.
 - The absence of `Retry-After` is pinned as a fact about today, not as a virtue. Adding the header
   to the login 429 would be an improvement for clients and would fail this suite until this record
-  is updated.
+  is updated. [ADR 0228](0228-public-read-limit.md) added an opt-in public read limiter that does
+  send the header, and moved the pins in this record's suite; the login 429 still sends none.
 - Whether the current limits are right — ten login attempts per minute per client key, 2 MiB for a
   price CSV, 1 MiB for a product file — is not judged anywhere here.

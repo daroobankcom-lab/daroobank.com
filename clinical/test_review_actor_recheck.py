@@ -73,8 +73,10 @@ class ClinicalReviewActorRecheckTests(TransactionTestCase):
     def test_review_permission_removed_before_review_is_denied_despite_stale_cache(self):
         stale_actor = get_user_model().objects.get(pk=self.reviewer.pk)
         self.assertTrue(stale_actor.has_perm('clinical.review_clinicaldraft'))  # prime backend cache
-        stale_actor.user_permissions.remove(*Permission.objects.filter(content_type__app_label='clinical',
-                                                                       codename='review_clinicaldraft'))
+        # Remove through a second instance so the request actor keeps its stale cache.
+        other = get_user_model().objects.get(pk=self.reviewer.pk)
+        other.user_permissions.remove(*Permission.objects.filter(content_type__app_label='clinical',
+                                                                 codename='review_clinicaldraft'))
         with self.assertRaises(PermissionDenied):
             review_draft(actor=stale_actor, session_auth_hash=stale_actor.get_session_auth_hash(),
                          **self.review_data())

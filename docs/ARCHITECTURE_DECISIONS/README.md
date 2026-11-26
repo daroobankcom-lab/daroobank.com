@@ -388,6 +388,8 @@
 
 - [0194: source-review actor and session recheck](0194-source-review-actor-session-recheck.md) — unlocked reviewer recheck preserving one lock order; still not revocation.
 
-- [0195: shared write-actor recheck](0195-shared-write-actor-recheck.md) — one helper reused by four guarded services; unlocked rechecks still race.
+- [0195: shared write-actor recheck](0195-shared-write-actor-recheck.md) — one helper reused by guarded review services; unlocked rechecks still race.
+
+- [0196: staging write actor recheck](0196-staging-write-actor-recheck.md) — the same helper on the bulk staging paths, plus corrected stale-cache evidence.
 
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

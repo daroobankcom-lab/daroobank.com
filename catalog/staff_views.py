@@ -75,7 +75,8 @@ def upload(request):
         try:
             if data['action'] == 'stage':
                 result, receipt = stage_product_with_receipt(data['csv_file'], data['source_name'], data['source_url'],
-                                                            actor=request.user, rights_attested=data['rights_attested'])
+                                                            actor=request.user, rights_attested=data['rights_attested'],
+                                                            session_auth_hash=request.session.get(HASH_SESSION_KEY))
                 result['receipt_id'] = receipt.pk
             else:
                 result = stage_products(data['csv_file'], data['source_name'], data['source_url'], actor=request.user)

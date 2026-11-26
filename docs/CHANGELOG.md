@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — extend the actor recheck to staging and correct stale-cache evidence
+
+**Changes:** `catalog.intake.stage_products` and `pricing.importer.stage_csv` recheck their stager through the shared helper in commit mode, after the source-stage lock and before any row is written; the receipt wrappers forward the hash and both upload views supply it from the session. Permission-removal tests across the ADR 0192–0196 suites now remove permissions, group membership or group permissions through a second user instance, because Django clears an instance's own permission cache and the earlier tests could pass without exercising the recheck. A near-miss session hash in `daroobank/test_actor_recheck.py` is now derived by flipping one character; a fixed digit made that case fail in one optimized-mode run when it coincided with the real hash. See ADR 0196.
+
+**Limits:** The staging rechecks are unlocked point-in-time reads, so parked-writer tests still stage rows and receipts after disable, password invalidation and reactivation; preview mode and actor-less price staging are not rechecked. Seven services on seven staff routes are covered, permission changes remain unserialized and durable session revocation is still absent. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — extend the shared actor recheck to catalog product review
 
 **Changes:** `catalog.intake.review_product` now rechecks its reviewer through the shared helper after locking the candidate row, and the staff product review view passes the request session's password hash. `catalog/test_review_actor_recheck.py` and two HTTP cases in `daroobank/test_staff_inflight_review_writes.py` cover stale/disabled/destaffed/deleted reviewers, removed permissions behind a primed cache, stale and malformed hashes, password rotation, a parked race and the CSRF negative control.

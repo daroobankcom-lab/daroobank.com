@@ -47,7 +47,10 @@ class ClaimActorStatusBoundaryTests(TransactionTestCase):
         user.user_permissions.add(*permissions)
         self.assertTrue(user.has_perm('sources.add_sourceclaim'))  # prime backend cache
         self.assertTrue(user.has_perm('sources.view_sourceclaim'))
-        user.user_permissions.remove(*permissions)
+        # Remove through a second instance so the request actor keeps its stale
+        # cache and only the fresh recheck inside the transaction can deny it.
+        other = get_user_model().objects.get(pk=user.pk)
+        other.user_permissions.remove(*permissions)
         self.assertFalse(get_user_model().objects.get(pk=user.pk).has_perm('sources.add_sourceclaim'))
         with self.assertRaises(PermissionDenied):
             record_claim(actor=user, data=DATA)
@@ -64,11 +67,14 @@ class ClaimActorStatusBoundaryTests(TransactionTestCase):
         self.assertTrue(user.has_perm('sources.view_sourceclaim'))
         self.assertTrue(record_claim(actor=user, data=DATA)[1])
         SourceClaim.objects.all().delete()
-        user.groups.remove(group)
+        # Membership and group-permission changes go through other instances, so
+        # the request actor keeps its primed cache and the recheck must deny it.
+        other = get_user_model().objects.get(pk=user.pk)
+        other.groups.remove(group)
         with self.assertRaises(PermissionDenied):
             record_claim(actor=user, data=DATA)
-        user.groups.add(group)
-        group.permissions.remove(*permissions)
+        other.groups.add(group)
+        Group.objects.get(pk=group.pk).permissions.remove(*permissions)
         with self.assertRaises(PermissionDenied):
             record_claim(actor=user, data=DATA)
         self.assertFalse(SourceClaim.objects.exists())

@@ -44,13 +44,13 @@ def _write_items(receipt, outcomes, counts):
     ImportReceiptItem.objects.bulk_create(items, batch_size=200)
 
 
-def stage_product_with_receipt(file, source_name, source_url, *, actor, rights_attested):
+def stage_product_with_receipt(file, source_name, source_url, *, actor, rights_attested, session_auth_hash=None):
     if not actor:
         raise PermissionDenied
     outcomes = []
     with write_conflict_boundary(StagingConflict):
         counts = stage_products(file, source_name, source_url, actor=actor, commit=True, rights_attested=rights_attested,
-                                on_staged=lambda *item: outcomes.append(item))
+                                on_staged=lambda *item: outcomes.append(item), session_auth_hash=session_auth_hash)
         receipt = ImportReceipt.objects.create(kind=ImportReceipt.PRODUCT, source_name=source_name,
             source_url=source_url, actor=actor, manifest_version=MANIFEST_VERSION, rows=counts['rows'],
             created=counts['created'], duplicates=counts['duplicates'])
@@ -58,7 +58,7 @@ def stage_product_with_receipt(file, source_name, source_url, *, actor, rights_a
     return counts, receipt
 
 
-def stage_price_with_receipt(file, source_name, source_url, *, actor, rights_attested):
+def stage_price_with_receipt(file, source_name, source_url, *, actor, rights_attested, session_auth_hash=None):
     if (not actor or not actor.is_authenticated or not actor.is_active or not actor.is_staff
             or not actor.has_perm(PRICE_VIEW) or not actor.has_perm('pricing.add_pricecandidate')):
         raise PermissionDenied
@@ -66,7 +66,7 @@ def stage_price_with_receipt(file, source_name, source_url, *, actor, rights_att
     outcomes = []
     with write_conflict_boundary(StagingConflict):
         counts = stage_csv(file, source_name, source_url, commit=True, rights_attested=rights_attested, staged_by=actor,
-                           on_staged=lambda *item: outcomes.append(item))
+                           on_staged=lambda *item: outcomes.append(item), session_auth_hash=session_auth_hash)
         receipt = ImportReceipt.objects.create(kind=ImportReceipt.PRICE, source_name=source_name, source_url=source_url,
             actor=actor, manifest_version=MANIFEST_VERSION, rows=counts['rows'], created=counts['created'], duplicates=counts['duplicates'],
             suggested=counts['suggested'], ambiguous=counts['ambiguous'], unmatched=counts['unmatched'])

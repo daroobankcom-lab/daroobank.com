@@ -61,7 +61,11 @@ class ActorRecheckTests(TransactionTestCase):
     def test_session_hash_binding_accepts_a_match_and_denies_stale_or_malformed_values(self):
         matching = self.actor.get_session_auth_hash()
         self.assertEqual(recheck_actor(self.actor, PERMS, session_auth_hash=matching).pk, self.actor.pk)
-        for stale in ('synthetic-not-a-real-hash', '', 12345, ['synthetic'], matching[:-1] + '0'):
+        # Flip one character deterministically: a fixed replacement digit could
+        # coincidentally equal the real hash and make this case pass vacuously.
+        near_miss = matching[:-1] + ('1' if matching[-1] != '1' else '2')
+        self.assertNotEqual(near_miss, matching)
+        for stale in ('synthetic-not-a-real-hash', '', 12345, ['synthetic'], near_miss):
             with self.subTest(stale=type(stale).__name__):
                 with self.assertRaises(PermissionDenied):
                     recheck_actor(self.actor, PERMS, session_auth_hash=stale)

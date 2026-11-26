@@ -78,8 +78,10 @@ class PricingReviewActorRecheckTests(TransactionTestCase):
     def test_review_permission_removed_before_review_is_denied_despite_stale_cache(self):
         stale_actor = get_user_model().objects.get(pk=self.reviewer.pk)
         self.assertTrue(stale_actor.has_perm('pricing.review_pricecandidate'))  # prime backend cache
-        stale_actor.user_permissions.remove(*Permission.objects.filter(content_type__app_label='pricing',
-                                                                       codename='review_pricecandidate'))
+        # Remove through a second instance so the request actor keeps its stale cache.
+        other = get_user_model().objects.get(pk=self.reviewer.pk)
+        other.user_permissions.remove(*Permission.objects.filter(content_type__app_label='pricing',
+                                                                 codename='review_pricecandidate'))
         with self.assertRaises(PermissionDenied):
             record_preliminary_review(actor=stale_actor, session_auth_hash=stale_actor.get_session_auth_hash(),
                                       **self.review_data())

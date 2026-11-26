@@ -112,7 +112,8 @@ def _find_or_create_candidate(**kwargs):
     return ProductCandidate.objects.only('pk').get_or_create(**kwargs)
 
 
-def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False, on_staged=None):
+def stage_products(file, source_name, source_url, *, actor, commit=False, rights_attested=False, on_staged=None,
+                   session_auth_hash=None):
     # Internal row callback runs inside the transaction; it must not cause external side effects.
     require_staff(actor, 'catalog.view_productcandidate', 'catalog.add_productcandidate')
     if type(commit) is not bool:
@@ -127,6 +128,12 @@ def stage_products(file, source_name, source_url, *, actor, commit=False, rights
     with write_conflict_boundary(StagingConflict):
         if commit:
             lock_source_stage('product', source_url)
+            # Re-verify the stager before any row is written. The read is
+            # deliberately unlocked to keep one lock order across services, so it is
+            # a point-in-time check and a later credential change still races.
+            # Preview mode writes nothing and is not rechecked here. ADR 0195.
+            recheck_actor(actor, ('catalog.view_productcandidate', 'catalog.add_productcandidate'),
+                          session_auth_hash=session_auth_hash)
             for row in rows:
                 digest = fingerprint(source_name, source_url, row)
                 candidate, created = _find_or_create_candidate(

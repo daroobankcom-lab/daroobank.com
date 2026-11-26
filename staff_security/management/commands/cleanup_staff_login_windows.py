@@ -35,6 +35,7 @@ class Command(BaseCommand):
                 count = ordered[:BATCH_LIMIT + 1].count()
                 result = {'mode': 'dry_run', 'eligible': min(count, BATCH_LIMIT),
                           'more': count > BATCH_LIMIT, 'limit': BATCH_LIMIT}
-        except DatabaseError as exc:
-            raise CommandError('Synthetic login-window maintenance is unavailable.') from exc
+        except DatabaseError:
+            # Driver errors can contain queries or sensitive environment details.
+            raise CommandError('Synthetic login-window maintenance is unavailable.') from None
         self.stdout.write(json.dumps(result, sort_keys=True))

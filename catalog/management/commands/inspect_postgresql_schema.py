@@ -20,8 +20,9 @@ class Command(BaseCommand):
             report = inspect_schema(expected_tables(), expected_foreign_keys(), expected_unique_keys(),
                                     expected_check_constraints(), expected_columns(), expected_field_indexes(),
                                     expected_named_indexes(), unsupported_unique_constraints(), expected_auto_fields())
-        except DatabaseError as exc:
-            raise CommandError('PostgreSQL catalog inspection could not be completed.') from exc
+        except DatabaseError:
+            # Do not chain driver details into an operator-facing traceback.
+            raise CommandError('PostgreSQL catalog inspection could not be completed.') from None
         self.stdout.write(json.dumps(report, sort_keys=True))
         if report['status'] != 'no_selected_issues':
             raise CommandError('Selected PostgreSQL catalog issues require investigation.')

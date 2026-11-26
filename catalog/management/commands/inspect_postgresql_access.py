@@ -17,6 +17,7 @@ class Command(BaseCommand):
             raise CommandError('This inspection is available only for PostgreSQL development settings.')
         try:
             report = inspect_access(expected_tables())
-        except DatabaseError as exc:
-            raise CommandError('PostgreSQL access inspection could not be completed.') from exc
+        except DatabaseError:
+            # Do not chain driver details into an operator-facing traceback.
+            raise CommandError('PostgreSQL access inspection could not be completed.') from None
         self.stdout.write(json.dumps(report, sort_keys=True))

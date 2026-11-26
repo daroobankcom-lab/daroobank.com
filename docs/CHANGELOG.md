@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — selected maintenance traceback redaction
+
+**Changes:** Generic database failures in synthetic login-window cleanup and the PostgreSQL schema/access inspectors no longer chain driver errors into formatted tracebacks. Synthetic canary tests include a `--traceback` CLI run.
+
+**Limits:** This does not scrub database/server logs, other commands, direct exception introspection or unexpected exception types; operators must still control diagnostic access and logging.
+
 ## 2026-11-26 — development staff-login password bound
 
 **Changes:** The staff form rejects passwords over 4,096 characters before calling the backend, with the generic invalid-login error. CSRF-valid attempts still count toward the opt-in synthetic throttle.

@@ -406,4 +406,6 @@
 
 - [0203: staff grant paths](0203-staff-grant-paths.md) — group grants, the superuser bypass, an alternate backend and stale in-memory actors.
 
+- [0204: staff denial parity](0204-staff-denial-parity.md) — denials for existing and missing rows are byte-identical, so existence is not an oracle.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

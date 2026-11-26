@@ -14,6 +14,7 @@ It remains a record of current behavior on a development-only portal with
 synthetic data, not an authorization design review.
 """
 import io
+import types
 from datetime import datetime, timezone as dt_timezone
 
 from django.contrib.auth import get_user_model
@@ -64,6 +65,41 @@ COUNTED_MODELS = (SourceClaim, SourceClaimReview, ProductCandidate, ProductCandi
                   ProductPresentation)
 
 
+def build_object_rows(author):
+    """Create one real row per object route through the normal services.
+
+    Shared with `test_staff_denial_parity.py` so both suites compare the same
+    rows. Returns a namespace; the caller supplies a fully permitted author.
+    """
+    rows = types.SimpleNamespace()
+    rows.claim = record_claim(actor=author, data=dict(CLAIM_DATA))[0]
+    stage_products(io.BytesIO(make_csv([PRODUCT_ROW])), 'منبع ساختگی', 'https://example.org/matrix-product',
+                   actor=author, commit=True, rights_attested=True)
+    rows.candidate = ProductCandidate.objects.get()
+    stage_csv(io.BytesIO(csv_bytes([PRICE_ROW])), 'منبع ساختگی', 'https://example.org/matrix-price',
+              staged_by=author, commit=True, rights_attested=True)
+    rows.price = PriceCandidate.objects.get()
+    rows.draft = create_draft(actor=author, data=dict(DRAFT_DATA))
+    rows.ingredient, _part, _form, _product, rows.package = build(author)
+    rows.presentation = ProductPresentation.objects.create(**PRESENTATION_FIELDS, published=True)
+    _counts, rows.receipt = stage_product_with_receipt(
+        io.BytesIO(make_csv([dict(PRODUCT_ROW, source_record_id='two')])), 'منبع ساختگی',
+        'https://example.org/matrix-receipt', actor=author, rights_attested=True)
+    return rows
+
+
+OBJECT_ROUTES = (
+        'staff_source_detail', 'staff_source_review_inspection', 'staff_source_review',
+        'staff_product_detail', 'staff_product_review_inspection', 'staff_product_review',
+        'staff_price_detail', 'staff_price_review_inspection', 'staff_price_review',
+        'staff_clinical_detail', 'staff_clinical_review_inspection', 'staff_clinical_lineage',
+        'staff_clinical_revise', 'staff_clinical_reference_create', 'staff_clinical_review',
+        'staff_identity_detail', 'staff_identity_lineage', 'staff_identity_revise_component',
+        'staff_identity_revise', 'staff_identity_review', 'staff_catalog_quality_irc',
+        'staff_import_receipt_detail', 'staff_import_manifest_inspection',
+)
+
+
 @override_settings(STAFF_PORTAL_ENABLED=True)
 class StaffAuthorizationObjectTests(TestCase):
     @classmethod
@@ -78,30 +114,12 @@ class StaffAuthorizationObjectTests(TestCase):
 
         author = User.objects.create_user('object-author', password='synthetic-only', is_staff=True)
         author.user_permissions.add(*Permission.objects.filter(codename__in=[c for _a, c in ALL_PERMISSIONS]))
-        cls.claim = record_claim(actor=author, data=dict(CLAIM_DATA))[0]
-        stage_products(io.BytesIO(make_csv([PRODUCT_ROW])), 'منبع ساختگی', 'https://example.org/matrix-product',
-                       actor=author, commit=True, rights_attested=True)
-        cls.candidate = ProductCandidate.objects.get()
-        stage_csv(io.BytesIO(csv_bytes([PRICE_ROW])), 'منبع ساختگی', 'https://example.org/matrix-price',
-                  staged_by=author, commit=True, rights_attested=True)
-        cls.price = PriceCandidate.objects.get()
-        cls.draft = create_draft(actor=author, data=dict(DRAFT_DATA))
-        cls.ingredient, _part, _form, _product, cls.package = build(author)
-        cls.presentation = ProductPresentation.objects.create(**PRESENTATION_FIELDS, published=True)
-        _counts, cls.receipt = stage_product_with_receipt(
-            io.BytesIO(make_csv([dict(PRODUCT_ROW, source_record_id='two')])), 'منبع ساختگی',
-            'https://example.org/matrix-receipt', actor=author, rights_attested=True)
+        rows = build_object_rows(author)
+        cls.claim, cls.candidate, cls.price, cls.draft = rows.claim, rows.candidate, rows.price, rows.draft
+        cls.ingredient, cls.package = rows.ingredient, rows.package
+        cls.presentation, cls.receipt = rows.presentation, rows.receipt
 
-    OBJECT_ROUTES = (
-        'staff_source_detail', 'staff_source_review_inspection', 'staff_source_review',
-        'staff_product_detail', 'staff_product_review_inspection', 'staff_product_review',
-        'staff_price_detail', 'staff_price_review_inspection', 'staff_price_review',
-        'staff_clinical_detail', 'staff_clinical_review_inspection', 'staff_clinical_lineage',
-        'staff_clinical_revise', 'staff_clinical_reference_create', 'staff_clinical_review',
-        'staff_identity_detail', 'staff_identity_lineage', 'staff_identity_revise_component',
-        'staff_identity_revise', 'staff_identity_review', 'staff_catalog_quality_irc',
-        'staff_import_receipt_detail', 'staff_import_manifest_inspection',
-    )
+    OBJECT_ROUTES = OBJECT_ROUTES
 
     def kwargs_for(self, name):
         objects = {

@@ -68,3 +68,56 @@ class StaffInflightWriteTests(TransactionTestCase):
         self.assertEqual(fresh.status_code, 302)
         self.assertTrue(fresh['Location'].startswith(reverse('staff_login') + '?'))
         self.assertEqual(SourceClaim.objects.count(), 0)
+
+    def test_reactivation_before_guard_can_still_allow_an_inflight_old_session(self):
+        # A remaining gap: this transaction checks current account flags and
+        # permissions, not the request session's original authentication hash.
+        user = get_user_model().objects.create_user('synthetic-reactivated-writer', password='synthetic-only', is_staff=True)
+        user.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                  codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(user)
+        path = reverse('staff_source_create')
+        self.assertEqual(client.get(path).status_code, 200)
+        token = client.cookies['csrftoken'].value
+        payload = {'source_name': 'Synthetic source', 'source_url': 'https://example.org/reactivation',
+                   'owner': 'Synthetic owner', 'evidence_url': 'https://example.org/evidence',
+                   'evidence_note': 'Synthetic evidence', 'claims_collection': 'on', 'attestation': 'on'}
+        ready, resume = Event(), Event()
+
+        def paused_validation(*args, **kwargs):
+            ready.set()
+            if not resume.wait(10):
+                raise TimeoutError('Synthetic reactivation write did not resume')
+            return validate_data(*args, **kwargs)
+
+        def post_claim():
+            close_old_connections()
+            try:
+                return client.post(path, payload, HTTP_X_CSRFTOKEN=token)
+            finally:
+                close_old_connections()
+
+        with patch('sources.services.validate_data', side_effect=paused_validation):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(post_claim)
+                try:
+                    self.assertTrue(ready.wait(10))
+                    current = get_user_model().objects.get(pk=user.pk)
+                    current.is_active = False
+                    current.set_unusable_password()
+                    current.save(update_fields=['is_active', 'password'])
+                    get_user_model().objects.filter(pk=user.pk).update(is_active=True)
+                    self.assertFalse(SourceClaim.objects.exists())
+                finally:
+                    resume.set()
+                response = future.result(timeout=15)
+        claim = SourceClaim.objects.get()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('staff_source_detail', args=[claim.pk]))
+        self.assertEqual(claim.recorded_by_id, user.pk)
+        # A new request revalidates the old session and is rejected.
+        fresh = client.post(path, {**payload, 'source_url': 'https://example.org/another'}, HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(fresh.status_code, 302)
+        self.assertTrue(fresh['Location'].startswith(reverse('staff_login') + '?'))
+        self.assertEqual(SourceClaim.objects.count(), 1)

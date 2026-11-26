@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — document reactivation race around the source-claim guard
+
+**Finding:** A synchronized synthetic HTTP test shows that when account disable, password invalidation and reactivation all commit before the guarded source-claim write, the in-flight already-authorized old session still creates the claim; its next request is denied and the CSRF negative control stays intact.
+
+**Limits:** One route and one ordering are covered. The guard checks current account state, not the requesting session's authentication hash, so there is still no race-free revocation; ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — recheck source-claim permissions on a fresh actor
 
 **Changes:** The selected source-claim transaction rechecks required permissions on its freshly loaded actor, rather than relying only on a possibly cached request actor.

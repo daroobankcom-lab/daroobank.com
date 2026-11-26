@@ -416,4 +416,6 @@
 
 - [0208: session lifecycle](0208-staff-session-lifecycle.md) — logout, cookie replay, password change and expiry walked across all 41 routes.
 
+- [0209: staff method sweep](0209-staff-method-sweep.md) — six HTTP methods across all 43 routes, with no destructive method accepted.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

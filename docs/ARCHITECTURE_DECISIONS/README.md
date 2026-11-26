@@ -366,4 +366,6 @@
 
 - [0183: non-debug config guards](0183-nondebug-config-guards.md) — explicit secret and host configuration.
 
+- [0184: trusted proxy scheme](0184-trusted-proxy-scheme.md) — explicit, default-off configuration.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

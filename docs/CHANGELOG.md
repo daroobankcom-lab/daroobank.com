@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — opt-in trusted proxy scheme
+
+**Changes:** A default-off non-debug option accepts a single forwarded scheme only from configured immediate peer networks, and rejects universal or malformed network lists.
+
+**Limits:** This does not authenticate a proxy or firewall the app; a proxy must overwrite client-supplied headers and preserve the approved host. No TLS infrastructure or production authorization follows. See ADR 0184.
+
 ## 2026-11-26 — fail closed on selected non-debug configuration
 
 **Changes:** Outside debug, startup requires a secret of an accepted minimum shape and explicitly configured, syntactically valid non-wildcard hosts. Debug preview defaults are unchanged.

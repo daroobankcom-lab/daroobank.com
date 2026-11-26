@@ -1,4 +1,5 @@
 import re
+from ipaddress import IPv6Address, ip_address
 
 from django.conf import settings
 from django.http import HttpResponseNotFound
@@ -46,6 +47,34 @@ def _staff_headers(response):
     response['X-Robots-Tag'] = 'noindex, nofollow'
     # Same-origin Referer is required for Django's HTTPS CSRF fallback.
     response['Referrer-Policy'] = 'same-origin'
+
+
+class TrustedProxySchemeMiddleware:
+    """Strip forwarded scheme unless the immediate peer and value are trusted.
+
+    Peer addresses are supplied by the serving stack; this does not authenticate
+    a proxy, firewall the application, or make a proxy sanitize incoming headers.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        meta = request.META
+        if 'HTTP_X_FORWARDED_PROTO' in meta:
+            remote = meta.get('REMOTE_ADDR')
+            valid = False
+            if isinstance(remote, str) and 1 <= len(remote) <= 45 and '%' not in remote:
+                try:
+                    peer = ip_address(remote)
+                    if isinstance(peer, IPv6Address) and peer.ipv4_mapped is not None:
+                        peer = peer.ipv4_mapped
+                    valid = any(peer in network for network in settings.TRUSTED_PROXY_SCHEME_NETWORKS)
+                except ValueError:
+                    pass
+            if not valid or meta['HTTP_X_FORWARDED_PROTO'] not in ('http', 'https'):
+                meta.pop('HTTP_X_FORWARDED_PROTO', None)
+        return self.get_response(request)
 
 
 class HealthProbePrivacyHeadersMiddleware:

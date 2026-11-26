@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
-from .configuration import require_nondebug_hosts, require_nondebug_secret
+from .configuration import require_nondebug_hosts, require_nondebug_secret, require_trusted_proxy_networks
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get('DAROOBANK_DEBUG') == '1'
@@ -21,11 +21,21 @@ if DEBUG:
 else:
     SECRET_KEY = require_nondebug_secret(SECRET_KEY)
     ALLOWED_HOSTS = require_nondebug_hosts(os.environ.get('DAROOBANK_ALLOWED_HOSTS'))
+
+# Disabled by default and in debug; forwarding is only meaningful when direct
+# peer networks and an independently secured proxy are explicitly configured.
+TRUSTED_PROXY_SCHEME_NETWORKS = ()
+SECURE_PROXY_SSL_HEADER = None
+if not DEBUG and os.environ.get('DAROOBANK_TRUST_PROXY_SSL_HEADER') == '1':
+    TRUSTED_PROXY_SCHEME_NETWORKS = require_trusted_proxy_networks(os.environ.get('DAROOBANK_TRUSTED_PROXY_CIDRS'))
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing', 'sources', 'ingestion', 'clinical', 'staff_security']
 MIDDLEWARE = [
     'daroobank.middleware.ContentSecurityPolicyMiddleware',
     'daroobank.middleware.HealthProbePrivacyHeadersMiddleware',
     'daroobank.middleware.EarlyRedirectPrivacyHeadersMiddleware',
+    'daroobank.middleware.TrustedProxySchemeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'daroobank.middleware.PublicReadPrivacyHeadersMiddleware',
     'daroobank.middleware.StaffPrivacyHeadersMiddleware',

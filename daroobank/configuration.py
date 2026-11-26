@@ -28,6 +28,29 @@ def _valid_host_pattern(pattern):
     return all(_DNS_LABEL.fullmatch(label) is not None for label in domain.split('.'))
 
 
+def require_trusted_proxy_networks(value):
+    """Parse a small explicit network list; this cannot prove proxy ownership."""
+    message = 'DAROOBANK_TRUSTED_PROXY_CIDRS must list explicit, non-universal networks.'
+    if (not isinstance(value, str) or not value or len(value) > 2048
+            or any(not 32 <= ord(char) <= 126 for char in value)):
+        raise ImproperlyConfigured(message)
+    entries = [item.strip() for item in value.split(',')]
+    if not 1 <= len(entries) <= 32 or any(not entry or '%' in entry for entry in entries):
+        raise ImproperlyConfigured(message)
+    try:
+        networks = tuple(ipaddress.ip_network(entry, strict=True) for entry in entries)
+    except ValueError:
+        raise ImproperlyConfigured(message) from None
+    # Reject lists that collectively cover all IPv4 or all IPv6 addresses,
+    # including two complementary /1 networks. Smaller broad networks can
+    # still be unsafe; their ownership cannot be checked here.
+    for version in (4, 6):
+        collapsed = ipaddress.collapse_addresses(network for network in networks if network.version == version)
+        if any(network.prefixlen == 0 for network in collapsed):
+            raise ImproperlyConfigured(message)
+    return networks
+
+
 def require_nondebug_hosts(value):
     """Require explicit DNS/IP patterns, not an unrestricted wildcard or URL."""
     if (not isinstance(value, str) or not value or len(value) > 8192

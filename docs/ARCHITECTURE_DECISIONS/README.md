@@ -404,4 +404,6 @@
 
 - [0202: public-route privacy matrix](0202-public-route-privacy-matrix.md) — every non-staff route inventoried and checked for private-data leakage.
 
+- [0203: staff grant paths](0203-staff-grant-paths.md) — group grants, the superuser bypass, an alternate backend and stale in-memory actors.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

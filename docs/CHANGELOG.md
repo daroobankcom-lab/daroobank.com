@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — disabled staff boundary regression tests
+
+**Changes:** Tests enumerate currently named staff routes, verify the shared gated path, and exercise private 404 responses for GET, HEAD and POST before session loading when the portal is disabled.
+
+**Limits:** These are Django-level tests, not production access controls, a review of future unnamed routes or proof of network isolation.
+
 ## 2026-11-26 — PostgreSQL connection lifetime bound
 
 **Changes:** `POSTGRES_CONN_MAX_AGE` now fails startup outside 0–31,536,000 seconds. Extremely large integers previously passed configuration and could overflow Django's connection deadline.

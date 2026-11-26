@@ -376,4 +376,6 @@
 
 - [0188: non-debug frame guard order](0188-nondebug-frame-guard-order.md) — covers selected early Django responses.
 
+- [0189: known-path early error privacy](0189-known-path-early-error-privacy.md) — selected early Django errors receive existing privacy headers.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

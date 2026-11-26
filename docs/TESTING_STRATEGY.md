@@ -316,6 +316,10 @@ Direct service tests reject selected truthy and falsey non-boolean `commit` valu
 
 Product and price CSV tests reject six selected raw controls at both edges of every CSV column (240 combinations), including selected cases in preview and commit; upload-form tests cover prefixed raw source fields, ordinary spacing and a Persian joiner. `daroobank/test_staff_raw_text_controls.py` checks selected source, clinical and identity forms and selected HTTP writes; an unchanged empty extra component row is skipped rather than validated (ADR 0133). `daroobank/test_staff_empty_posts.py` checks required errors and no selected writes for six empty staff POSTs with CSRF enforcement (ADR 0134). `daroobank/test_sample_downloads.py` checks the two fixed synthetic downloads, permissions and preview without writes; the browser smoke exercises both downloads (ADR 0136). Selected form summaries and their handling of field, hidden, general and formset errors are checked in these HTTP tests; the Chromium smoke checks a summary link by keyboard on one invalid identity form (ADR 0135). Authenticated HTTP tests check selected invalid source/CSV inputs produce no candidates or receipts. This is not complete Unicode, provenance, logging, authorization or data-integrity coverage; see [ADR 0118](ARCHITECTURE_DECISIONS/0118-intake-raw-control-characters.md).
 
+## Known-path early errors
+
+`daroobank/test_early_error_privacy.py` checks selected non-debug invalid-host 400 responses in a fresh process, plus an unrelated path that is not newly covered. Existing privacy and redirect tests remain necessary. These headers do not sanitize logs or apply to infrastructure outside Django; see [ADR 0189](ARCHITECTURE_DECISIONS/0189-known-path-early-error-privacy.md).
+
 ## Non-debug frame guard
 
 `daroobank/test_nondebug_frame_guard.py` exercises real settings in fresh processes for ordinary and early HTTPS, disabled-staff and CSRF responses, explicit frame exemptions and debug preview compatibility. It does not cover upstream framing, CSP `frame-ancestors` or every response; see [ADR 0188](ARCHITECTURE_DECISIONS/0188-nondebug-frame-guard-order.md).

@@ -93,10 +93,11 @@ class HealthProbePrivacyHeadersMiddleware:
 
 
 class EarlyRedirectPrivacyHeadersMiddleware:
-    """Apply known-path headers to redirects produced before URL resolution.
+    """Apply known-path privacy headers even before URL resolution.
 
-    In particular, this wraps SecurityMiddleware without changing its HTTPS
-    redirect or the staff gate's ordering. It cannot affect upstream proxies.
+    This wraps SecurityMiddleware, covering its redirects and selected early
+    errors without changing the staff gate's ordering. The historical class name
+    is retained; upstream proxies and unknown paths remain outside its scope.
     """
 
     def __init__(self, get_response):
@@ -104,11 +105,10 @@ class EarlyRedirectPrivacyHeadersMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        if response.status_code in (301, 302, 303, 307, 308):
-            if _is_staff_path(request.path_info):
-                _staff_headers(response)
-            elif _is_public_read_path(request.path_info):
-                _public_headers(response)
+        if _is_staff_path(request.path_info):
+            _staff_headers(response)
+        elif _is_public_read_path(request.path_info):
+            _public_headers(response)
         return response
 
 

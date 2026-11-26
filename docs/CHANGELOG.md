@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — privacy headers on selected early errors
+
+**Changes:** The existing outer known-path middleware now applies staff/public privacy headers to selected early errors as well as redirects, including invalid-host 400 responses.
+
+**Limits:** Unknown routes, infrastructure responses and logs are not covered; see ADR 0189.
+
 ## 2026-11-26 — frame protection on early non-debug responses
 
 **Changes:** Non-debug frame middleware now wraps the HTTPS redirect and disabled-staff gate; fresh-process tests cover early and ordinary responses and Django's explicit exemptions.

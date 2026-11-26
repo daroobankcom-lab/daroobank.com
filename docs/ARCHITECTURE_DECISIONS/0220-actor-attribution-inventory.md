@@ -83,3 +83,8 @@ After all five reverts the suite passed again with a clean `git diff --stat`.
 - Whether an unattributed candidate *should* be reviewable, and whether the command-line stager
   should record a self-asserted operator, are governance decisions. Recording a name typed into
   a shell argument would be an assertion, not evidence, and would not close the gap.
+  [ADR 0229](0229-attribution-gap-plan.md) writes those decisions down as a costed proposal —
+  six options, seven decisions, no owner — and measures three things this record did not: that no
+  code path publishes a presentation or sets its verification date, that a command-line staging
+  writes no import receipt and no items, and that the command is the only write path not gated
+  on debug mode.

@@ -456,4 +456,6 @@
 
 - [0228: an opt-in limit on public reads](0228-public-read-limit.md) — a second opt-in limiter counts 120 public reads per keyed client in a rolling minute and refuses an over-limit one with 429 and a `Retry-After`, storing a keyed digest, a window start and a count, failing open when the counter is unreachable, and moving 19 pins and the schema to 33 tables.
 
+- [0229: the two write paths that name nobody](0229-attribution-gap-plan.md) — the published catalog record and command-line price staging are measured again, three facts ADR 0220 did not measure are added, and a proposal with no owner prices six options and lists seven decisions.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

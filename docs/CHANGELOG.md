@@ -2,6 +2,55 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — write down the decision for the two write paths that name nobody
+
+ **Changes:** ADR 0220 measured attribution instead of assuming it — 19 of the 24 project models
+name the account that appended them behind a protected foreign key and a creation timestamp — and
+recorded two places that name nobody: `catalog.ProductPresentation`, the row the public reads, and
+price staging from `manage.py stage_price_csv`, whose candidates the portal then refuses to let
+anybody review and which, because an identical payload reuses the row, can never acquire an actor
+later. Both were measurements. Neither was a decision, and `docs/SECURITY.md` asks for audit records
+carrying *"actor, role, target, before/after versions or hashes, decision, time and request
+correlation"* while the Phase 1 evidence carries source rights, protected audit and explicit
+publication approval as open.
+
+ `docs/ATTRIBUTION_GAP_PLAN.md` is that decision written down in the form `docs/READ_AUDIT_PLAN.md`
+and `docs/MFA_IMPLEMENTATION_PLAN.md` already use: a proposal, explicitly not an approved control
+and explicitly without an owner, naming six options with a counted price each, seven decisions
+owners have to make, and what has to be verified before any implementation. Three facts were
+measured first because the options are priced against them, and ADR 0220 had not measured any of
+them: **no code path publishes a presentation at all** — `published=True` appears once in project
+code and only as a read filter, `verified_at` is never assigned by anything although a database
+constraint and `clean()` both require it on a published row, and the only write to the model is the
+projection repair's `.update(...)` of two derived columns; **a command-line import bypasses the
+whole receipt layer** — the staff route stages through
+`ingestion.receipts.stage_price_with_receipt`, which refuses a missing actor, rechecks it and writes
+one `ImportReceipt` whose `actor` is a required `PROTECT` foreign key plus one item per row, while
+the command writes no receipt and no items, so its import appears in no inventory at
+`/staff/operations/imports/`, has no manifest and no per-row outcome record; and **the command is
+the only project write path that is not debug-gated** — neither the command module nor
+`pricing/importer.py` mentions `DEBUG`, and staging succeeds with debug off, while the projection
+repair, the staff portal and the login throttle all refuse to run outside a debug environment.
+
+ `daroobank/test_attribution_gap_plan.py` (12 tests, ~0.5 s) pins the plan and re-measures both
+gaps, including the command's surface (four options, no `--staged-by`; 12 commands and 24 options in
+total) and its test surface (8 modules, 16 mentions, 8 committing calls, one operator document), so
+a price the plan quotes cannot go stale silently. Eight red checks were applied alone and reverted
+from backups, each verified byte for byte: dropping a decision's number (1 failure), paraphrasing a
+quoted requirement (1), giving the plan an owner (1), naming a module that does not exist (1),
+renaming an option (1), adding `--staged-by` to the command (2), adding `published_by` to the model
+(1) and adding a `DEBUG` mention to the importer (1).
+
+ Nothing is implemented and nothing is attributed: no row gained an actor, no command-line import
+gained a receipt, no publication path exists, and the candidates already staged from a shell are
+still unreviewable. The prices are counted rather than prototyped — no option was built and
+reverted, so no cascade was run and a count of pins is a lower bound on the work — the AST scans are
+literal, so `setattr`, raw SQL, a variable-bound queryset or a signal would not be seen, and
+`override_settings(DEBUG=False)` changes a setting at runtime rather than reproducing a non-debug
+process. `docs/SECURITY.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/PRICE_DATA_MODEL.md`,
+`docs/PHASE1_RELEASE_EVIDENCE.md` and ADR 0220's limits now state the receipt absence and name the
+plan. See [ADR 0229](ARCHITECTURE_DECISIONS/0229-attribution-gap-plan.md).
+
 ## 2026-11-26 — add an opt-in limit on public reads that records nothing
 
 **Changes:** ADR 0223 measured that nothing in this application limits a public request: 48

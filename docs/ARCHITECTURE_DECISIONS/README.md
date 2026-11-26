@@ -418,4 +418,6 @@
 
 - [0209: staff method sweep](0209-staff-method-sweep.md) — six HTTP methods across all 43 routes, with no destructive method accepted.
 
+- [0210: staff header inventory](0210-staff-header-inventory.md) — one closed header inventory across 1 204 staff responses, for every account shape.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

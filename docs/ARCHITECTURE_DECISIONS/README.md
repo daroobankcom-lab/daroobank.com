@@ -402,4 +402,6 @@
 
 - [0201: staff authorization against existing rows](0201-staff-authorization-existing-rows.md) — the same matrix over real rows, so denials do not become an existence oracle.
 
+- [0202: public-route privacy matrix](0202-public-route-privacy-matrix.md) — every non-staff route inventoried and checked for private-data leakage.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

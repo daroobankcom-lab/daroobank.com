@@ -150,8 +150,9 @@ permissions). Public reads are unaffected.
   comparison can observe.
 - Grants end sessions too. An administrator who adds a permission must expect the account
   to have to log in again; that is the chosen failure direction.
-- Database-backed sessions only. There is still no session inventory, no per-account
-  listing and no UI; the command scans the store linearly and deletes one bounded batch.
+- Database-backed sessions only, and there is no UI.
+  [ADR 0214](0214-session-inventory.md) adds the read-only per-account listing that was
+  missing here; both commands still scan the store linearly and act on one bounded batch.
 - The command is development-only, like the rest of the synthetic maintenance tooling. A
   production revocation procedure with audit and ownership remains an open operational
   gate.

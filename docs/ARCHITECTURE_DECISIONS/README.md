@@ -426,4 +426,6 @@
 
 - [0213: durable session invalidation](0213-durable-session-invalidation.md) — a session bound to its account's state, ended by any change to it; closes the ADR 0191 revival scenario.
 
+- [0214: session inventory](0214-session-inventory.md) — a read-only report of which sessions exist and which the guard would end, with no session material in it.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -56,7 +56,7 @@ class ContentSecurityPolicyTests(SimpleTestCase):
         # coordinates are deliberately invalid; this home request needs no DB.
         env = {key: os.environ[key] for key in ('PATH', 'HOME', 'LANG') if key in os.environ}
         env.update(DJANGO_SETTINGS_MODULE='daroobank.settings', DAROOBANK_DEBUG='0',
-                   DAROOBANK_SECRET_KEY='synthetic-only-test-key', DAROOBANK_ALLOWED_HOSTS='localhost',
+                   DAROOBANK_SECRET_KEY='synthetic-only-not-a-real-key-0123456789-abcdefghijklm', DAROOBANK_ALLOWED_HOSTS='localhost',
                    POSTGRES_DB='synthetic-no-connection', POSTGRES_USER='synthetic',
                    POSTGRES_HOST='/synthetic-no-server', POSTGRES_PORT='5432')
         script = ("import django, json; django.setup(); from django.test import Client; "

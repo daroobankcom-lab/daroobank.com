@@ -364,4 +364,6 @@
 
 - [0182: repeated staff-login credentials](0182-repeated-staff-login-credentials.md) — narrow form hardening.
 
+- [0183: non-debug config guards](0183-nondebug-config-guards.md) — explicit secret and host configuration.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

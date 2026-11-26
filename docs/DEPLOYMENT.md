@@ -2,6 +2,10 @@
 
 A development Django application, PostgreSQL-only configuration, `.env.example` and a development Compose stack exist; there is no production deployment configuration or infrastructure. The Compose stack and development server are not suitable for production. No deployment has been performed or authorized.
 
+## Non-debug configuration prerequisites
+
+Non-debug startup requires an explicit `DAROOBANK_SECRET_KEY` and `DAROOBANK_ALLOWED_HOSTS`. The key must meet the shape checks in [ADR 0183](ARCHITECTURE_DECISIONS/0183-nondebug-config-guards.md); those checks cannot establish randomness or secrecy. Supply a unique randomly generated key through an approved secret manager. List only authorized ASCII hostnames (IDNA/punycode for international names) or bracketed IPv6 addresses, without ports or URLs; `*` is refused and `.example.org` trusts all of its subdomains. Changing a key affects existing signatures and sessions; no production rotation policy is implemented. These requirements do not configure a production deployment or grant authorization.
+
 ## Optional minimal operational probes
 
 `DAROOBANK_HEALTH_PROBES_ENABLED=1` opts in to unauthenticated `/health/live/` and `/health/ready/` GET/HEAD paths; the default is off. Liveness only checks that the process can return a response, while readiness performs a narrow default PostgreSQL `SELECT 1`, not a complete service or migration check. A failure returns 503 without database details. Network/proxy restrictions, polling limits, host and HTTPS configuration, response deadlines, monitoring and incident ownership remain external responsibilities. A PostgreSQL statement timeout is not a hard request deadline. See [ADR 0180](ARCHITECTURE_DECISIONS/0180-opt-in-process-database-probes.md); enabling these paths is not production authorization.

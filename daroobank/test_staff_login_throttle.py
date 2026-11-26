@@ -22,8 +22,8 @@ class StaffLoginThrottleConfigurationTests(SimpleTestCase):
                                        ('1', '1', 'True'), ('0', '1', 'False')):
             with self.subTest(debug=debug, value=value):
                 env = os.environ.copy()
-                env.update(DAROOBANK_DEBUG=debug, DAROOBANK_SECRET_KEY='synthetic-secret',
-                           POSTGRES_DB='synthetic', POSTGRES_USER='synthetic',
+                env.update(DAROOBANK_DEBUG=debug, DAROOBANK_SECRET_KEY='synthetic-only-not-a-real-key-0123456789-abcdefghijklm',
+                           DAROOBANK_ALLOWED_HOSTS='localhost', POSTGRES_DB='synthetic', POSTGRES_USER='synthetic',
                            POSTGRES_HOST='synthetic', POSTGRES_PORT='5432')
                 env.pop('DAROOBANK_STAFF_LOGIN_THROTTLE', None)
                 if value is not None:

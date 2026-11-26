@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
+from .configuration import require_nondebug_hosts, require_nondebug_secret
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get('DAROOBANK_DEBUG') == '1'
@@ -12,14 +13,14 @@ HEALTH_PROBES_ENABLED = os.environ.get('DAROOBANK_HEALTH_PROBES_ENABLED') == '1'
 # Synthetic development control only, not MFA or a production access policy.
 STAFF_LOGIN_THROTTLE_ENABLED = DEBUG and os.environ.get('DAROOBANK_STAFF_LOGIN_THROTTLE') == '1'
 SECRET_KEY = os.environ.get('DAROOBANK_SECRET_KEY', '')
-if not SECRET_KEY:
-    if DEBUG:
-        SECRET_KEY = 'development-only-not-for-production'
-    else:
-        raise ImproperlyConfigured('DAROOBANK_SECRET_KEY is required outside development')
-ALLOWED_HOSTS = [x.strip() for x in os.environ.get('DAROOBANK_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if x.strip()]
 if DEBUG:
+    if not SECRET_KEY:
+        SECRET_KEY = 'development-only-not-for-production'
+    ALLOWED_HOSTS = [x.strip() for x in os.environ.get('DAROOBANK_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if x.strip()]
     ALLOWED_HOSTS += ['.e2b.app', 'testserver']
+else:
+    SECRET_KEY = require_nondebug_secret(SECRET_KEY)
+    ALLOWED_HOSTS = require_nondebug_hosts(os.environ.get('DAROOBANK_ALLOWED_HOSTS'))
 INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.staticfiles', 'catalog', 'pricing', 'sources', 'ingestion', 'clinical', 'staff_security']
 MIDDLEWARE = [
     'daroobank.middleware.ContentSecurityPolicyMiddleware',

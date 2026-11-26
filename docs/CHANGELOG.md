@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — fail closed on selected non-debug configuration
+
+**Changes:** Outside debug, startup requires a secret of an accepted minimum shape and explicitly configured, syntactically valid non-wildcard hosts. Debug preview defaults are unchanged.
+
+**Limits:** This is a compatibility change, not proof of key randomness, host ownership, TLS, production security or authorization. See ADR 0183.
+
 ## 2026-11-25 — reject repeated staff-login credentials
 
 **Changes:** The development staff login form rejects repeated enabled username/password values before invoking an authentication backend, preserving the generic error and existing sessions.

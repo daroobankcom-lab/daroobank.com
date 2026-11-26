@@ -1,6 +1,6 @@
 """The documentation graph holds together: every link, anchor, index entry and named suite resolves.
 
-This repository documents itself heavily — 253 markdown files, of which 226 are numbered decision
+This repository documents itself heavily — 255 markdown files, of which 227 are numbered decision
 records, cross-linked to each other, to the guides and to the test suites that measure them. A
 broken link in that graph is invisible until a reader follows it, and the failure mode is quiet:
 a decision record that cites a suite which was renamed, an index that forgets the newest record,
@@ -33,12 +33,12 @@ EXTERNAL = ('http://', 'https://', 'mailto:')
 SUITE_LINE = re.compile(r'^Suite:\s*(.*)$')
 MODULE = re.compile(r'`([^`]+\.py)`')
 # Measured, so that a scan which silently finds nothing cannot pass.
-DOCUMENT_COUNT = 253
-ADR_COUNT = 226
-LINK_COUNT = 906
+DOCUMENT_COUNT = 255
+ADR_COUNT = 227
+LINK_COUNT = 916
 EXTERNAL_COUNT = 31
 ANCHOR_COUNT = 29
-SUITE_LINE_COUNT = 16
+SUITE_LINE_COUNT = 17
 
 
 def documents():

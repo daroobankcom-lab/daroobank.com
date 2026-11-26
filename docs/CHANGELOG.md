@@ -2,6 +2,55 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — write down the read-audit decision and measure its price
+
+**Changes:** ADR 0221 measured that nothing records a read and declined to add logging, because an
+access log is a decision about retention, reader identity and tamper-resistance that this project
+had not made. The requirement behind that decision is not optional: `docs/SECURITY.md` asks for
+audit records carrying *"actor, role, target, before/after versions or hashes, decision, time and
+request correlation, without PHI in general logs"*, protected *"from modification by application
+roles"*; its privacy section requires a recorded legal basis, retention and deletion policy *"with
+legal review"*; `daroobank/settings.py` keeps the staff portal development-only *"until MFA,
+throttling and audit exist"*; and the operations runbook tells a responder to review access and
+audit logs after a restore. What was missing was a decision, and a decision without a price tag is
+a guess.
+
+`docs/READ_AUDIT_PLAN.md` is that decision written down in the form `docs/MFA_IMPLEMENTATION_PLAN.md`
+already uses: a proposal, explicitly not an approved control, naming the six decisions that block
+implementation — scope, identity and privacy, retention, tamper-resistance, placement, enablement —
+the two precedents the code already offers (append-only models that refuse `save()` and `delete()`,
+and the keyed HMAC of a normalized address in `staff_security/throttle.py` that stores no raw IP),
+the two alternatives, and what has to be verified before any enablement.
+
+The price was measured, not estimated. A prototype was built in a scratch copy of the tree — one
+append-only `ReadAuditEntry` model in `staff_security`, its migration, and one middleware writing a
+row per GET behind a new `DAROOBANK_READ_AUDIT` setting — and nine pin-holding suites were run
+against it: 138 tests, **20 failures across 7 suites**. ADR 0221's five pins move (the middleware
+tuple, the table inventory, the model-name scan and both sweeps, which write 43 and 12 rows), ADR
+0225's five rollback measurements shift with a 24th project table, ADR 0216's four migration pins
+move (`staff_security` holds 2 migrations, 17 in total), ADR 0223's three abuse pins move (48
+repeated public reads write 48 rows), and ADRs 0220, 0222 and 0217 move one each. On a freshly
+migrated throwaway database the prototype measured 33 tables, 283 columns, 113 indexes, 139
+constraints, 51 foreign keys and 32 applied migrations against today's 32, 276, 108, 136, 50 and 31,
+while `inspect_postgresql_schema` still reported `no_selected_issues`, because its expectations are
+derived from the models. The prototype was then discarded: the tree holds no model, no migration, no
+middleware and no setting, and reads still write nothing.
+
+`daroobank/test_read_audit_plan.py` (6 tests, ~0.005 s, no database) pins the plan — its proposal
+wording, its five sections, the six decisions in order, the requirements it quotes, every suite and
+record it names, failure counts that add to 20, the prototype's schema numbers, the seven records it
+would supersede, and the continued absence of an implementation. Seven red checks were applied alone
+and reverted from backups: deleting the retention decision (1 failure), understating a cascade row
+(1), changing the measured column count (1), dropping a record from the supersede list (1), creating
+`daroobank/read_audit.py` (1), naming a suite that does not exist (1) and paraphrasing a quoted
+requirement (1).
+
+The cascade is a lower bound — nine suites were sampled rather than the full 1632 tests — one design
+point was prototyped, no performance property was measured, and the tamper-resistance options are
+named rather than evaluated. The plan decides nothing; it makes the decision costed and a quiet
+implementation impossible. See
+[ADR 0227](ARCHITECTURE_DECISIONS/0227-read-audit-plan.md).
+
 ## 2026-11-26 — pin what CI verifies and what it never produces
 
 **Changes:** `docs/DEPLOYMENT.md` asks the release gates to *"Pin and scan dependencies and base

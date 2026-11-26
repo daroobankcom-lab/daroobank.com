@@ -392,4 +392,6 @@
 
 - [0196: staging write actor recheck](0196-staging-write-actor-recheck.md) — the same helper on the bulk staging paths, plus corrected stale-cache evidence.
 
+- [0197: clinical write actor recheck](0197-clinical-write-actor-recheck.md) — draft create/revise and reference create rechecked before their locks.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -83,7 +83,8 @@ def create(request):
     status = 200
     if request.method == 'POST' and form.is_valid():
         try:
-            draft = create_draft(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS})
+            draft = create_draft(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS},
+                                 session_auth_hash=request.session.get(HASH_SESSION_KEY))
             return redirect('staff_clinical_detail', pk=draft.pk)
         except DraftError as exc:
             form.add_error(None, str(exc))
@@ -109,7 +110,8 @@ def revise(request, pk):
         try:
             draft = create_draft(actor=request.user, data={key: form.cleaned_data[key] for key in FIELDS},
                 parent_id=parent.pk, expected_parent_hash=form.cleaned_data['expected_parent_hash'],
-                change_reason=form.cleaned_data['change_reason'])
+                change_reason=form.cleaned_data['change_reason'],
+                session_auth_hash=request.session.get(HASH_SESSION_KEY))
             return redirect('staff_clinical_detail', pk=draft.pk)
         except DraftError as exc:
             form.add_error(None, str(exc))
@@ -270,7 +272,8 @@ def reference_create(request, pk):
             add_reference(actor=request.user, draft_id=draft.pk,
                 data={key: form.cleaned_data[key] for key in ASSERTION_FIELDS},
                 expected_draft_hash=form.cleaned_data['expected_draft_hash'],
-                expected_evidence_hash=form.cleaned_data['expected_evidence_hash'])
+                expected_evidence_hash=form.cleaned_data['expected_evidence_hash'],
+                session_auth_hash=request.session.get(HASH_SESSION_KEY))
             return redirect('staff_clinical_detail', pk=draft.pk)
         except DraftError as exc:
             form.add_error(None, str(exc))

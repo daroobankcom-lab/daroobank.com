@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — extend the actor recheck to the clinical write paths
+
+**Changes:** `clinical.services.create_draft` and `clinical.evidence.add_reference` accept an optional `session_auth_hash` and call the shared `recheck_actor` as the first statement inside their writer transactions, before the draft lock, so no row is written against a stale actor. The clinical create, revise and reference-create views pass the request session's password hash. `clinical/test_write_actor_recheck.py` and `daroobank/test_staff_inflight_clinical_writes.py` cover matching/omitted/stale hashes, password rotation, disabled/destaffed/deleted writers, a permission removed through a second instance, parked races and the CSRF negative control. See ADR 0197.
+
+**Limits:** The rechecks are unlocked point-in-time reads, so parked-writer tests still create a draft and a reference after disable, password invalidation and reactivation; a flag-only disable/reactivate still permits a parked HTTP create. Nine services across ten staff routes are covered, identity/revision services and reads are untouched, permission changes remain unserialized and durable session revocation is still absent. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — extend the actor recheck to staging and correct stale-cache evidence
 
 **Changes:** `catalog.intake.stage_products` and `pricing.importer.stage_csv` recheck their stager through the shared helper in commit mode, after the source-stage lock and before any row is written; the receipt wrappers forward the hash and both upload views supply it from the session. Permission-removal tests across the ADR 0192–0196 suites now remove permissions, group membership or group permissions through a second user instance, because Django clears an instance's own permission cache and the earlier tests could pass without exercising the recheck. A near-miss session hash in `daroobank/test_actor_recheck.py` is now derived by flipping one character; a fixed digit made that case fail in one optimized-mode run when it coincided with the real hash. See ADR 0196.

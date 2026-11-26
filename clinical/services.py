@@ -145,7 +145,8 @@ def _valid_draft_for_update(draft):
     return valid_draft(draft) and current_account_exists(draft.author_id, using=draft._state.db)
 
 
-def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change_reason=''):
+def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change_reason='',
+                 session_auth_hash=None):
     require_staff(actor, VIEW, ADD)
     validate_data(data)
     if parent_id is None:
@@ -161,6 +162,10 @@ def create_draft(*, actor, data, parent_id=None, expected_parent_hash='', change
         # their fingerprints are never rewritten.
         change_reason = change_reason.strip()
     with write_conflict_boundary(DraftConflict):
+        # Re-verify the writer before any lock or row write. The read is deliberately
+        # unlocked to keep one lock order across services, so it is a point-in-time
+        # check and a credential change committed afterwards still races. ADR 0197.
+        recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash)
         parent = None
         if parent_id is not None:
             try:

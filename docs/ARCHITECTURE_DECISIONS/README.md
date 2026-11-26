@@ -450,8 +450,8 @@
 
 - [0225: rollback with data in it](0225-populated-rollback-drill.md) — a populated throwaway database loses 23 of its 30 rows to a single-app rollback and all of them to a full one, a reapply returns an identical schema and zero rows, only a copy taken beforehand brings rows back and only after the identity sequences are advanced, and a rollback blocked by one locked row leaves the database half undone.
 
-- [0227: the read-audit decision and its measured price](0227-read-audit-plan.md) — a proposal names the six decisions that block read auditing, and a reverted prototype of the in-application option measures 20 pin failures across 7 suites and a 33-table schema.
-
 - [0226: CI verifies every dependency and produces no artifact](0226-ci-artifact-gate.md) — one workflow, two jobs, 22 steps, five actions pinned to commit SHAs, both lock files hash-pinned with a negative control, and zero artifact uploads, image pushes, SBOMs, signatures, digests, staging environments or exported outputs.
+
+- [0227: the read-audit decision and its measured price](0227-read-audit-plan.md) — a proposal names the six decisions that block read auditing, and a reverted prototype of the in-application option measures 20 pin failures across 7 suites and a 33-table schema.
 
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

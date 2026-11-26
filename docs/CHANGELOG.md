@@ -2,6 +2,48 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — measure who a row names, and pin the two places where it names nobody
+
+**Changes:** ADR 0218 removed the component that would have kept a `django_admin_log` row for
+administrative changes, which makes "who did this, and when?" a question about this schema
+rather than about a log. The answer was never written down. `daroobank/test_actor_attribution_inventory.py`
+(10 tests, ~0.8 s) measures it: of the 23 project models, 19 carry a foreign key to the account
+responsible — `staged_by`, `reviewer`, `recorded_by`, `author`, `actor` — every one of them
+`on_delete=PROTECT` so deleting an account cannot erase attribution, 18 of them `NOT NULL`, and
+each paired with an `auto_now_add` creation timestamp (`created_at` on 16, `collected_at` on the
+two candidates, `recorded_at` on `SourceClaim`). No project model has an `auto_now` field at all:
+the schema records when a row appeared and never when one changed, because every staff write
+appends a new row rather than editing one.
+
+The four models that name nobody are pinned with their reason: `FormulationComponent` and
+`ImportReceiptItem` are children whose required, protected parent link reaches an attributed
+parent; `StaffLoginWindow` is a synthetic throttle row keyed by an address digest; and
+`catalog.ProductPresentation` — the published catalog record the public reads — has no actor
+column, no creation timestamp and no create call site anywhere in the project. It is named by
+exactly seven non-test modules and written by exactly one, the projection repair, which a
+PostgreSQL-backed test shows reports `fields: {irc_normalized, search_text}`, leaves every other
+column of the row byte-identical and creates **no row in any of the 23 tables**: the only
+in-app write to the published catalog leaves no attribution anywhere.
+
+The second exception is behavioral. `PriceCandidate.staged_by` is the one nullable actor column,
+and the two staging entry points differ: `manage.py stage_price_csv --commit --attest-authorized`
+stores a candidate naming no account, while the staff import route passes the session account
+(ADR 0195 records that actor-less CLI staging is deliberate). What had not been measured is the
+cost — a reviewer holding `pricing.review_pricecandidate` gets a 200 detail page with no stager,
+`can_review` false and no review form, and since an identical payload reuses the existing row,
+replaying that candidate through the route never gives it an actor: a row first staged from the
+command line is permanently unreviewable in the portal. The development guide now says so where
+the command is documented.
+
+Five red checks were applied alone and reverted: adding a `ProductPresentation` create call site,
+making a second actor column nullable, adding an `auto_now` field, dropping
+`display_stager is not None` from the portal's `can_review` rule, and making the importer fill in
+`staged_by` on replay — each fails the assertions that carry it. This is attribution, not an
+audit: nothing measured is tamper-resistant, reads are not recorded, no management command
+records its operator, and whether an unattributed candidate should be reviewable is an open
+governance decision. See
+[ADR 0220](ARCHITECTURE_DECISIONS/0220-actor-attribution-inventory.md).
+
 ## 2026-11-26 — document the staff login throttle and hold the command surface to the operator documents
 
 **Changes:** with `django.contrib.admin` deliberately absent (ADR 0218), management commands

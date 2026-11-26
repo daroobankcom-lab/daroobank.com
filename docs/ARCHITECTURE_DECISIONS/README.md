@@ -438,4 +438,6 @@
 
 - [0219: every management command is documented where an operator looks](0219-documented-command-surface.md) — the twelve commands and their options are held to the development guide, the operations runbook and the deployment guide; naming is checked, correctness of the prose is not.
 
+- [0220: actor attribution is a schema property](0220-actor-attribution-inventory.md) — 19 of the 23 project models name the account that wrote them behind a protected foreign key and a creation timestamp; the published catalog record names nobody, and a candidate staged from the command line can never be reviewed in the portal.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

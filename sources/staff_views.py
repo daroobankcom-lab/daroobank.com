@@ -174,7 +174,8 @@ def review(request, pk):
     if not form.is_valid():
         return detail_response(request, claim, form=form, status=400)
     try:
-        review_claim(actor=request.user, claim_id=pk, **form.cleaned_data)
+        review_claim(actor=request.user, claim_id=pk, session_auth_hash=request.session.get(HASH_SESSION_KEY),
+                     **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
         claim = get_claim(pk)

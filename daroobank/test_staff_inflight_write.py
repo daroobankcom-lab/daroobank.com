@@ -9,8 +9,8 @@ from django.db import close_old_connections
 from django.test import Client, TransactionTestCase, override_settings
 from django.urls import reverse
 
-from sources.models import SourceClaim
-from sources.services import validate_data
+from sources.models import SourceClaim, SourceClaimReview
+from sources.services import record_claim, valid_review_reason, validate_data
 
 
 @override_settings(STAFF_PORTAL_ENABLED=True,
@@ -160,3 +160,87 @@ class StaffInflightWriteTests(TransactionTestCase):
                             HTTP_X_CSRFTOKEN=token)
         self.assertEqual(fresh.status_code, 302)
         self.assertEqual(SourceClaim.objects.count(), 2)
+
+    def _review_client(self):
+        """Prepare a reviewer session plus another user's claim to review."""
+        author = get_user_model().objects.create_user('synthetic-review-target-author', password='synthetic-only',
+                                                      is_staff=True)
+        author.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                    codename__in=['view_sourceclaim', 'add_sourceclaim']))
+        claim, _created = record_claim(actor=author, data={'source_name': 'Synthetic source',
+            'source_url': 'https://example.org/reviewed', 'owner': 'Synthetic owner',
+            'evidence_url': 'https://example.org/evidence', 'evidence_note': '', 'claims_collection': True,
+            'claims_storage': False, 'claims_publication': False, 'starts_on': None, 'expires_on': None})
+        reviewer = get_user_model().objects.create_user('synthetic-inflight-reviewer', password='synthetic-only',
+                                                        is_staff=True)
+        reviewer.user_permissions.add(*Permission.objects.filter(content_type__app_label='sources',
+                                       codename__in=['view_sourceclaim', 'review_sourceclaim']))
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(reviewer)
+        path = reverse('staff_source_review', args=[claim.pk])
+        self.assertEqual(client.get(reverse('staff_source_detail', args=[claim.pk])).status_code, 200)
+        payload = {'decision': 'further_review', 'reason': 'این مدرک ساختگی به بررسی بیشتر نیاز دارد.',
+                   'expected_review': 0, 'expected_hash': claim.payload_sha256}
+        return client, path, payload, claim, reviewer
+
+    def _paused_review(self, client, path, payload, change_account):
+        ready, resume = Event(), Event()
+
+        def paused_reason(*args, **kwargs):
+            # The view's own authorization checks have already passed.
+            ready.set()
+            if not resume.wait(10):
+                raise TimeoutError('Synthetic in-flight review did not resume')
+            return valid_review_reason(*args, **kwargs)
+
+        def post_review():
+            close_old_connections()
+            try:
+                return client.post(path, payload, HTTP_X_CSRFTOKEN=client.cookies['csrftoken'].value)
+            finally:
+                close_old_connections()
+
+        with patch('sources.services.valid_review_reason', side_effect=paused_reason):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(post_review)
+                try:
+                    self.assertTrue(ready.wait(10), 'Synthetic review did not reach input validation')
+                    change_account()
+                    self.assertFalse(SourceClaimReview.objects.exists())
+                finally:
+                    resume.set()
+                return future.result(timeout=15)
+
+    def test_password_invalidation_before_review_guard_denies_inflight_review_after_reactivation(self):
+        client, path, payload, _claim, reviewer = self._review_client()
+
+        def invalidate_and_reactivate():
+            current = get_user_model().objects.get(pk=reviewer.pk)
+            current.is_active = False
+            current.set_unusable_password()
+            current.save(update_fields=['is_active', 'password'])
+            get_user_model().objects.filter(pk=reviewer.pk).update(is_active=True)
+
+        response = self._paused_review(client, path, payload, invalidate_and_reactivate)
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(SourceClaimReview.objects.exists())
+        fresh = client.post(path, {**payload, 'reason': 'دلیل ساختگی دوم برای درخواست تازه.'},
+                            HTTP_X_CSRFTOKEN=client.cookies['csrftoken'].value)
+        self.assertEqual(fresh.status_code, 302)
+        self.assertTrue(fresh['Location'].startswith(reverse('staff_login') + '?'))
+        self.assertEqual(SourceClaimReview.objects.count(), 0)
+
+    def test_flag_only_reactivation_before_review_guard_can_still_allow_an_inflight_review(self):
+        client, path, payload, claim, reviewer = self._review_client()
+
+        def disable_then_reactivate():
+            current = get_user_model().objects.get(pk=reviewer.pk)
+            current.is_active = False
+            current.save(update_fields=['is_active'])
+            get_user_model().objects.filter(pk=reviewer.pk).update(is_active=True)
+
+        response = self._paused_review(client, path, payload, disable_then_reactivate)
+        event = SourceClaimReview.objects.get()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('staff_source_detail', args=[claim.pk]))
+        self.assertEqual(event.reviewer_id, reviewer.pk)

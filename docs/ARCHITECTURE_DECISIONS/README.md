@@ -386,4 +386,6 @@
 
 - [0193: source-claim session hash binding](0193-source-claim-session-hash-binding.md) — one guarded write rechecks the session's password hash; still not revocation.
 
+- [0194: source-review actor and session recheck](0194-source-review-actor-session-recheck.md) — unlocked reviewer recheck preserving one lock order; still not revocation.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

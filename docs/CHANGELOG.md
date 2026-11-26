@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — recheck the source reviewer and bind review to the session hash
+
+**Changes:** `review_claim` accepts an optional `session_auth_hash`, which the staff review view supplies from the request session. After locking the claim row and before creating a review, the service rejects an invalid actor key, reloads the reviewer without a row lock, repeats the active/staff/permission checks on that fresh instance and compares the supplied hash in constant time, denying with 403. Synchronized synthetic tests now show disable plus password invalidation plus reactivation before the guard are denied. See ADR 0194.
+
+**Limits:** The reviewer read is unlocked to preserve the single account-then-claim lock order, so a credential change after that read still races; a parked review commits in a selected test, as does a flag-only disable/reactivate. One service and route are covered, the hash reflects the password only, and durable session revocation remains absent. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — bind the source-claim write to the session password hash
 
 **Changes:** `record_claim` accepts an optional `session_auth_hash`; the development staff create view passes the request session's authentication hash, and the guarded transaction compares it in constant time with the freshly locked account's current hash, denying a mismatch or non-string value with 403. A synchronized synthetic test now shows disable, password invalidation and reactivation committing before the guard are denied. See ADR 0193.

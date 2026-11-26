@@ -150,7 +150,7 @@ def _lock_latest_review(claim):
             .order_by('-pk').select_for_update().only('pk').first())
 
 
-def review_claim(*, actor, claim_id, decision, reason, expected_review, expected_hash):
+def review_claim(*, actor, claim_id, decision, reason, expected_review, expected_hash, session_auth_hash=None):
     require_staff(actor, VIEW, REVIEW)
     if (type(claim_id) is not int or not 1 <= claim_id <= MAX_PK
             or not isinstance(decision, str) or decision not in dict(SourceClaimReview.DECISIONS)
@@ -159,6 +159,21 @@ def review_claim(*, actor, claim_id, decision, reason, expected_review, expected
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
     with write_conflict_boundary(ReviewConflict):
         claim = bounded_claim_notes(SourceClaim.objects.select_for_update()).get(pk=claim_id)
+        # Re-verify the reviewer against the database after taking the claim lock.
+        # This read is deliberately unlocked: record_claim locks the account row
+        # before the claim row, so locking the account here would invert that order
+        # and could deadlock. The recheck is a point-in-time read, not
+        # serialization, and a credential change committed afterwards still races.
+        if type(actor.pk) is not int or not 1 <= actor.pk <= MAX_PK:
+            raise PermissionDenied
+        current_actor = get_user_model().objects.filter(pk=actor.pk).first()
+        require_staff(current_actor, VIEW, REVIEW)
+        # A supplied session hash binds this review to that session's password
+        # state; an omitted hash keeps direct service calls working and is not
+        # authenticated by this check.
+        if session_auth_hash is not None and not (isinstance(session_auth_hash, str)
+                and constant_time_compare(session_auth_hash, current_actor.get_session_auth_hash())):
+            raise PermissionDenied
         materialize_claim_note(claim)
         if claim.recorded_by_id == actor.pk:
             raise PermissionDenied

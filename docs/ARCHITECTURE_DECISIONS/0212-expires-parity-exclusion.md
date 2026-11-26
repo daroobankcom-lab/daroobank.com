@@ -55,6 +55,22 @@ same answer again, asserts the two `Expires` values **differ**, and asserts the 
 responses are still `comparable()`-equal. Cost: about 2.2 s; the suite is now 10
 tests, roughly 22 s.
 
+### Red check
+
+Reverting just the `VOLATILE_HEADERS` line back to `{'date', 'set-cookie'}` fails the
+new guard test on both endpoints, with the timestamp difference visible in the
+message:
+
+```
+FAIL: ... (route='staff_login')   ... 14:09:09 GMT' ... != ... 14:09:10 GMT' ...
+FAIL: ... (route='staff_logout')  ... 14:09:10 GMT' ... != ... 14:09:11 GMT' ...
+Ran 1 test in 3.466s — FAILED (failures=2)
+```
+
+The line was restored from a backup and `git diff --stat` is empty afterwards. The
+other four parity suites were unaffected by the revert in that run because their
+routes never emit `Expires`; the guard test is what makes the exclusion load-bearing.
+
 ### Alternatives rejected
 
 - **Skip `staff_logout` in the parity test.** It would remove the flake by removing

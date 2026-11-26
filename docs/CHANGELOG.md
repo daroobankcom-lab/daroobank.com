@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — database configuration error redaction
+
+**Changes:** Invalid PostgreSQL port or connection lifetime still fails startup, but no longer chains Python's conversion exception, which may contain the configured value. Fresh-process tests exercise synthetic canaries.
+
+**Limits:** This covers these two integer settings only, not all startup, process, infrastructure or database logs; secrets must still be managed and logs reviewed separately.
+
 ## 2026-11-26 — optional non-debug HSTS duration
 
 **Changes:** A bounded explicit HSTS max-age can be configured outside debug; the default remains off and subdomain/preload directives stay disabled.

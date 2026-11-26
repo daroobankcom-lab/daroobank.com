@@ -75,8 +75,10 @@ try:
     db_port = int(os.environ.get('POSTGRES_PORT', '5432'))
     if db_conn_max_age < 0 or not 1 <= db_port <= 65535:
         raise ValueError
-except ValueError as exc:
-    raise ImproperlyConfigured('Invalid PostgreSQL port or connection lifetime') from exc
+except ValueError:
+    # Python's int() error includes the original environment value; never echo
+    # potentially sensitive misconfiguration into startup logs or tracebacks.
+    raise ImproperlyConfigured('Invalid PostgreSQL port or connection lifetime') from None
 
 db_options = {'connect_timeout': 5}
 if os.environ.get('POSTGRES_SSLMODE'):

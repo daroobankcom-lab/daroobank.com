@@ -410,4 +410,6 @@
 
 - [0205: identifier and method parity](0205-staff-identifier-and-method-parity.md) — thirteen identifier shapes and both method directions across five account shapes.
 
+- [0206: query-parameter parity](0206-staff-query-parameter-parity.md) — nine caller-controlled query shapes across all 41 staff routes.
+
 Record future decisions with context, alternatives, consequences and status. Supersede rather than silently delete decisions.

@@ -10,6 +10,7 @@ from django.db.transaction import TransactionManagementError
 
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_account_exists
+from daroobank.actor_recheck import recheck_actor
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import (has_control_or_surrogate, has_forbidden_multiline_control,
                                   valid_private_source_url, valid_review_reason)
@@ -188,7 +189,8 @@ def _lock_latest_review(draft):
             .order_by('-pk').select_for_update().only('pk').first())
 
 
-def review_draft(*, actor, draft_id, decision, reason, expected_review, expected_hash, expected_evidence_hash=None):
+def review_draft(*, actor, draft_id, decision, reason, expected_review, expected_hash,
+                 expected_evidence_hash=None, session_auth_hash=None):
     require_staff(actor, VIEW, REVIEW)
     if (type(draft_id) is not int or not 1 <= draft_id <= MAX_PK
             or not isinstance(decision, str) or decision not in dict(ClinicalDraftReview.DECISIONS)
@@ -199,6 +201,10 @@ def review_draft(*, actor, draft_id, decision, reason, expected_review, expected
         raise DraftConflict('اطلاعات بازبینی معتبر نیست.')
     with write_conflict_boundary(DraftConflict):
         draft = bounded_draft_own_text(ClinicalDraft.objects.select_for_update(of=('self',))).get(pk=draft_id)
+        # Re-verify the reviewer after taking the draft lock. The read is
+        # deliberately unlocked to keep one lock order across services, so it is a
+        # point-in-time check and a later credential change still races. ADR 0195.
+        recheck_actor(actor, (VIEW, REVIEW), session_auth_hash=session_auth_hash)
         materialize_draft_own_text(draft)
         if draft.author_id == actor.pk:
             raise PermissionDenied

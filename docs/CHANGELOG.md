@@ -2,6 +2,12 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — share one write-actor recheck across four guarded services
+
+**Changes:** A new `daroobank/actor_recheck.py` helper reloads a write actor, repeats its active/staff/permission checks on the fresh instance and optionally binds the write to the session password hash, with an opt-in account-row lock. Source-claim creation and review now use it, and `pricing.reviews.record_preliminary_review` and `clinical.services.review_draft` gain the unlocked recheck plus session-hash binding, supplied by their staff views. See ADR 0195.
+
+**Limits:** Only `record_claim` locks the account row; the other three rechecks are unlocked point-in-time reads, so selected parked-writer tests still commit a review after disable, password invalidation and reactivation. Four services on four routes are covered, the hash reflects the password only, permission changes are still not serialized, and durable session revocation remains absent. ADR 0191 remains a release blocker.
+
 ## 2026-11-26 — recheck the source reviewer and bind review to the session hash
 
 **Changes:** `review_claim` accepts an optional `session_auth_hash`, which the staff review view supplies from the request session. After locking the claim row and before creating a review, the service rejects an invalid actor key, reloads the reviewer without a row lock, repeats the active/staff/permission checks on that fresh instance and compares the supplied hash in constant time, denying with 403. Synchronized synthetic tests now show disable plus password invalidation plus reactivation before the guard are denied. See ADR 0194.

@@ -1,6 +1,7 @@
 """Development-only, permission-gated price staging and preliminary review."""
 import unicodedata
 from django.conf import settings
+from django.contrib.auth import HASH_SESSION_KEY
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import PermissionDenied
@@ -228,7 +229,8 @@ def price_review(request, pk):
     if not form.is_valid():
         return _detail_response(request, candidate, form=form, status=400)
     try:
-        record_preliminary_review(candidate_id=pk, actor=request.user, **form.cleaned_data)
+        record_preliminary_review(candidate_id=pk, actor=request.user,
+                                  session_auth_hash=request.session.get(HASH_SESSION_KEY), **form.cleaned_data)
     except ReviewConflict as exc:
         form.add_error(None, str(exc))
         candidate = _get_candidate(pk)

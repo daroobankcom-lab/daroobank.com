@@ -14,7 +14,7 @@ ADR 0192 and ADR 0193 hardened one write path: `record_claim` locks and reloads 
 2. loads the reviewer's current database row **without a row lock** and repeats the active, staff and required-permission checks against that fresh instance, so cached Django permissions on the request actor are not trusted;
 3. when a session hash is supplied, compares it in constant time with the fresh account's `get_session_auth_hash()` and denies a non-string or mismatching value.
 
-Any failure raises `PermissionDenied`, which this route surfaces as HTTP 403 without creating a review. Omitting the hash keeps direct service calls, management paths and existing tests working; those calls are not authenticated by this check. No new table, setting, dependency or route is introduced.
+Any failure raises `PermissionDenied`, which this route surfaces as HTTP 403 without creating a review. Omitting the hash keeps direct service calls, management paths and existing tests working; those calls are not authenticated by this check. No new table, setting, dependency or route is introduced. [ADR 0195](0195-shared-write-actor-recheck.md) later moved these checks into one shared helper and extended the same pattern to the pricing and clinical review services.
 
 The reviewer read is deliberately **unlocked**. `record_claim` locks the account row before the claim row; taking an account lock after the claim lock here would invert that order across the two services and could deadlock under concurrency. Preserving a single lock order was judged more important than serializing this read.
 

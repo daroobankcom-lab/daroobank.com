@@ -1,4 +1,5 @@
 """Private development-only editorial triage; never publish."""
+from django.contrib.auth import HASH_SESSION_KEY
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
@@ -240,7 +241,8 @@ def review(request, pk):
     if not form.is_valid():
         return detail_response(request, draft, form=form, status=400)
     try:
-        review_draft(actor=request.user, draft_id=pk, **form.cleaned_data)
+        review_draft(actor=request.user, draft_id=pk, session_auth_hash=request.session.get(HASH_SESSION_KEY),
+                     **form.cleaned_data)
     except DraftConflict as exc:
         form.add_error(None, str(exc))
         draft = get_draft(pk)

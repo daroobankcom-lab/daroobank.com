@@ -5,16 +5,15 @@ import re
 import unicodedata
 from datetime import date
 
-from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.db.transaction import TransactionManagementError
 from django.utils import timezone
-from django.utils.crypto import constant_time_compare
 
 from catalog.normalization import normalize_search
 from daroobank.account_checks import current_account_exists
+from daroobank.actor_recheck import recheck_actor
 from daroobank.write_conflict_boundary import write_conflict_boundary
 from daroobank.validation import valid_private_source_url, valid_review_reason
 from .models import SourceClaim, SourceClaimReview
@@ -108,22 +107,10 @@ def record_claim(*, actor, data, session_auth_hash=None):
     validate_data(data)
     digest = fingerprint(data)
     with write_conflict_boundary(ClaimConflict):
-        # Serialize this write with updates of this account's active/staff flags.
-        # NO KEY UPDATE allows foreign-key key-share locks; this is PostgreSQL
-        # specific and does not serialize permission/group or session changes.
-        if type(actor.pk) is not int or not 1 <= actor.pk <= MAX_PK:
-            raise PermissionDenied
-        current_actor = get_user_model().objects.select_for_update(no_key=True).filter(pk=actor.pk).first()
-        # A fresh model instance avoids permission caches on the request actor.
-        # Permission/group changes are not locked and can still race this check.
-        require_staff(current_actor, VIEW, ADD)
-        # A caller that supplies the session's authentication hash binds this
-        # write to that session's password state; a mismatch denies even an
-        # active, permitted account. Omitted hashes keep direct service calls
-        # working and are not authenticated by this check.
-        if session_auth_hash is not None and not (isinstance(session_auth_hash, str)
-                and constant_time_compare(session_auth_hash, current_actor.get_session_auth_hash())):
-            raise PermissionDenied
+        # Serialize this write with updates of this account's active/staff flags:
+        # the account row is locked before the claim row, and permission/group or
+        # session changes are not serialized by that lock. See ADR 0192-0193.
+        current_actor = recheck_actor(actor, (VIEW, ADD), session_auth_hash=session_auth_hash, lock=True)
         claim, created = _find_or_create_claim(source_url=data['source_url'], payload_sha256=digest,
                                                              defaults={**data, 'recorded_by': actor})
         if not created:
@@ -159,21 +146,12 @@ def review_claim(*, actor, claim_id, decision, reason, expected_review, expected
         raise ReviewConflict('اطلاعات بازبینی معتبر نیست.')
     with write_conflict_boundary(ReviewConflict):
         claim = bounded_claim_notes(SourceClaim.objects.select_for_update()).get(pk=claim_id)
-        # Re-verify the reviewer against the database after taking the claim lock.
-        # This read is deliberately unlocked: record_claim locks the account row
-        # before the claim row, so locking the account here would invert that order
-        # and could deadlock. The recheck is a point-in-time read, not
-        # serialization, and a credential change committed afterwards still races.
-        if type(actor.pk) is not int or not 1 <= actor.pk <= MAX_PK:
-            raise PermissionDenied
-        current_actor = get_user_model().objects.filter(pk=actor.pk).first()
-        require_staff(current_actor, VIEW, REVIEW)
-        # A supplied session hash binds this review to that session's password
-        # state; an omitted hash keeps direct service calls working and is not
-        # authenticated by this check.
-        if session_auth_hash is not None and not (isinstance(session_auth_hash, str)
-                and constant_time_compare(session_auth_hash, current_actor.get_session_auth_hash())):
-            raise PermissionDenied
+        # Re-verify the reviewer after taking the claim lock. This read is
+        # deliberately unlocked: record_claim locks the account row before the
+        # claim row, so locking the account here would invert that order and could
+        # deadlock. The recheck is a point-in-time read, not serialization, and a
+        # credential change committed afterwards still races. See ADR 0194.
+        current_actor = recheck_actor(actor, (VIEW, REVIEW), session_auth_hash=session_auth_hash)
         materialize_claim_note(claim)
         if claim.recorded_by_id == actor.pk:
             raise PermissionDenied

@@ -130,8 +130,9 @@ created and dropped:
   `PUBLIC`, granting with the grant option and revoking from itself were equally inert.
   `manage.py migrate` as that role into an empty superuser-owned database with `USAGE` but not
   `CREATE` on the schema failed with `MigrationSchemaMissing: Unable to create the django_migrations
-  table (permission denied for schema public)`, and with `CREATE` granted it applied all **32**
-  migrations and **owned the tables it created**. `manage.py test` on a database-touching module
+  table (permission denied for schema public)`, and with `CREATE` granted — inside the target
+  database, since `pg_namespace` is per-database — it applied all **32** migrations and **owned
+  everything it created**, all **33** tables and all **111** indexes. `manage.py test` on a database-touching module
   exited **2** with *"Got an error creating the test database: permission denied to create
   database"*, while a module with no database-dependent test passed as either role because Django
   creates no test database for it. `pg_dump -Fc` wrote **145,667 bytes** with the grants and failed
@@ -170,7 +171,7 @@ created and dropped:
 
 ## Red checks
 
-After the plan, the suite and the neighbour patches existed, twenty-four mutations were applied one
+After the plan, the suite and the neighbour patches existed, twenty-six mutations were applied one
 at a time to a byte-identical backup of the tree (`sha256sum` recorded before, re-verified after
 every restore, final check rc=0), each followed by a run of
 `daroobank/test_database_connection_plan.py`, each run required to fail. Every mutation went red and
@@ -216,6 +217,10 @@ the suite ended green:
     `test_no_new_command_model_or_dependency_exists` and `test_the_tree_still_contains_no_pooler`.
 24. staff_security/throttle.py: one of its two `SET LOCAL` statements deleted —
     `test_the_timeout_inventory_is_the_measured_one`.
+25. Plan: the `**33** tables and **111** indexes` the migrating role owns became `32` and `110` —
+    `test_the_plan_states_the_measured_numbers`.
+26. Plan: *"`pg_namespace` is per-database"* became *"`pg_namespace` is shared"* —
+    `test_the_plan_states_the_measured_numbers`.
 
 Two mutations initially slipped, and both slips were the mutation's fault rather than the suite's:
 the plan states `130,001.02 ms` in three places and `9,320 kB` in three, and replacing the one
@@ -228,7 +233,11 @@ the test modules counted this suite's own file, which names the tokens it forbid
 excluded its own three files; and the forbidden-selection list was applied to the whole record, which
 names those phrases in this section. Each was fixed in the suite or in the documents before the red
 check above was run, and the record's own `Suite:` line and quotation count were recounted at the
-same time.
+same time. Mutations 25 and 26 were added after that run, when a second privilege probe re-measured
+what the migrating role owns — all 33 tables and all 111 indexes carry it as `relowner` — and
+established that the `CREATE` grant has to be made inside the target database, because
+`pg_namespace` is per-database and a grant made while connected to another database leaves the same
+`MigrationSchemaMissing` behind. Both numbers are pinned and both mutations were run red.
 
 ## Consequences
 

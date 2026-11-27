@@ -197,6 +197,7 @@ MEASURED = [
     'WARNING:  no privileges were granted for "django_migrations"', '**1,048,576** bytes',
     '`vacuum_count` stayed **0**', 'MigrationSchemaMissing: Unable to create the django_migrations '
     'table (permission denied for schema public)', 'all **32** migrations',
+    'all **33** tables and all **111** indexes', '`pg_namespace` is per-database',
     'Got an error creating the test database: permission denied to create database',
     '(7 tests)', '**145,667** bytes', '<insufficient privilege>', 'pg_signal_backend',
     '9,312 kB', '9,320 kB', '4,664 kB', '**25 ms**', '**48 ms**', '400–440 ms', '13–14 ms',
@@ -592,9 +593,9 @@ class MeasuredNumberTests(SimpleTestCase):
         self.assertIn('now count 242 and 241, and 268', consequences)
         self.assertIn('`LOGIN_ROUTE_TESTS` is 45, not 44', consequences,
                       'the record stopped naming the pin its module list moved')
-        self.assertIn('twenty-four mutations', flat(section(read(ADR), 'Red checks')),
+        self.assertIn('twenty-six mutations', flat(section(read(ADR), 'Red checks')),
                       'the record states a red-check count that is not the list it carries')
-        self.assertEqual(len(numbered(section(read(ADR), 'Red checks'))), 24,
+        self.assertEqual(len(numbered(section(read(ADR), 'Red checks'))), 26,
                          'the red-check list the record names moved')
         for path, name, value in ((DOCUMENT_LINKS, 'DOCUMENT_COUNT', 269),
                                   (DOCUMENT_LINKS, 'ADR_COUNT', 235),

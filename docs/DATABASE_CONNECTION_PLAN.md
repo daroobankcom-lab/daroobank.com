@@ -250,8 +250,12 @@ Three of its refusals are not refusals, and that is the sharpest edge in this se
   `manage.py migrate` as the runtime role into an empty database owned by the superuser, with `USAGE`
   but not `CREATE` on `public`, failed with
   `MigrationSchemaMissing: Unable to create the django_migrations table (permission denied for schema
-  public)`. With `CREATE` granted it applied all **32** migrations and the tables it created are owned
-  by **itself**, not by `postgres`. Against an already-migrated database it exits 0 with *"No
+  public)`. With `CREATE` granted it applied all **32** migrations, and everything it created is
+  owned by **itself** rather than by `postgres`: all **33** tables and all **111** indexes in `public`
+  carry the runtime role as `relowner`. The grant has to be made inside the target database —
+  `pg_namespace` is per-database, so `GRANT CREATE ON SCHEMA public` run while connected to another
+  database grants nothing the migration can use, and the same `MigrationSchemaMissing` follows.
+  Against an already-migrated database it exits 0 with *"No
   migrations to apply."*, and with the table grants revoked it exits 1 with *"permission denied for
   table django_migrations"*.
 * **The test runner needs `CREATEDB`.** `manage.py test catalog.test_candidate_migration` as the

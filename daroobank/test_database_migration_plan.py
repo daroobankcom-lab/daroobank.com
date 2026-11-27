@@ -245,8 +245,8 @@ COMMAND_COUNT = 12
 PROJECT_MODEL_COUNT = 24
 REQUIREMENTS_LINES = 94
 SETTINGS_MODULES = 4
-DOCS_MARKDOWN_COUNT = 264
-TEST_MODULE_COUNT = 240
+DOCS_MARKDOWN_COUNT = 266
+TEST_MODULE_COUNT = 241
 WORKFLOW_MIGRATE_STEPS = ['python manage.py migrate --noinput', 'python manage.py check',
                           'python manage.py makemigrations --check --dry-run',
                           'python manage.py inspect_postgresql_schema']

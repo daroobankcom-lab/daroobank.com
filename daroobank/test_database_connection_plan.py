@@ -67,7 +67,11 @@ MFA_SUITE = ROOT / 'daroobank' / 'test_mfa_implementation_plan.py'
 SECRET_SUITE = ROOT / 'daroobank' / 'test_secret_rotation_plan.py'
 BACKUP_SUITE = ROOT / 'daroobank' / 'test_backup_recovery_plan.py'
 
-SKIP_PARTS = ('.venv', '.cache', '.git', 'node_modules', '__pycache__', 'staticfiles')
+# Directories the walk must not count. Every one of them is ignored by `.gitignore`, so none of them
+# is part of the tree the plan counts over. `backups/` is where a dump lands, and the `compose` job
+# creates `backups/context-probe/` on purpose to prove the image excludes it: a count that included
+# it would move with local state instead of with the repository.
+SKIP_PARTS = ('.venv', '.cache', '.git', 'node_modules', '__pycache__', 'staticfiles', 'backups')
 PROJECT_APPS = ('catalog', 'clinical', 'daroobank', 'ingestion', 'pricing', 'sources',
                 'staff_security')
 # This delivery's own files. A document that reports the absence of a word cannot be one of the

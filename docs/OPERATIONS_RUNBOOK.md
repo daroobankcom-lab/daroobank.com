@@ -31,6 +31,8 @@ It is not monitoring and not an authorization: it serves no request, checks noth
 
 The edge conditions in that review list are now measured rather than assumed: both header profiles over the public and staff routes, the HSTS and forwarded-scheme matrices, the absence of any `Access-Control` header, the 7-of-12 referrer split and the opt-in limiter's 429 refusal are recorded in [the network and TLS plan](NETWORK_TLS_PLAN.md) ([ADR 0234](ARCHITECTURE_DECISIONS/0234-network-tls-plan.md)); the plan is a proposal with no owner and implements nothing.
 
+The artifact half of that review has no measured gate to wait for — 0 exports, 0 waiting jobs, 0 protected environments and 4 mutable base-image references — and is recorded in [the CI and supply-chain plan](CI_SUPPLY_CHAIN_PLAN.md) ([ADR 0237](ARCHITECTURE_DECISIONS/0237-ci-supply-chain-plan.md)); the plan is a proposal with no owner and implements nothing.
+
 ## Local synthetic restore drill
 
 Use the [PostgreSQL backup and isolated restore procedure](DEVELOPMENT_GUIDE.md#postgresql-backup-and-isolated-restore) only with synthetic data and a newly created isolated database. Verify migrations, records and application behavior; never restore into the running database. Record the outcome without sensitive details, then dispose of copies under the local policy. These steps are not a production restore exercise; no cadence, encryption, off-host retention, recovery objectives, alerting, external asset recovery or production access controls are implemented. The drill restores into a database it just created and verifies a fixture the same process wrote, which is why an archive missing a fact written after the dump passed every check it runs; see [the backup and recovery plan](BACKUP_RECOVERY_PLAN.md).

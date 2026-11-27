@@ -83,7 +83,7 @@ throwaway databases.
 - **The target is always new.** The guide runs `createdb --no-password daroobank_restore_drill` and
   retargets `POSTGRES_DB` to that literal name twice; the drill's docstring says *"Source and target
   are new, dedicated databases, never an existing database"* and it refuses a colliding target rather
-  than replacing it. Of the 262 markdown documents in `docs/`, the only two that name `--clean`,
+  than replacing it. Of the 264 markdown documents in `docs/`, the only two that name `--clean`,
   `--if-exists` or `dropdb` are this record and the plan.
 - **An archive carries no privileges and every credential.** Its header counts `TOC Entries: 291` and
   the listing prints 287 selected entries — 33 `TABLE`, 33 `TABLE DATA`, 60 `INDEX`, 30 `SEQUENCE`

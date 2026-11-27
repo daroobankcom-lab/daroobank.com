@@ -60,7 +60,7 @@ and `createdb` clients the `pgserver` wheel bundles. They are pinned by
   target is refused rather than replaced. The runbook states the rule as *"never restore into the
   running database"*.
 * **No live-database recovery shape is written down anywhere.** The guide's script contains no
-  `--clean`, no `--if-exists`, no `--create`, no `dropdb` and no `DROP DATABASE`, and of the 262
+  `--clean`, no `--if-exists`, no `--create`, no `dropdb` and no `DROP DATABASE`, and of the 264
   markdown documents in `docs/` the only two that name any of them are this plan and
   [its decision record](ARCHITECTURE_DECISIONS/0232-backup-recovery-plan.md).
 * **The dump is taken with `--no-owner --no-acl`.** The archive's header counts `TOC Entries: 291`

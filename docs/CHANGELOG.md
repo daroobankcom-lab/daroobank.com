@@ -2,6 +2,126 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-27 — measure what a migration costs, and price the staging upgrade and rollback options
+
+**Changes:** `docs/DEPLOYMENT.md` asks a release to *"run tests/migrations on staging and validate
+rollback compatibility"* and to *"Define rollback including content/cache and migration compatibility
+before release"*, `docs/OPERATIONS_RUNBOOK.md` tells an operator to *"rerun in staging, then
+explicitly resume from a safe checkpoint"*, `docs/DEVELOPMENT_GUIDE.md` warns that catalog migration
+`0008` *"fails on existing violations and may wait for table locks"*, `docs/TESTING_STRATEGY.md`
+counts *"All relevant tests pass in CI and staging"* as a release condition, `docs/ROADMAP.md` puts
+*"DB migrations"* in Phase 1, and `docs/PHASE1_RELEASE_EVIDENCE.md` carried the subject as an open
+gate that named its own gaps: *"it measured no duration, no WAL volume and no long-running `ALTER
+TABLE` under load"* and *"Rollback of Django's own apps, other shapes of concurrency (an open writing
+transaction, `CREATE INDEX CONCURRENTLY`, a running command, a standby) and tested recovery from a
+real staging schema are unmeasured."* Two drills existed and answered the row-count question only.
+
+`docs/DATABASE_MIGRATION_PLAN.md` now measures before it proposes: a `What is true today, measured`
+section in nine subsections, eight numbered decisions, seven priced options — leave the migration path
+as it is, write the staging sequence down as an ordered procedure, bound the migration session with a
+timeout, move index builds out of atomic migrations, take a copy before every destructive migration
+and drill restoring it, make a half-undone schema detectable, and declare staging migration and
+rollback out of Phase 1 scope — a seven-item `Required behavior before any staging migration` list and
+a six-item verification list. Every measurement was taken against the synthetic PostgreSQL 16.2 server
+on throwaway databases that the experiment created and dropped, with the `pg_dump` and `pg_restore`
+clients the `pgserver` wheel bundles.
+
+Both directions are sub-second and cheap in WAL. `migrate` applied 32 migrations in 0.927 s writing
+1,172,320 bytes; `migrate catalog zero` unapplied its 11-migration cascade in 0.711 s and 149,408
+bytes, leaving 17 tables and 21 applied rows; the other five apps followed in 0.378 s and 61,536
+bytes, leaving nine tables that are all Django's; and reapplying took 0.724 s and 885,624 bytes and
+returned an inventory identical row for row — 279 columns, 111 indexes, 138 constraints — with zero
+rows. A rollback's cost does not grow with the data it destroys: inserting 50,000 rows into
+`staff_security_staffloginwindow` took 0.345 s and wrote 29,621,944 bytes into an 18,653,184-byte
+table, and `migrate staff_security zero` then removed both of that app's tables and all 50,000 rows in
+0.096 s writing 6,680 bytes, with a reapply that returned an empty table in 0.068 s.
+
+Lock modes were read from `pg_locks` and the load numbers come from one writer thread committing an
+insert every 5 ms, about 175 writes a second. `ALTER TABLE … ADD COLUMN` takes `AccessExclusiveLock`
+on the table alone, `CREATE INDEX` takes `ShareLock`, an `ALTER COLUMN … TYPE` to the same width
+rewrites under `AccessExclusiveLock` on the table, its primary key, its indexes and its TOAST table,
+`DROP TABLE catalog_productpresentation` is refused with *"cannot drop table … because other objects
+depend on it"* and `TRUNCATE` of it with *"cannot truncate a table referenced in a foreign key
+constraint"*. A metadata-only column took 0.001 s and 1,344 bytes on an empty table and 0.001 s and
+1,408 bytes at 50,000 rows; a rewriting column took 0.007 s and 27,016 bytes at zero rows, 0.143 s and
+17,895,928 bytes at 50,000, and 3.631 s and 178,759,168 bytes at 500,000, rewriting a 186,662,912-byte
+table into 174,104,576 bytes. Under the writer that rewrite waited 2.726 s and blocked exactly one
+insert for 2.703 s, a blocking `CREATE INDEX` took 0.102 s and stalled one writer for 0.094 s, the
+metadata-only column blocked nobody, and `CREATE INDEX CONCURRENTLY` took 0.003 s outside a
+transaction and cannot run inside one at all — which no project migration can avoid, `atomic = False`
+appearing in none of the 17 modules. An uncommitted `UPDATE` in a second session and a session that
+only ran `SELECT count(*)` and `pg_sleep(4)` each cancelled a metadata `ALTER TABLE` after 2.001 s at
+the drill's 2 s `lock_timeout`, and the same reader cancelled `migrate catalog zero` after 2.551 s,
+leaving 32 tables, 31 of 32 applied migrations and 29 rows, the cascade's first migration —
+`ingestion 0002`, not a `catalog` one — already committed.
+
+Rolling back Django's own apps is the widest command in the tree. `migrate sessions zero` is one
+migration, 0.156 s and 4,544 bytes, and costs `django_session` while every project row survives.
+`migrate contenttypes zero` derives a cascade of 26 migrations of which 24 are project migrations —
+`auth` 12, `contenttypes` 2, `catalog` 6, `clinical` 2, `ingestion` 2, `pricing` 1, `sources` 1 —
+took 1.241 s and 346,936 bytes, and left five tables and six rows, after which an ORM read of
+`ProductPresentation` still returned two rows while the model-derived inspection reported 28
+unresolved tables, 49 missing foreign keys, 45 missing unique keys, 23 missing check constraints, 239
+missing columns and 51 missing field indexes. `migrate auth zero` afterwards found nothing left to
+take at 0.016 s and 752 bytes. Almost nothing notices that state: `manage.py check`,
+`makemigrations --check --dry-run` and `showmigrations` all exit 0 on a half-undone database,
+`migrate --check` exits 1, readiness reports *"1 migrations are not applied:
+ingestion.0002_importreceiptitem_importreceipt_manifest_version_and_more"* with
+`migration_history_consistent` true — the pair an unmigrated database also produces — and
+`inspect_postgresql_schema` takes no `--database` and reads `django.db.connection`, so it cannot be
+pointed at another database. Repairing forward took 0.198 s, returned an identical inventory and 32
+applied migrations, and left 29 of 31 rows.
+
+The one migration that reads data is cheap and fails atomically. `catalog 0008`, the validated
+`catalog_published_requires_verified` check constraint, took 0.100 s and wrote 2,464 bytes of WAL
+against 200,000 synthetic presentations — 0.068 s and 2,440 bytes on an empty table — and under the
+write load 0.096 s, 6,200 bytes, zero blocked writes and a slowest write of 0.028 s; against a single
+violating row it failed after 0.052 s with *"check constraint … is violated by some row"*, wrote 0
+bytes, left the constraint absent and left `django_migrations` at 31 rows, so a forward migration that
+fails leaves the schema as it was while a rollback that is blocked does not. A copy at that volume was
+1,186,535 bytes in 0.154 s against the 136,001-byte fixture archive ADR 0232 measured, restored into a
+database that did not exist in 0.327 s printing 0 bytes, and its next insert succeeded with no
+`setval` because the archive carries its `SEQUENCE SET` entries. No standby exists to measure here:
+`pg_is_in_recovery()` is false and `pg_stat_replication` and `pg_replication_slots` are both empty.
+
+`daroobank/test_database_migration_plan.py` holds the plan to all of it: that the plan keeps its five
+sections, nine measured subsections, eight decisions, seven priced options, seven required behaviors,
+six verification items and its proposal disclaimers, and that no option reads as chosen; that it quotes
+the twenty-four requirements it is priced against with the source documents' sentences intact; that the
+tree still holds 17 atomic project migration modules in six linear chains, two data operations whose
+declared reverse is a no-op, one `AddConstraint` migration, `db_options = {'connect_timeout': 5}` with
+no migration timeout anywhere, three request-path modules that bound their own lock wait and four
+statement timeouts, an inspection command with no `--database`, a workflow with no `environment:` key,
+four settings modules, twelve commands, twenty-four models and a hash-pinned lock with no `pgserver`
+in it; that the schema, cascade, fixture, document and module inventories a migration change would move
+are still as counted; and that four measurements stay true because they are re-performed on PostgreSQL
+— the cascade a rollback derives from the graph, the atomic refusal of the validated constraint
+migration, every command's and both readiness checks' answer to a half-undone database before and after
+a repair forward, and the absence of a replica. Twenty-two of its 26 tests are database-free. Twenty-eight
+regressions were applied alone to a byte-identical backup of the tree and reverted afterwards, and all
+twenty-eight are caught: between 1 and 2 of the 26 tests fail for each, and the one a first pass
+missed — renaming the local `loader` inside `migration_history_consistent()`, which left the count of
+`MigrationLoader(connection` at two — is recorded in the ADR with the pin it strengthened.
+
+The pins that count the tree moved with it: 265 documents, 233 records, 1075 links, 31 external
+links, 29 anchors and 23 `Suite:` lines in `daroobank/test_document_links.py`, 239 test modules in
+the two suites that count them and 264 markdown documents in
+`daroobank/test_backup_recovery_plan.py`. One pin outside this plan moved too:
+`daroobank/test_mfa_implementation_plan.py` counts the test modules that name the login route, and
+this suite names the `staff_security_staffloginwindow` table and the command that cleans up staff
+login windows, so that count is 43 rather than 42. `docs/MFA_IMPLEMENTATION_PLAN.md` quoted *42 of
+the 237 test modules*, stale since the tree grew past it, and now quotes 43 of the 239.
+
+No migration control is implemented: no staging environment, no `lock_timeout` on any migration
+connection, no migration-order control, no copy step, no command, no migration and no dependency was
+added, and the deployment guide's four instructions — set `lock_timeout`, stop the writers, copy the
+tables a cascade will drop, `setval` on restore — are unchanged, because turning them into a sequence
+is option B and no option was chosen. The prices are counted from inventories rather than prototyped —
+no migration control was built and reverted, so no cascade of pin failures was run the way ADR 0227
+measured 20 across 7 suites — and every duration and byte count is one measured run on one machine
+against synthetic data, not a budget. See
+[ADR 0233](ARCHITECTURE_DECISIONS/0233-database-migration-plan.md).
+
 ## 2026-11-26 — measure what a restore proves, and price the backup and recovery options
 
  **Changes:** `docs/DEVELOPMENT_GUIDE.md` says *"PostgreSQL's `pg_dump` and `pg_restore` are

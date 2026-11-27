@@ -35,7 +35,7 @@ What is measured here, and what the plan says because of it:
   `auth_user`, `auth_user_groups`, `auth_user_user_permissions` and `django_session`;
 * restoring over a populated database fails and its fix is written down nowhere. A second restore of
   the same archive exits 1 in 0.006 s on `ERROR:  relation "auth_group" already exists`; adding
-  `--clean --if-exists` makes it exit 0 in 0.209 s, and of the 262 markdown documents in `docs/` only
+  `--clean --if-exists` makes it exit 0 in 0.209 s, and of the 264 markdown documents in `docs/` only
   the plan and its decision record name either flag;
 * the envelope drill mints its own keys and destroys them. `openssl req -x509 -newkey rsa:2048 -nodes
   -days 1 -subj /CN=synthetic-only`, files `O_EXCL` at `0600` inside a `0700` temporary directory that
@@ -187,7 +187,7 @@ GUIDE_PROTECTIONS = ('set -C', 'umask 077', 'An absolute archive path is require
                      'A simple synthetic database name is required.', '-le 63')
 # The flags a recovery into an existing database would need, and the only documents that name them.
 LIVE_RESTORE_TOKENS = ('--clean', '--if-exists', '--create', 'dropdb', 'DROP DATABASE')
-DOCS_MARKDOWN_COUNT = 262
+DOCS_MARKDOWN_COUNT = 264
 DRILL_LINES = 315
 ENCRYPTED_DRILL_LINES = 225
 FIXTURE_LINES = 230

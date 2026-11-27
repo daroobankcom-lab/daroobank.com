@@ -251,6 +251,17 @@ reproduced locally against a stock `initdb` cluster started with `listen_address
 and the plan and the limitations below now carry the difference instead of the suite pretending one
 number fits both servers.
 
+The whole check was run again after this branch merged `main`, because the merge moved the pins the
+mutations target: this record became 0236, the tree grew three files and the corpus two documents,
+and six of the twenty-seven anchors had to be corrected before they could be applied at all. Five of
+those six state their number more than once in the plan — `2.42 ms per request` twice, `5,001.98 ms`
+three times, `1,003,684 kB` twice, `1,104 kB` twice and `8,058,024 bytes` three times — and a
+mutation that changes one occurrence and leaves the others is the slip mutations 13 and 17 first
+made. The sixth quoted `**50** foreign keys`, which is not a sentence the plan writes; the plan says
+*all **50** of them*. All twenty-seven then went red on the merged tree, each caught by the test its
+entry names, against a byte-identical backup of all 747 tracked files with `sha256sum -c` rc=0 after
+every restore and at the end, and the suite was green before the first mutation and after the last.
+
 ## Consequences
 
 * The data-model row in [PHASE1_RELEASE_EVIDENCE.md](../PHASE1_RELEASE_EVIDENCE.md) now carries the

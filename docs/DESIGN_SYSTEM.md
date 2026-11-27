@@ -17,3 +17,5 @@ Semantic CSS variables define ink, brand, backgrounds, surfaces, border, muted, 
 ## Typography and layout
 
 Self-hosted [Vazirmatn](https://github.com/rastikerdar/vazirmatn) variable WOFF2; its SIL OFL licence is included in `static/fonts/OFL.txt`. `font-display: swap` and fallbacks keep text visible. SVG icons are local, no third-party tracking or runtime assets. Persian RTL is default; mixed terms use `bdi`/`dir=auto`. The shared container, search form, navigation, cards, buttons, empty states and responsive CSS are in `static/css/site.css`; reduced-motion and keyboard focus styles are present. Width breakpoints are 700px and 950px. Styles adapt to the viewport, but actual browser/device regression and screen-reader tests are still required.
+
+The stylesheet byte counts belong to the measured edge profile: `site.css` is 25,166 bytes and `staff.css` is 8,245 bytes in the tree [the network and TLS plan](NETWORK_TLS_PLAN.md) measures ([ADR 0234](ARCHITECTURE_DECISIONS/0234-network-tls-plan.md)), which pins both files and the 63-template count without changing them.

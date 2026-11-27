@@ -145,7 +145,7 @@ SHAPE_FRAGMENTS = ['50 <= len(value) <= 512', 'len(set(value)) < 5',
 # A shape-valid secret with no entropy at all: the shape check accepts it and says so.
 DICTIONARY_PHRASE = 'the-quick-brown-fox-jumps-over-the-lazy-dog-in-tehran'
 PROJECT_MODULE_COUNT = 127
-TEST_MODULE_COUNT = 241
+TEST_MODULE_COUNT = 242
 COMMAND_COUNT = 12
 READINESS_CHECKS = ['debug_disabled', 'staff_portal_disabled', 'secret_key_shape',
                     'allowed_hosts_explicit', 'cookies_secure', 'session_flags',

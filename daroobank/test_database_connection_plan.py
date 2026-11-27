@@ -40,7 +40,7 @@ from django.test import SimpleTestCase, TransactionTestCase
 
 ROOT = Path(__file__).resolve().parent.parent
 PLAN = ROOT / 'docs' / 'DATABASE_CONNECTION_PLAN.md'
-ADR = ROOT / 'docs' / 'ARCHITECTURE_DECISIONS' / '0235-database-connection-plan.md'
+ADR = ROOT / 'docs' / 'ARCHITECTURE_DECISIONS' / '0236-database-connection-plan.md'
 ADR_INDEX = ROOT / 'docs' / 'ARCHITECTURE_DECISIONS' / 'README.md'
 EVIDENCE = ROOT / 'docs' / 'PHASE1_RELEASE_EVIDENCE.md'
 DEPLOYMENT = ROOT / 'docs' / 'DEPLOYMENT.md'
@@ -188,7 +188,7 @@ MEASURED = [
     '7 `SET LOCAL` statements in 4 non-test modules', '`staff_security/read_limit.py`',
     '`staff_security/throttle.py`', '`daroobank/health.py`',
     'staff_security/management/commands/cleanup_staff_login_windows.py',
-    '130 mentions of `lock_timeout`', '76 of `statement_timeout`', '61 `SET LOCAL`',
+    '132 mentions of `lock_timeout`', '76 of `statement_timeout`', '61 `SET LOCAL`',
     '12 `set_config`', '6 `connect_timeout`', 'max_connections` is **100**',
     'superuser_reserved_connections` is **3**', '**97**', '**100**',
     'remaining connection slots are reserved for roles with the SUPERUSER attribute',
@@ -219,14 +219,14 @@ MEASURED = [
     '151 commits, 0 rollbacks, 579 blocks read against 746,888 buffer hits',
     'pg_is_in_recovery()` is **false**', 'archive_mode` is **off**', '(disabled)',
     'max_wal_senders` 10', '1,214 ms', '8,058,024 bytes',
-    '`backup_manifest`, `base.tar.gz` and `pg_wal.tar.gz`', '**257** documents in `docs/`',
-    '**741** files of the tree', '`statement_timeout` is named in **5**', '`replica` in **9**',
-    '`superuser` in **15**', '`VACUUM` in **3**', '`standby` in **3**', '`connect_timeout` in **3**',
+    '`backup_manifest`, `base.tar.gz` and `pg_wal.tar.gz`', '**259** documents in `docs/`',
+    '**744** files of the tree', '`statement_timeout` is named in **5**', '`replica` in **9**',
+    '`superuser` in **17**', '`VACUUM` in **3**', '`standby` in **3**', '`connect_timeout` in **3**',
     '`least privilege` in **2**', '`CONN_MAX_AGE` in **2**', 'in **1** each',
     '`max_connections`, `autovacuum`, `pooler` and `read replica` appear in **0** of them',
     '`requirements.in` is 4 lines, `requirements.txt` 94 and `requirements-build.txt` 9',
 ]
-PLAN_DEPENDENCIES = ['ADR 0217', 'ADR 0222', 'ADR 0233', 'ADR 0235', 'BACKUP_RECOVERY_PLAN.md',
+PLAN_DEPENDENCIES = ['ADR 0217', 'ADR 0222', 'ADR 0233', 'ADR 0236', 'BACKUP_RECOVERY_PLAN.md',
                      'SECRET_ROTATION_PLAN.md', 'docs/DATABASE_SCHEMA.md',
                      'docs/TESTING_STRATEGY.md', 'docs/SECURITY.md', 'docs/DEVELOPMENT_GUIDE.md',
                      'docs/OPERATIONS_RUNBOOK.md', 'docs/DEPLOYMENT.md',
@@ -237,13 +237,13 @@ PLAN_DEPENDENCIES = ['ADR 0217', 'ADR 0222', 'ADR 0233', 'ADR 0235', 'BACKUP_REC
                      'daroobank.wsgi.application']
 # The document corpus the plan counts over: every markdown document in `docs/` that this delivery
 # neither writes nor edits.
-CORPUS_COUNT = 257
-DOC_TOKEN_COUNTS = {'statement_timeout': 5, 'replica': 9, 'superuser': 15, 'VACUUM': 3,
+CORPUS_COUNT = 259
+DOC_TOKEN_COUNTS = {'statement_timeout': 5, 'replica': 9, 'superuser': 17, 'VACUUM': 3,
                     'standby': 3, 'connect_timeout': 3, 'least privilege': 2, 'CONN_MAX_AGE': 2,
                     'POSTGRES_CONN_MAX_AGE': 1, 'pooling': 1}
 ABSENT_DOC_TOKENS = ('max_connections', 'autovacuum', 'pooler', 'read replica')
 ABSENT_TREE_TOKENS = ('pgbouncer', 'pgpool', 'psycopg_pool', 'HAProxy', 'pg_stat_statements')
-TREE_FILE_COUNT = 741
+TREE_FILE_COUNT = 744
 PROJECT_MODULE_COUNT = 120
 SET_LOCAL_MODULES = {'daroobank/health.py': 1,
                      'staff_security/management/commands/cleanup_staff_login_windows.py': 2,
@@ -253,7 +253,7 @@ SET_LOCAL_TOTAL = 7
 LOCK_TIMEOUT_COUNT = 3
 STATEMENT_TIMEOUT_COUNT = 4
 IDLE_TRANSACTION_COUNT = 0
-TEST_TIMEOUT_MENTIONS = {'lock_timeout': 130, 'statement_timeout': 76, 'SET LOCAL': 61,
+TEST_TIMEOUT_MENTIONS = {'lock_timeout': 132, 'statement_timeout': 76, 'SET LOCAL': 61,
                          'set_config': 12, 'connect_timeout': 6}
 REQUIREMENTS_LINES = {'requirements.in': 4, 'requirements.txt': 94, 'requirements-build.txt': 9}
 COMPOSE_LINES = 44
@@ -470,7 +470,7 @@ class MeasuredNumberTests(SimpleTestCase):
                 self.assertIn(name, plan, 'the plan stopped naming something it depends on')
         for record in ('0217-deployment-readiness-report.md', '0222-documented-environment.md',
                        '0233-database-migration-plan.md', '0009-postgresql-only.md',
-                       '0235-database-connection-plan.md'):
+                       '0236-database-connection-plan.md'):
             with self.subTest(record=record):
                 self.assertIn(record, plan, 'the plan stopped linking a record it quotes')
 
@@ -608,24 +608,24 @@ class MeasuredNumberTests(SimpleTestCase):
                               'the record stopped naming a document it changed')
         self.assertIn('No option was chosen', consequences,
                       'the record stopped saying that nothing here decides anything')
-        self.assertIn('269 documents, 235 records', consequences)
-        self.assertIn('25 `Suite:` lines', consequences)
-        self.assertIn('now count 242 and 241, and 268', consequences)
-        self.assertIn('`LOGIN_ROUTE_TESTS` is 45, not 44', consequences,
+        self.assertIn('271 documents, 236 records', consequences)
+        self.assertIn('26 `Suite:` lines', consequences)
+        self.assertIn('now count 243 and 242, and 270', consequences)
+        self.assertIn('`LOGIN_ROUTE_TESTS` is 46, not 44', consequences,
                       'the record stopped naming the pin its module list moved')
         self.assertIn('twenty-seven mutations', flat(section(read(ADR), 'Red checks')),
                       'the record states a red-check count that is not the list it carries')
         self.assertEqual(len(numbered(section(read(ADR), 'Red checks'))), 27,
                          'the red-check list the record names moved')
-        for path, name, value in ((DOCUMENT_LINKS, 'DOCUMENT_COUNT', 269),
-                                  (DOCUMENT_LINKS, 'ADR_COUNT', 235),
-                                  (DOCUMENT_LINKS, 'SUITE_LINE_COUNT', 25),
-                                  (MIGRATION_SUITE, 'TEST_MODULE_COUNT', 242),
-                                  (MIGRATION_SUITE, 'DOCS_MARKDOWN_COUNT', 268),
-                                  (MFA_SUITE, 'TEST_MODULE_COUNT', 241),
-                                  (SECRET_SUITE, 'TEST_MODULE_COUNT', 241),
-                                  (BACKUP_SUITE, 'DOCS_MARKDOWN_COUNT', 268),
-                                  (MFA_SUITE, 'LOGIN_ROUTE_TESTS', 45)):
+        for path, name, value in ((DOCUMENT_LINKS, 'DOCUMENT_COUNT', 271),
+                                  (DOCUMENT_LINKS, 'ADR_COUNT', 236),
+                                  (DOCUMENT_LINKS, 'SUITE_LINE_COUNT', 26),
+                                  (MIGRATION_SUITE, 'TEST_MODULE_COUNT', 243),
+                                  (MIGRATION_SUITE, 'DOCS_MARKDOWN_COUNT', 270),
+                                  (MFA_SUITE, 'TEST_MODULE_COUNT', 242),
+                                  (SECRET_SUITE, 'TEST_MODULE_COUNT', 242),
+                                  (BACKUP_SUITE, 'DOCS_MARKDOWN_COUNT', 270),
+                                  (MFA_SUITE, 'LOGIN_ROUTE_TESTS', 46)):
             with self.subTest(suite=path.name, pin=name):
                 self.assertIn(f'{name} = {value}', read(path),
                               'a global pin the record names was not moved to the value it states')
@@ -634,17 +634,17 @@ class MeasuredNumberTests(SimpleTestCase):
         for path in (DEPLOYMENT, RUNBOOK, SECURITY, TESTING, GUIDE, SCHEMA_DOC, CHANGELOG):
             with self.subTest(document=path.name):
                 text = flat(read(path))
-                for phrase in ('DATABASE_CONNECTION_PLAN.md', '0235-database-connection-plan.md'):
+                for phrase in ('DATABASE_CONNECTION_PLAN.md', '0236-database-connection-plan.md'):
                     self.assertIn(phrase, text,
                                   'a neighbouring document stopped naming the connection plan')
-        self.assertIn('0235-database-connection-plan.md', read(ADR_INDEX),
+        self.assertIn('0236-database-connection-plan.md', read(ADR_INDEX),
                       'the record is not listed in the index that is supposed to list it')
         row = [line for line in read(EVIDENCE).splitlines()
                if line.startswith('| Data model and migrations')]
         self.assertEqual(len(row), 1, 'the data-model row of the release evidence moved')
         measured, open_cell = row[0].split('|')[2], row[0].split('|')[3]
         self.assertIn('DATABASE_CONNECTION_PLAN.md', measured)
-        self.assertIn('0235-database-connection-plan.md', measured)
+        self.assertIn('0236-database-connection-plan.md', measured)
         self.assertIn('**Open:**', open_cell, 'the row stopped being open')
         for phrase in ('2.42 ms', '97', '1,104 kB', '1,104', '8,058,024', '5,001.98',
                        'no pooler', 'superuser'):

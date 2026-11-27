@@ -31,7 +31,7 @@ bound their own statements, and no answer to the five questions a connection act
 production: **how long does a connection live, what does opening one cost per request, where is the
 ceiling and who reaches it first, what bounds a statement or a lock wait when the module did not
 bound it, and which role is on the other end?**
-[ADR 0235](ARCHITECTURE_DECISIONS/0235-database-connection-plan.md) records what this document says
+[ADR 0236](ARCHITECTURE_DECISIONS/0236-database-connection-plan.md) records what this document says
 and what it measures. It is not a capacity plan, not a pooler, not a privilege model and not a
 recovery objective.
 
@@ -183,7 +183,7 @@ statements in 4 non-test modules** — `staff_security/read_limit.py`, `staff_se
 `staff_security/management/commands/cleanup_staff_login_windows.py` and `daroobank/health.py` —
 carrying `lock_timeout` `'1s'` three times, `statement_timeout` `'2s'` three times and `'1s'` once.
 `idle_in_transaction_session_timeout` appears **0** times in project code, so the third of the three
-waits above is bounded nowhere at all. The test suites are far heavier than the code they test: 130
+waits above is bounded nowhere at all. The test suites are far heavier than the code they test: 132
 mentions of `lock_timeout`, 76 of `statement_timeout`, 61 `SET LOCAL`, 12 `set_config` and 6
 `connect_timeout` across the test modules. Any path that does not go through one of those four
 modules — a management command, an ingestion run, a shell session, a query the ORM builds for a view
@@ -378,10 +378,10 @@ there is no archive, so the only candidate is a base backup whose freshness noth
 
 ### What the repository already says about it
 
-Counted over the **257** documents in `docs/` that this delivery neither writes nor edits — the
+Counted over the **259** documents in `docs/` that this delivery neither writes nor edits — the
 eleven it touches are excluded, because a document that reports the absence of a word cannot itself
 be one of the documents searched for it: `statement_timeout` is named in **5** of them, `replica` in
-**9**, `superuser` in **15**, `VACUUM` in **3**, `standby` in **3**, `connect_timeout` in **3**,
+**9**, `superuser` in **17**, `VACUUM` in **3**, `standby` in **3**, `connect_timeout` in **3**,
 `least privilege` in **2**, `CONN_MAX_AGE` in **2** — [ADR
 0009](ARCHITECTURE_DECISIONS/0009-postgresql-only.md) and [ADR
 0222](ARCHITECTURE_DECISIONS/0222-documented-environment.md) — and `POSTGRES_CONN_MAX_AGE` and
@@ -389,7 +389,7 @@ be one of the documents searched for it: `statement_timeout` is named in **5** o
 verify. `max_connections`, `autovacuum`, `pooler` and `read replica` appear in **0** of them: no
 document in this repository names the connection ceiling or the process that reclaims space.
 
-Over the **741** files of the tree outside `.git`, `.venv`, `.cache`, `.github`, `node_modules`, this
+Over the **744** files of the tree outside `.git`, `.venv`, `.cache`, `.github`, `node_modules`, this
 plan, its record and its suite, `pgbouncer`, `pgpool`, `psycopg_pool`, `HAProxy` and
 `pg_stat_statements` appear in **0** files. `requirements.in` is 4 lines, `requirements.txt` 94 and
 `requirements-build.txt` 9, and no pooling or monitoring client is in any of them.

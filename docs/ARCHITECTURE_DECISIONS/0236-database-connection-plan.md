@@ -1,4 +1,4 @@
-# 0235 — the database connection plan, and what a connection in this repository actually costs
+# 0236 — the database connection plan, and what a connection in this repository actually costs
 
 Date: 2026-11-27
 Status: accepted
@@ -100,7 +100,7 @@ created and dropped:
   `staff_security/read_limit.py` (2) and `staff_security/throttle.py` (2) — carrying `lock_timeout`
   `'1s'` three times and `statement_timeout` `'2s'` three times and `'1s'` once;
   `idle_in_transaction_session_timeout` appears **0** times in project code and **0** times in the
-  four modules, while the test suites carry 130 mentions of `lock_timeout` and 76 of
+  four modules, while the test suites carry 132 mentions of `lock_timeout` and 76 of
   `statement_timeout`.
 * **The ceiling is 100, a non-superuser reaches 97, and a superuser locks the operator out.** With
   `max_connections` **100** and `superuser_reserved_connections` **3**, a `LOGIN NOSUPERUSER` role
@@ -231,7 +231,7 @@ the plan states `130,001.02 ms` in three places and `9,320 kB` in three, and rep
 occurrence in the table left the other two, so the number the suite pins was still there. Both were
 rewritten to change every occurrence and both then went red. The suite itself failed on its first run
 against the documents written that morning — 25 assertions over 15 tests — and four of those failures
-were its own: the verification list has seven items, not six; the tree holds 741 files, not the 740
+were its own: the verification list has seven items, not six; the tree held 741 files, not the 740
 copied from a count taken before this delivery's three files existed; the count of timeout tokens in
 the test modules counted this suite's own file, which names the tokens it forbids, until the suite
 excluded its own three files; and the forbidden-selection list was applied to the whole record, which
@@ -273,15 +273,16 @@ number fits both servers.
   `daroobank/test_mfa_implementation_plan.py` and `daroobank/test_secret_rotation_plan.py`, the
   `docs/` markdown count in `daroobank/test_database_migration_plan.py` and
   `daroobank/test_backup_recovery_plan.py`, and the document, record, link and `Suite:` line counts
-  in `daroobank/test_document_links.py`. After this record the tree holds 269 documents, 235
-  records, 25 `Suite:` lines, and the two test-module counts and the two markdown counts now count
-  242 and 241, and 268.
-* One pin in the MFA suite moves for a reason of its own: `LOGIN_ROUTE_TESTS` is 45, not 44, because
+  in `daroobank/test_document_links.py`. After this record the tree holds 271 documents, 236
+  records, 26 `Suite:` lines, and the two test-module counts and the two markdown counts now count
+  243 and 242, and 270.
+* One pin in the MFA suite moves for a reason of its own: `LOGIN_ROUTE_TESTS` is 46, not 44, because
+  both suites this tree gained name modules its `staff_login` pattern matches.
   `daroobank/test_database_connection_plan.py` names
   `staff_security/management/commands/cleanup_staff_login_windows.py` — one of the four modules whose
-  `SET LOCAL` statements it counts — and that module matches the `staff_login` pattern the MFA suite
-  uses to count the test modules downstream of the login route. The connection suite does not test
-  the login route; the count is of modules that name it.
+  `SET LOCAL` statements it counts — and `daroobank/test_api_permissions_plan.py` (Lane C, ADR 0235)
+  names the login route it audits. Neither suite tests the login route; the count is of modules that
+  name it.
 * No option was chosen: no connection lifetime, no pool, no timeout, no role, no grant and no index
   follows from this record, and the eight options in the plan are priced inventories rather than
   recommendations.

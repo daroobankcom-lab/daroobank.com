@@ -9,7 +9,7 @@ the code and implementing one becomes a documented event rather than an edit.
 What is measured here, and what the plan says because of it:
 
 * there is one login entry point and one factor. `StaffLoginView` is the only `LoginView` subclass
-  in the project, its template renders exactly `username` and `password`, and 44 of the 240 test
+  in the project, its template renders exactly `username` and `password`, and 45 of the 241 test
   modules that are not this one name that route, so the flow is not a local edit;
 * no factor state exists. No field on any installed model matches the vocabulary of a factor, no
   module mentions TOTP, WebAuthn, a passkey or an OTP, and the four modules that mention `MFA`

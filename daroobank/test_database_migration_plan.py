@@ -27,7 +27,7 @@ What is measured here, and what the plan says because of it:
   indexes and its TOAST table. A metadata-only column took 0.001 s at zero rows and at 50,000; a
   rewriting column took 0.007 s, 0.143 s and 3.631 s at zero, 50,000 and 500,000 rows, writing
   178,759,168 bytes of WAL at the last of those — about the size of the table it rewrote;
-* under a writer committing every 5 ms, about 175 writes a second, that rewrite waited 2.726 s and
+* under a writer committing every 5 ms, about 195 writes a second, that rewrite waited 2.726 s and
   blocked exactly one insert for 2.703 s, a blocking `CREATE INDEX` took 0.102 s and stalled one
   writer for 0.094 s, the metadata-only column blocked nobody, and `CREATE INDEX CONCURRENTLY` —
   which no atomic migration can hold, because `atomic = False` appears in none of the 17 modules —
@@ -68,9 +68,9 @@ built and reverted, so no cascade of pin failures was run. Four tests below are 
 re-perform four of the measurements — the cascade a Django app's rollback derives from the graph, what
 every existing command and both migration readiness checks say about a database a blocked rollback
 left half undone, the atomic refusal of the validated constraint migration, and the absence of any
-replica to measure a rollback against. What is not checked is which environment a staging migration runs in, who authorizes one, what is copied
-beforehand and what the recovery objective is. Those are the eight numbered decisions the plan leaves
-open, and no test can make them.
+replica to measure a rollback against. What is not checked is which environment a staging migration
+runs in, who authorizes one, what is copied beforehand and what the recovery objective is. Those are
+the eight numbered decisions the plan leaves open, and no test can make them.
 """
 import ast
 import io
@@ -218,7 +218,7 @@ MEASURED_BOTH = ['0.927', '1,172,320', '0.711', '149,408', '0.378', '61,536', '0
 MEASURED_PLAN = ['0.345 s', '50,000 rows', '1,344 bytes', '1,408 bytes', '0.007 s', '27,016 bytes',
                  '0.143 s', '17,895,928 bytes', '0.013 s', '0.001 s', '1.125 s', '101,036,096',
                  '69,238,784', '2,440 bytes', '0.068 s', '6,200 bytes', '0.028 s', '0.068 s',
-                 '32.3 s', '8.7 times', '~1,614 times', '0.02 %', '175 writes a second',
+                 '32.3 s', '8.7 times', '~1,614 times', '0.02 %', '195 writes a second',
                  '28 unresolved tables', '49 missing foreign keys', '239 missing columns',
                  '1 unresolved table', '3 missing foreign keys', '10 missing columns']
 # The inventory a migration change would move, quoted by four other suites as well as by this plan.
@@ -437,6 +437,7 @@ class RecordStructureTests(SimpleTestCase):
     def test_the_record_limits_what_it_claims(self):
         text = flat(section(read(ADR), 'Limitations'))
         for phrase in ('one run on one machine', 'one writer thread, not a workload',
+                       '1,566 writes counted over an 8.021 s window',
                        'The prices are counted, not run', 'stay unmeasured',
                        'No option was evaluated for safety or lawfulness'):
             with self.subTest(phrase=phrase):

@@ -120,7 +120,7 @@ One throwaway database, migrated from nothing, then rolled back and reapplied.
 ### Locks, and a long `ALTER TABLE` under load
 
 Lock modes were read from `pg_locks` inside the session that held them, then rolled back; the load
-numbers come from one writer thread committing an insert every 5 ms — about 175 writes a second —
+numbers come from one writer thread committing an insert every 5 ms — about 195 writes a second —
 while the statement ran.
 
 * **What each statement locks.** `ALTER TABLE … ADD COLUMN` takes `AccessExclusiveLock` on the table
@@ -299,7 +299,7 @@ option below is contingent on the decisions it names, and none of them is answer
    among the 24 can hold a migration record, and ADR 0232 measured that nothing records a dump or a
    restore either. The gate asks for an owner and an authorization; this document names neither.
 5. **What is the acceptable lock wait, and what happens to requests during it?** A metadata change
-   under 175 writes a second waited 0.001 s, a 500,000-row rewrite waited 2.726 s and stalled one
+   under 195 writes a second waited 0.001 s, a 500,000-row rewrite waited 2.726 s and stalled one
    writer for 2.703 s, and with the drill's 2 s `lock_timeout` a single open read cancelled the
    statement. The request path already bounds itself to a 1 s `lock_timeout`; the migration path does
    not.

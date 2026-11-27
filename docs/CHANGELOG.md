@@ -37,7 +37,7 @@ table, and `migrate staff_security zero` then removed both of that app's tables 
 0.096 s writing 6,680 bytes, with a reapply that returned an empty table in 0.068 s.
 
 Lock modes were read from `pg_locks` and the load numbers come from one writer thread committing an
-insert every 5 ms, about 175 writes a second. `ALTER TABLE … ADD COLUMN` takes `AccessExclusiveLock`
+insert every 5 ms, about 195 writes a second. `ALTER TABLE … ADD COLUMN` takes `AccessExclusiveLock`
 on the table alone, `CREATE INDEX` takes `ShareLock`, an `ALTER COLUMN … TYPE` to the same width
 rewrites under `AccessExclusiveLock` on the table, its primary key, its indexes and its TOAST table,
 `DROP TABLE catalog_productpresentation` is refused with *"cannot drop table … because other objects

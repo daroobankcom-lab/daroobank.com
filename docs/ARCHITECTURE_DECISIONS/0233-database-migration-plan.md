@@ -79,7 +79,7 @@ copy at a volume, and implement no migration control.
 
 All of it from throwaway PostgreSQL databases against the synthetic PostgreSQL 16.2 server the drills
 use, with the `pg_dump` and `pg_restore` clients the `pgserver` wheel bundles, and one writer thread
-committing an insert every 5 ms — about 175 writes a second — where a load is named. Durations and
+committing an insert every 5 ms — about 195 writes a second — where a load is named. Durations and
 byte counts are one measured run each, not budgets.
 
 - **Both directions are sub-second and cheap in WAL, which is why neither is the risk.** On an empty
@@ -263,9 +263,11 @@ the suite ran green again (26 tests, exit 0) and no database was left behind.
   200,000 synthetic presentations are larger than the fixture and smaller than a pharmacy catalog, and
   none of it has the row width, the index count or the fragmentation of real data. The durations say
   what this schema did once, not what a staging database will do.
-- **The load is one writer thread, not a workload.** About 175 commits a second from one connection,
-  with no readers, no connection pool, no vacuum, no replication and no checkpoint pressure. A real
-  migration competes with all of those, and a stall measured against one writer understates a queue.
+- **The load is one writer thread, not a workload.** About 195 commits a second from one connection
+  — 1,566 writes counted over an 8.021 s window against the same 500,000 rows, a mean commit of
+  0.558 ms and no writer error — with no readers, no connection pool, no vacuum, no replication and
+  no checkpoint pressure. A real migration competes with all of those, and a stall measured against
+  one writer understates a queue.
 - **No option was evaluated for safety or lawfulness.** Whether a pharmacy catalog may be rolled back
   at all, who authorizes it, what a copy of it may be kept and for how long, and whether a staging
   environment may hold real data are questions for an owner and a reviewer, not for this record.

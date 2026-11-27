@@ -81,8 +81,8 @@ MODULE = re.compile(r'`([a-z][\w/]*\.py)`')
 RECORD = re.compile(r'\bADR[s]? (\d{4})\b')
 DOCUMENT = re.compile(r'`(docs/[\w.]+\.md)`')
 # Counted for the plan's option C, and recounted here so the plan cannot quote a stale surface.
-TEST_MODULES_NAMING_COMMAND = 8
-COMMAND_MENTIONS_IN_TESTS = 16
+TEST_MODULES_NAMING_COMMAND = 9
+COMMAND_MENTIONS_IN_TESTS = 20
 TEST_CALLS_THAT_COMMIT = 8
 OPERATOR_DOCS_NAMING_COMMAND = 1
 

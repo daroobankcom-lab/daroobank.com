@@ -33,12 +33,12 @@ EXTERNAL = ('http://', 'https://', 'mailto:')
 SUITE_LINE = re.compile(r'^Suite:\s*(.*)$')
 MODULE = re.compile(r'`([^`]+\.py)`')
 # Measured, so that a scan which silently finds nothing cannot pass.
-DOCUMENT_COUNT = 267
-ADR_COUNT = 234
-LINK_COUNT = 1122
+DOCUMENT_COUNT = 269
+ADR_COUNT = 235
+LINK_COUNT = 1175
 EXTERNAL_COUNT = 31
 ANCHOR_COUNT = 29
-SUITE_LINE_COUNT = 24
+SUITE_LINE_COUNT = 25
 
 
 def documents():

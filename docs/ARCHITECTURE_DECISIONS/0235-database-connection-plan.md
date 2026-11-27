@@ -197,29 +197,38 @@ the suite ended green:
 11. Plan: `2.42 ms per request` became `2.24 ms per request` —
     `test_the_plan_states_the_measured_numbers`.
 12. Plan: `5,001.98 ms` became `5,100 ms` — `test_the_plan_states_the_measured_numbers`.
-13. Plan: `130,001.02 ms` deleted — `test_the_plan_states_the_measured_numbers`.
+13. Plan: every `130,001.02` became `130,000` — `test_the_plan_states_the_measured_numbers`.
 14. Plan: the ceiling table's `97` became `98` — `test_the_plan_states_the_measured_numbers`.
 15. Plan: `1,003,684 kB` became `1,003,648 kB` — `test_the_plan_states_the_measured_numbers`.
 16. Plan: `1,104 kB` became `1,014 kB` — `test_the_plan_states_the_measured_numbers`.
-17. Plan: `9,320 kB` became `9,230 kB` — `test_the_plan_states_the_measured_numbers`.
+17. Plan: every `9,320` became `9,230` — `test_the_plan_states_the_measured_numbers`.
 18. Plan: `8,058,024 bytes` became `8,058,420 bytes` —
     `test_the_plan_states_the_measured_numbers`.
 19. Plan: `**50** foreign keys` became `49` — `test_the_plan_states_the_measured_numbers`.
 20. settings.py: `db_options = {'connect_timeout': 5}` became `{'connect_timeout': 10}` —
+    `test_the_plan_quotes_the_requirements_it_is_priced_against` and
     `test_the_settings_shape_is_the_measured_one`.
-21. settings.py: the `POSTGRES_CONN_MAX_AGE` default `'0'` became `'60'` —
-    `test_the_settings_shape_is_the_measured_one`.
+21. settings.py: the `POSTGRES_CONN_MAX_AGE` default `'0'` became `'60'` — the same two tests.
 22. settings.py: a new `os.environ.get('POSTGRES_POOL_SIZE')` read appended —
-    `test_no_pooler_dependency_or_environment_variable_exists`.
+    `test_the_settings_shape_is_the_measured_one`, which counts the environment names the settings
+    read.
 23. requirements.txt: a `psycopg_pool` line appended —
-    `test_no_pooler_dependency_or_environment_variable_exists`.
+    `test_no_new_command_model_or_dependency_exists` and `test_the_tree_still_contains_no_pooler`.
 24. staff_security/throttle.py: one of its two `SET LOCAL` statements deleted —
     `test_the_timeout_inventory_is_the_measured_one`.
 
-Three mutations initially slipped — a measured number the suite did not yet pin, a forbidden
-selection phrase the list did not yet carry and a corpus count taken before the exclusion list was
-complete — which is why the number list, the forbidden list and the corpus exclusion exist in the
-suite in their present form; each was re-run red after the suite grew the assertion.
+Two mutations initially slipped, and both slips were the mutation's fault rather than the suite's:
+the plan states `130,001.02 ms` in three places and `9,320 kB` in three, and replacing the one
+occurrence in the table left the other two, so the number the suite pins was still there. Both were
+rewritten to change every occurrence and both then went red. The suite itself failed on its first run
+against the documents written that morning — 25 assertions over 15 tests — and four of those failures
+were its own: the verification list has seven items, not six; the tree holds 741 files, not the 740
+copied from a count taken before this delivery's three files existed; the count of timeout tokens in
+the test modules counted this suite's own file, which names the tokens it forbids, until the suite
+excluded its own three files; and the forbidden-selection list was applied to the whole record, which
+names those phrases in this section. Each was fixed in the suite or in the documents before the red
+check above was run, and the record's own `Suite:` line and quotation count were recounted at the
+same time.
 
 ## Consequences
 
@@ -246,6 +255,12 @@ suite in their present form; each was re-run red after the suite grew the assert
   in `daroobank/test_document_links.py`. After this record the tree holds 269 documents, 235
   records, 25 `Suite:` lines, and the two test-module counts and the two markdown counts now count
   242 and 241, and 268.
+* One pin in the MFA suite moves for a reason of its own: `LOGIN_ROUTE_TESTS` is 45, not 44, because
+  `daroobank/test_database_connection_plan.py` names
+  `staff_security/management/commands/cleanup_staff_login_windows.py` — one of the four modules whose
+  `SET LOCAL` statements it counts — and that module matches the `staff_login` pattern the MFA suite
+  uses to count the test modules downstream of the login route. The connection suite does not test
+  the login route; the count is of modules that name it.
 * No option was chosen: no connection lifetime, no pool, no timeout, no role, no grant and no index
   follows from this record, and the eight options in the plan are priced inventories rather than
   recommendations.

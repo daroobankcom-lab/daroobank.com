@@ -590,6 +590,8 @@ class MeasuredNumberTests(SimpleTestCase):
         self.assertIn('269 documents, 235 records', consequences)
         self.assertIn('25 `Suite:` lines', consequences)
         self.assertIn('now count 242 and 241, and 268', consequences)
+        self.assertIn('`LOGIN_ROUTE_TESTS` is 45, not 44', consequences,
+                      'the record stopped naming the pin its module list moved')
         self.assertIn('twenty-four mutations', flat(section(read(ADR), 'Red checks')),
                       'the record states a red-check count that is not the list it carries')
         self.assertEqual(len(numbered(section(read(ADR), 'Red checks'))), 24,
@@ -601,7 +603,8 @@ class MeasuredNumberTests(SimpleTestCase):
                                   (MIGRATION_SUITE, 'DOCS_MARKDOWN_COUNT', 268),
                                   (MFA_SUITE, 'TEST_MODULE_COUNT', 241),
                                   (SECRET_SUITE, 'TEST_MODULE_COUNT', 241),
-                                  (BACKUP_SUITE, 'DOCS_MARKDOWN_COUNT', 268)):
+                                  (BACKUP_SUITE, 'DOCS_MARKDOWN_COUNT', 268),
+                                  (MFA_SUITE, 'LOGIN_ROUTE_TESTS', 45)):
             with self.subTest(suite=path.name, pin=name):
                 self.assertIn(f'{name} = {value}', read(path),
                               'a global pin the record names was not moved to the value it states')

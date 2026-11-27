@@ -178,13 +178,17 @@ staff account.
   signals and background jobs are not routes and do not appear.
 - **Boundaries outside the parity suites.** [API_PERMISSIONS_PLAN.md](API_PERMISSIONS_PLAN.md)
   ([ADR 0235](ARCHITECTURE_DECISIONS/0235-api-permissions-plan.md)) measures what route parity
-  does not: active superusers bypass all 41 matrix permissions (`0` explicit grants required),
-  a single staff account can hold all 16 permissions, `0` of 37 PostgreSQL `CHECK` constraints
+  does not: **0** view permission decorators (`36` inline, `2` `scan_response`-delegated, `3`
+  downstream-service `inspect_lineage`/`inspect_manifest` guards, `2` decorator-free auth CBVs),
+  active superusers bypass all 41 matrix permissions (`0` explicit grants required), users or
+  `Group` grants can accumulate all 16 permissions, `0` of 37 PostgreSQL `CHECK` constraints
   enforce actor separation, cross-revision self-review succeeds in `clinical/services.py` and
-  `catalog/identity.py`, 15 of 16 `recheck_actor` sites run `lock=False`, session inventory/revocation
-  commands stop at 5,000 rows, 6 management commands run under `DEBUG=False`, `StaffLoginView`
-  accepts `PUT` and overrides `LOGIN_REDIRECT_URL` to `/staff/`, and `docs/openapi.json` omits
-  live response headers, parameter bounds and HTML 405/403/429/`>4300`-digit-404 answers.
+  `catalog/identity.py`, 15 of 16 `recheck_actor` sites run `lock=False`, ADR 0191 residual blockers
+  and session inventory/revocation commands stop at 5,000 rows, `4` signed cursors exist alongside
+  `0` API tokens, `0` non-test `HTTP_X_FORWARDED_FOR` readers exist (proxy trust belongs to
+  [NETWORK_TLS_PLAN.md](NETWORK_TLS_PLAN.md)), 6 management commands run under `DEBUG=False`,
+  `StaffLoginView` accepts `PUT` and overrides `LOGIN_REDIRECT_URL` to `/staff/`, and
+  `docs/openapi.json` omits live response headers, parameter bounds and HTML 405/403/429/`>4300`-digit-404 answers.
   It is an unowned proposal with eight open decisions and implements nothing.
 - **Sign-off.** The table below is empty and stays empty until the project assigns an
   owner. Filling it in with a name or a date would be a fabrication.

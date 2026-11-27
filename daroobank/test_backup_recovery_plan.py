@@ -187,7 +187,7 @@ GUIDE_PROTECTIONS = ('set -C', 'umask 077', 'An absolute archive path is require
                      'A simple synthetic database name is required.', '-le 63')
 # The flags a recovery into an existing database would need, and the only documents that name them.
 LIVE_RESTORE_TOKENS = ('--clean', '--if-exists', '--create', 'dropdb', 'DROP DATABASE')
-DOCS_MARKDOWN_COUNT = 266
+DOCS_MARKDOWN_COUNT = 268
 DRILL_LINES = 315
 ENCRYPTED_DRILL_LINES = 225
 FIXTURE_LINES = 230

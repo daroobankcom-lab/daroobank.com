@@ -32,6 +32,7 @@ Current implementation: `catalog.ProductPresentation` and the private synthetic 
 - Index price history `(package_id, category, unit, effective_at DESC, published_at DESC)`, source record/run, pending review state and content audience/status. Add FKs, constrained status transitions and transactional publication; do not derive identity from fuzzy similarity. Use query plans and realistic data before adding indexes.
 - Effective date, collection time, verification time and publication time mean different things; never fill an unknown effective date with collection time. Soft withdrawal/history rather than destructive update, with retention exceptions documented and legally approved.
 
+The query-plan half of that instruction is measured on synthetic data: all 50 foreign keys in the current schema already have an index or a covering prefix whose leading column is the referencing column, so the gap this prices does not exist yet, and on a 50,000-row child whose only index was its primary key the children of one parent cost 2.666 ms as a `Seq Scan` against 0.068 ms as a `Bitmap Heap Scan` once a 480 kB index built in 17–18 ms existed, with one cascading parent delete at 3.51 ms against 0.77 ms ([the database connection plan](DATABASE_CONNECTION_PLAN.md), [ADR 0235](ARCHITECTURE_DECISIONS/0235-database-connection-plan.md)).
 
 ## Implemented development-only source assertions
 

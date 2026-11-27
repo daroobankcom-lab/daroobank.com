@@ -2,6 +2,174 @@
 
 Entries describe the state at each change; later entries can supersede earlier limitations.
 
+## 2026-11-26 — measure what a restore proves, and price the backup and recovery options
+
+ **Changes:** `docs/DEVELOPMENT_GUIDE.md` says *"PostgreSQL's `pg_dump` and `pg_restore` are
+external client utilities, not an application backup service"* and *"A volume alone is not a
+backup."*, `docs/OPERATIONS_RUNBOOK.md` asks an operator to *"define ownership, encrypted backup
+cadence, off-host retention, RPO/RTO and recovery environment"*, says *"no values have been
+approved"* and then forbids the one thing an incident would require — *"never restore into the
+running database"* — `docs/PHASE1_RELEASE_EVIDENCE.md` carries *"encrypted off-site backups,
+independent key custody, access control, retention, integrity and anti-replay/freshness policy,
+recovery objectives, scheduled isolated restore drills and documented owner"* as an open gate,
+`docs/SECURITY.md` assigns *"Operate backups and database"* to a database administrator role that
+does not exist here, and ADR 0225 ends with *"Identity sequences are part of any restore."* The
+drill exists and runs twice in CI under opt-in switches, and it answers a narrower question than the
+gate asks.
+
+`docs/BACKUP_RECOVERY_PLAN.md` now measures before it proposes: a `What is true today, measured`
+section in four subsections, eight numbered decisions, seven priced options — leave the restore path
+as documented, read the archive's own header before restoring, record every dump and restore in the
+database, put the envelope keys in a custodian outside the repository, document and drill the
+live-database shape, verify completeness against a manifest instead of a self-written fixture, and
+declare backup and recovery out of Phase 1 scope — a seven-item `Required behavior before any
+restore` list and a six-item verification list. The measurements, taken against the synthetic
+PostgreSQL 16.2 server with the `pg_dump`, `pg_restore` and `createdb` clients the `pgserver` wheel
+bundles: the documented sequence is `dump, list, createdb, restore, migrate, check` and its listing
+step is `pg_restore --list --no-password -- "$SYNTHETIC_DUMP_FILE" > /dev/null`, while the drill
+captures the same listing and asserts only `listed.returncode` — `listed.stdout` appears nowhere in
+its 315 lines; the guide's target is the literal `daroobank_restore_drill`, created one line
+earlier, and of the 262 markdown documents in `docs/` only the plan and its record name the flags a
+restore over an existing database needs.
+
+One replay dumped a synthetic fixture, wrote one later business fact, dumped again, and restored the
+older archive into a new database: 136,001 bytes against 136,541, both listings stamped `2026-11-26
+23:37:44 UTC` because the two dumps took 0.071 s and 0.053 s, the restore exiting 0 in 0.163 s and
+printing 0 bytes, the target holding 33 public tables, 32 applied migrations, 2 accounts, 0
+sessions, 1 package and 1 review while the source held 2 and 2, and `manage.py check` (0.372 s),
+`migrate --check` (0.390 s), `inspect_postgresql_schema` (0.388 s) and the drill's ORM verification
+(0.522 s) all exiting 0 with empty stderr — 1.673 s of verification that cannot tell a stale archive
+from a current one. The archive's header counts `TOC Entries: 291` and its listing prints 287
+selected entries — 33 `TABLE`, 33 `TABLE DATA`, 60 `INDEX`, 30 `SEQUENCE` and 30 `SEQUENCE SET`, 51
+`CONSTRAINT` and 50 `FK CONSTRAINT`, matching the 50 foreign keys the schema inspection counts — of
+which none is an ACL, an OWNER or a GRANT, while four `TABLE DATA` entries are `auth_user`,
+`auth_user_groups`, `auth_user_user_permissions` and `django_session`. A second restore of the same
+archive into the restored target exited 1 in 0.006 s on `ERROR:  relation "auth_group" already
+exists`, and the two flags that made it exit 0 in 0.209 s are named in no other document.
+
+`daroobank/test_synthetic_encrypted_restore.py` mints its own recipient and signing keys with
+`openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=synthetic-only` at mode `0600` inside a
+`0700` temporary directory the test destroys, `.github/workflows/checks.yml` references zero
+`secrets.*` expressions, CI takes its clients from `docker run --rm --network host … postgres:16`,
+one of the four mutable base-image references ADR 0226 counted, `LOGGING` is `{}`, no application
+module imports `logging`, and none of the 24 project models is named like a backup, dump, archive,
+restore or recovery record.
+
+`daroobank/test_backup_recovery_plan.py` holds the plan to all of it: that the plan keeps its five
+sections, four measured subsections, eight decisions, seven priced options, seven required behaviors
+and its proposal disclaimers; that it quotes the sixteen requirements it is priced against with the
+source documents' measured sentences intact; that the guide's script is still six steps that discard
+the listing and still restore only into a database they just created; that no document except the
+plan and its record names a live-database restore; that the drill still never reads the listing it
+captures; that the envelope drill still mints and destroys its own keys; that the workflow still
+holds no secret and no key file is committed; that the client tools are still not in the repository;
+that nothing records a dump or a restore; that the schema, attribution, rollback, CI-gate, document
+and module inventories a backup record or a custodian would move are still as counted; and that the
+replay stays as measured, by re-performing it. Twenty regressions were applied alone to a
+byte-identical backup of the tree and reverted afterwards, and all twenty are caught: between 1 and
+3 of the 24 tests fail for each, except the renamed isolated test database, which
+`daroobank/isolated_postgresql` refuses with *"Invalid isolated synthetic test database name."*
+before any test runs.
+
+No backup control is implemented: no record, manifest, custodian, schedule, command, dependency or
+change to the restore target policy was added, and the guide's script, the runbook's prohibition and
+the drill's new-database policy are unchanged, because changing them is option E and no option was
+chosen. The prices are counted from inventories rather than prototyped — no backup control was built
+and reverted, so no cascade of pin failures was run the way ADR 0227 measured 20 across 7 suites —
+and the replay was performed once, on two accounts, one package, one review and a cross-domain
+fixture in throwaway databases, so it says nothing about restoring a real volume, about the flags
+that make a restore over an existing database succeed against a large or concurrently used one, or
+about what an operator sees while it happens. No option was evaluated for security, lawfulness or
+operational cost; custody was not measured, because no secret store, KMS or key file exists in this
+tree; and the live-database shape was exercised mechanically on a throwaway target with no
+authorization, downtime or privilege story. The 16 tests of the three restore suites still pass
+locally in 23.8 s with the bundled clients on `PATH`, and no CI step runs the new suite's one opt-in
+database test. `docs/DEVELOPMENT_GUIDE.md`, `docs/OPERATIONS_RUNBOOK.md`, `docs/SECURITY.md`,
+`docs/DEPLOYMENT.md`, `docs/PHASE1_RELEASE_EVIDENCE.md` and `docs/TESTING_STRATEGY.md` now name the
+plan and the record. See [ADR 0232](ARCHITECTURE_DECISIONS/0232-backup-recovery-plan.md).
+
+## 2026-11-26 — measure what rotating the one secret does, and price the rotation options
+
+ **Changes:** `docs/SECURITY.md` asks for *"encryption at rest where appropriate with isolated
+managed keys and rotation"*, `docs/DEPLOYMENT.md` tells an operator to *"Supply a unique randomly
+generated key through an approved secret manager"* and then concedes *"Changing a key affects
+existing signatures and sessions; no production rotation policy is implemented"*,
+`docs/OPERATIONS_RUNBOOK.md` tells an incident responder to *"rotate exposed credentials"* inside a
+checklist that calls itself *"mostly a prospective checklist"*, and
+`docs/PHASE1_RELEASE_EVIDENCE.md` carries *"secret manager, key generation/rotation and recovery"*
+as an open gate. The requirement was written down four times and the procedure existed nowhere, and
+the runbook went further than the others: it called `revoke_staff_sessions --all --apply` *"the
+state to want after a secret rotation"*, which is the one instruction this measurement contradicts.
+
+ `docs/SECRET_ROTATION_PLAN.md` now measures before it proposes: a `What is true today, measured`
+section in three subsections, eight numbered decisions, seven priced options — leave key handling
+as documented, write the procedure down only, add a read-only pre-rotation impact command, make
+rotation graceful with `SECRET_KEY_FALLBACKS`, give each purpose its own key material, take the key
+from an external secret manager or KMS, and declare rotation out of Phase 1 scope — a seven-item
+`Required behavior before any rotation` list and a verification list. The measurements, taken with a
+live `django.setup()` under `daroobank.synthetic_test_settings` on synthetic PostgreSQL data plus
+file reads: `SECRET_KEY` is `os.environ.get('DAROOBANK_SECRET_KEY', '')` and `daroobank/settings.py`
+is the only project module that reads it; in debug an empty value becomes the published
+35-character `'development-only-not-for-production'`, which `require_nondebug_secret` rejects, while
+a 53-character dictionary phrase passes it, because the check's own docstring says it *"cannot
+determine randomness or secrecy"*; of the 127 non-test project modules 9 call `salted_hmac` and none
+of the 9 passes an explicit `secret=`, so all of them take `settings.SECRET_KEY`, using 9 salts — 8
+named constants and one inline literal — of which 5 compose a per-purpose suffix; 6 modules sign
+through `django.core.signing` with the same secret; the session store signs its own rows under
+`django.contrib.sessions.SessionStore`; `SECRET_KEY_FALLBACKS` is `[]` and no project module names
+it; the 12 management commands include no rotate or rekey command; `LOGGING` is `{}` and no project
+module imports `logging`; and the lock holds 7 names and 78 hashes with no key-management package.
+
+ The rotation was then performed on one synthetic staff session. Before it, the account logged in,
+read `staff/prices/` for 200 and wrote one login window and one read window. After the key changed:
+the same request answered 302 to the login page; the `django_session` row kept its key and its
+expiry and decoded to `{}`; exactly one `"Session data corrupted"` warning reached
+`django.security.SuspiciousSession`, a logger with no handlers; `list_staff_sessions` reported
+`scanned: 1, sessions_matched: 0, sessions_unbound: 0` with no accounts, so the sessions a rotation
+invalidates disappear from the inventory rather than appearing in it;
+`revoke_staff_sessions --all --apply` reported `matched: 0, revoked: 0` and left the row behind;
+`cleanup_staff_login_windows --apply` reported `{"deleted": 0, "limit": 500}`, because its retention
+is 24 hours and the orphans were minutes old, and no command prunes `PublicReadWindow` at all; both
+window tables went 1 → 2 as the limiter counters restarted at zero; `recheck_actor` denied a guarded
+write carrying the pre-rotation hash; and the `password` column stayed byte-identical with the
+passphrase still verifying, while `get_session_auth_hash()`, the session fingerprint and the
+inventory alias for the same session key all moved. With the old key listed in
+`SECRET_KEY_FALLBACKS` the row decoded fully again and the signed cursor loaded, and the staff route
+still answered 302, because `daroobank/session_guard.authorization_fingerprint` embeds
+`get_session_auth_hash()` only; the inventory then showed the session as `bound: true,
+guard_would_end_it: true` under a different alias, and `scanned: 0` after the guard ran, because
+Django cycles the session key when a fallback matches and this project's guard deletes the cycled
+row.
+
+ `daroobank/test_secret_rotation_plan.py` (20 tests, ~7.4 s, 6 of them on the synthetic database)
+pins both halves: that the plan stays an unowned proposal with its sections, decisions, options and
+measured sentences intact and still quotes the five documents it answers; that every module, file
+and record it names exists, including the nine keyed sites by path and line; that the key surface
+stays as measured; and that the cascade stays as measured, by re-performing it. Fourteen regressions
+were applied alone and reverted from backups that were re-hashed afterwards, and all fourteen fail
+the suite, between 1 and 8 of the 20 tests each: dropping the proposal disclaimer (2), dropping a
+measured cascade number (1), dropping a numbered decision (1), dropping an option row (1), no longer
+quoting the release-evidence gate (1), misnaming a keyed site (1), configuring a fallback key in
+settings (2), replacing the debug constant (1), teaching the guard about fallback hashes (8),
+teaching `recheck_actor` about them (1), passing an explicit `secret=` at a keyed digest (3),
+renaming a salt (2), making the shape check measure entropy (1) and claiming in the deployment guide
+that a rotation policy exists (1).
+
+ No rotation control is implemented: no command, setting, fallback entry, fallback-aware guard or
+recheck, per-purpose key, logging configuration or dependency was added, and the deployment guide
+still says no production rotation policy is implemented. The prices are counted from inventories
+rather than prototyped — no rotation command was built and reverted, so no cascade of pin failures
+was run the way ADR 0227 measured 20 across 7 suites — and the rotation itself was performed once,
+on one synthetic account in a throwaway database, so it says nothing about the volume a real
+rotation produces or how long a mass logout takes to drain. No option was evaluated for security,
+lawfulness or operational cost; key custody was not measured, because no secret manager, KMS or key
+file exists in this tree; and no recovery path was exercised, so a lost key and a rotated key are
+alike only in what was measured of them. `docs/SECURITY.md`, `docs/DEPLOYMENT.md`,
+`docs/OPERATIONS_RUNBOOK.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/PHASE1_RELEASE_EVIDENCE.md` and
+`docs/TESTING_STRATEGY.md` now name the plan and the record, and the runbook no longer tells an
+operator that revoking every session is the state to want after a rotation. See
+[ADR 0231](ARCHITECTURE_DECISIONS/0231-secret-rotation-plan.md).
+
 ## 2026-11-26 — measure the authentication surface and price the MFA options
 
  **Changes:** `docs/SECURITY.md` asks for *"MFA for administrators"*, *"Argon2-compatible password

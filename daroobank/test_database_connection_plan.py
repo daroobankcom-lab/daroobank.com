@@ -177,6 +177,7 @@ MEASURED = [
     'Invalid PostgreSQL port or connection lifetime', '5,001.98 ms', '2,001.65 ms', '30,001.09 ms',
     '130,001.02 ms', 'tcp_syn_retries = 6', 'accepted 4 connections', '0.32 ms', '1.52 ms',
     '1.55 ms', '5.68 ms', 'tcp_keepalives_idle` 0 s', 'tcp_user_timeout` 0 ms',
+    'reports `tcp_keepalives_idle` as **7200**',
     'tcp_keepalive_time` 7200 s', 'tcp_keepalive_intvl` 75 s', 'tcp_keepalive_probes` 9',
     '`SO_KEEPALIVE` read **0**', '127.0.0.1:5432` is refused', 'deadlock_timeout` at its 1,000 ms',
     '2,003 ms', '501 ms', "3.003)", '3,007 ms', '301 ms', '6.009', '4 granted locks',
@@ -369,6 +370,21 @@ def catalog(sql, params=None):
 
 def one(sql, params=None):
     return catalog(sql, params)[0][0]
+
+
+KERNEL_KEEPALIVE_IDLE = Path('/proc/sys/net/ipv4/tcp_keepalive_time')
+
+
+def kernel_keepalive_idle():
+    """The kernel's keepalive idle time, or None where this suite cannot read it.
+
+    A server that listens on TCP reports an unconfigured `tcp_keepalives_idle` as this value while
+    its compiled default stays 0, so the reported number belongs to the machine, not to this tree.
+    """
+    try:
+        return KERNEL_KEEPALIVE_IDLE.read_text(encoding='utf-8').strip()
+    except OSError:
+        return None
 
 
 class PlanShapeTests(SimpleTestCase):
@@ -593,9 +609,9 @@ class MeasuredNumberTests(SimpleTestCase):
         self.assertIn('now count 242 and 241, and 268', consequences)
         self.assertIn('`LOGIN_ROUTE_TESTS` is 45, not 44', consequences,
                       'the record stopped naming the pin its module list moved')
-        self.assertIn('twenty-six mutations', flat(section(read(ADR), 'Red checks')),
+        self.assertIn('twenty-seven mutations', flat(section(read(ADR), 'Red checks')),
                       'the record states a red-check count that is not the list it carries')
-        self.assertEqual(len(numbered(section(read(ADR), 'Red checks'))), 26,
+        self.assertEqual(len(numbered(section(read(ADR), 'Red checks'))), 27,
                          'the red-check list the record names moved')
         for path, name, value in ((DOCUMENT_LINKS, 'DOCUMENT_COUNT', 269),
                                   (DOCUMENT_LINKS, 'ADR_COUNT', 235),
@@ -661,7 +677,7 @@ class CatalogShapeTests(TransactionTestCase):
         for name in ('max_connections', 'superuser_reserved_connections', 'statement_timeout',
                      'lock_timeout', 'idle_in_transaction_session_timeout', 'autovacuum_naptime',
                      'autovacuum_vacuum_scale_factor', 'checkpoint_timeout', 'wal_level',
-                     'archive_mode', 'tcp_keepalives_idle', 'tcp_user_timeout'):
+                     'archive_mode', 'tcp_user_timeout'):
             with self.subTest(setting=name):
                 setting, boot, source = catalog(
                     'select setting, boot_val, source from pg_settings where name = %s', (name,))[0]
@@ -671,6 +687,19 @@ class CatalogShapeTests(TransactionTestCase):
                 self.assertIn(source, ('default', 'configuration file'),
                              'a connection or capacity setting is set somewhere this suite cannot '
                              'read: neither a compiled default nor a configuration file')
+        # `tcp_keepalives_idle` is pinned separately: a server with no TCP listener reports 0 and a
+        # server that listens on TCP reports the kernel's own idle time, with the same compiled
+        # default and the same source in both cases, so the value is not this tree's to pin.
+        setting, boot, source = catalog('select setting, boot_val, source from pg_settings'
+                                        " where name = 'tcp_keepalives_idle'")[0]
+        self.assertEqual(boot, '0', 'the keepalive idle timer gained a compiled default')
+        self.assertIn(source, ('default', 'configuration file'),
+                      'the keepalive idle timer was configured somewhere this suite cannot read')
+        kernel = kernel_keepalive_idle()
+        if kernel is not None:
+            self.assertIn(setting, ('0', kernel),
+                          'the server reports a keepalive idle time that is neither its compiled '
+                          'default nor the kernel value this suite can read')
 
     def test_the_role_is_a_superuser_and_the_cluster_has_no_replica(self):
         self.assertTrue(one('select rolsuper from pg_roles where rolname = current_user'),

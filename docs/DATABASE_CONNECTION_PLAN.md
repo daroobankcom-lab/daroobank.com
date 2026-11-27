@@ -132,7 +132,17 @@ Nothing bounds a connection after it is open. The server's own TCP settings are 
 means the kernel decides: `tcp_keepalives_idle` 0 s, `tcp_keepalives_interval` 0 s,
 `tcp_keepalives_count` 0 and `tcp_user_timeout` 0 ms, against kernel defaults of
 `tcp_keepalive_time` 7200 s, `tcp_keepalive_intvl` 75 s and `tcp_keepalive_probes` 9 — so a
-connection whose peer has vanished without a FIN is not noticed for two hours. libpq accepts
+connection whose peer has vanished without a FIN is not noticed for two hours.
+
+Those zeros are what a server with no TCP listener reports, not what every PostgreSQL 16 reports.
+The same build started from a stock `initdb` with `listen_addresses = '*'` — the shape CI's
+`postgres:16` service has — reports `tcp_keepalives_idle` as **7200**, the kernel's own
+`net.ipv4.tcp_keepalive_time`, while `boot_val` stays **0** and `source` stays `default`: an
+unconfigured keepalive timer is reported as the kernel's value once the server accepts TCP. So
+*nobody configured it* and *it is off* are different claims, only the first of which is true of this
+cluster, and a deployment that listens on TCP inherits the kernel's two hours rather than a zero.
+
+libpq accepts
 `keepalives=1` with `keepalives_idle`, `keepalives_interval` and `keepalives_count`, and it accepts
 `tcp_user_timeout=5000` and `target_session_attrs=read-write`, through the same call path Django
 uses, so every one of them is one line of `OPTIONS` away. What they would do could not be measured

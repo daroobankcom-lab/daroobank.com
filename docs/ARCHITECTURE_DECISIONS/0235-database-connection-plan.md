@@ -173,7 +173,7 @@ created and dropped:
 
 ## Red checks
 
-After the plan, the suite and the neighbour patches existed, twenty-six mutations were applied one
+After the plan, the suite and the neighbour patches existed, twenty-seven mutations were applied one
 at a time to a byte-identical backup of the tree (`sha256sum` recorded before, re-verified after
 every restore, final check rc=0), each followed by a run of
 `daroobank/test_database_connection_plan.py`, each run required to fail. Every mutation went red and
@@ -223,6 +223,8 @@ the suite ended green:
     `test_the_plan_states_the_measured_numbers`.
 26. Plan: *"`pg_namespace` is per-database"* became *"`pg_namespace` is shared"* —
     `test_the_plan_states_the_measured_numbers`.
+27. Plan: the listening server's reported `tcp_keepalives_idle` of `**7200**` became `**7300**` —
+    `test_the_plan_states_the_measured_numbers`.
 
 Two mutations initially slipped, and both slips were the mutation's fault rather than the suite's:
 the plan states `130,001.02 ms` in three places and `9,320 kB` in three, and replacing the one
@@ -240,6 +242,14 @@ what the migrating role owns — all 33 tables and all 111 indexes carry it as `
 established that the `CREATE` grant has to be made inside the target database, because
 `pg_namespace` is per-database and a grant made while connected to another database leaves the same
 `MigrationSchemaMissing` behind. Both numbers are pinned and both mutations were run red.
+Mutation 27 was added last, and it exists because CI found a real difference: the first run of this
+branch on GitHub Actions failed on `test_the_server_bounds_no_wait_and_configures_nothing` alone,
+because the `postgres:16` service listens on TCP and reports an unconfigured `tcp_keepalives_idle`
+as the kernel's **7200** where this cluster's socket-only server reports **0**. The failure was
+reproduced locally against a stock `initdb` cluster started with `listen_addresses = '*'` on
+127.0.0.1, the pin was narrowed to what belongs to this tree — the compiled default and the source —
+and the plan and the limitations below now carry the difference instead of the suite pretending one
+number fits both servers.
 
 ## Consequences
 
@@ -313,6 +323,14 @@ established that the `CREATE` grant has to be made inside the target database, b
   a statement may cost, who may hold superuser, whether an archive must exist and which indexes are
   worth their write cost are questions for named owners; the eight options are priced inventories,
   not recommendations, and the eight decisions stay open.
+- **One catalog fact is the kernel's, not this repository's.** `tcp_keepalives_idle` reads **0**
+  here because this server has no TCP listener; the same PostgreSQL 16 build started from a stock
+  `initdb` with `listen_addresses = '*'`, which is the shape the CI service has, reports **7200** —
+  the kernel's `net.ipv4.tcp_keepalive_time` — with `boot_val` still **0** and `source` still
+  `default`. The suite therefore pins that setting's compiled default and its source and accepts
+  either reported value, and reads the kernel's out of
+  `/proc/sys/net/ipv4/tcp_keepalive_time` where that file exists, rather than pinning a number that
+  belongs to whichever machine runs the test.
 - **The suite pins documents, counts, the settings shape and four catalog facts.** It cannot tell
   whether a pooler would help, whether a lifetime above zero would survive a deployment's restarts,
   or whether the plan is the right plan; forcing the questions and the counts is all it does.

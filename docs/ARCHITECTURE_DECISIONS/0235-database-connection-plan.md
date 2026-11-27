@@ -2,7 +2,8 @@
 
 Date: 2026-11-27
 Status: accepted
-Suite: `daroobank/test_database_connection_plan.py` (15 tests, ~1.1 s, 2 of them on the synthetic PostgreSQL database)
+Suite: `daroobank/test_database_connection_plan.py` (15 tests, ~1.1 s, of which 2 read the
+catalog of the synthetic database the runner provides)
 
 ## Context
 
@@ -132,8 +133,9 @@ created and dropped:
   `CREATE` on the schema failed with `MigrationSchemaMissing: Unable to create the django_migrations
   table (permission denied for schema public)`, and with `CREATE` granted — inside the target
   database, since `pg_namespace` is per-database — it applied all **32** migrations and **owned
-  everything it created**, all **33** tables and all **111** indexes. `manage.py test` on a database-touching module
-  exited **2** with *"Got an error creating the test database: permission denied to create
+  everything it created**, all **33** tables and all **111** indexes. `manage.py test` on a
+  database-touching module exited **2** with *"Got an error creating the test database: permission
+  denied to create
   database"*, while a module with no database-dependent test passed as either role because Django
   creates no test database for it. `pg_dump -Fc` wrote **145,667 bytes** with the grants and failed
   on the first table without them. A non-superuser reads another role's backend in

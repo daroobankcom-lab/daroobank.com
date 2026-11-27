@@ -62,8 +62,9 @@ run** on one machine and are quoted as such, never as a budget. They are pinned 
 ### The connection lifecycle per request
 
 `POSTGRES_CONN_MAX_AGE` exists, is read as `int(os.environ.get('POSTGRES_CONN_MAX_AGE', '0'))` and
-so defaults to `'0'`, and is validated to the inclusive range 0..31,536,000 together with the port, one `try` block whose only refusal message is *"Invalid
-PostgreSQL port or connection lifetime"*. The cap has a stated reason — *"A finite cap also prevents
+so defaults to `'0'`, and is validated to the inclusive range 0..31,536,000 together with the
+port, one `try` block whose only refusal message is *"Invalid PostgreSQL port or connection
+lifetime"*. The cap has a stated reason — *"A finite cap also prevents
 huge integers from overflowing Django's monotonic close deadline when a database connection is
 opened."* — and `CONN_HEALTH_CHECKS` is `True`. Twenty requests for
 `/health/ready/` — the one route that always runs exactly one `SELECT` inside an atomic block that
@@ -212,10 +213,10 @@ is 1.1 MB of private memory plus a slot that no other worker can use.
 
 The cluster has exactly **one** non-system role: `postgres`, with `rolsuper`, `rolinherit`,
 `rolcreaterole`, `rolcreatedb`, `rolreplication` and `rolbypassrls` all true and `rolconnlimit` −1.
-It owns every one of the 33 tables in `public`; **0** grants exist to `PUBLIC`; the `public` schema is owned by
-`pg_database_owner`. This is the role the application connects as, in development, in `compose.yaml`,
-in the CI workflow (which creates a per-run `POSTGRES_USER` that the official image makes a
-superuser) and in the test runner.
+It owns every one of the 33 tables in `public`; **0** grants exist to `PUBLIC`; the `public`
+schema is owned by `pg_database_owner`. This is the role the application connects as, in
+development, in `compose.yaml`, in the CI workflow (which creates a per-run `POSTGRES_USER` that
+the official image makes a superuser) and in the test runner.
 
 Measured from that role: it read a stored credential hash out of `pg_authid` (`'SCRAM-SHA-256$…'`),
 dropped a project table and recreated it, created a database, read all **360** rows of `pg_settings`,

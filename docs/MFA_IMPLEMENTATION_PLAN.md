@@ -31,8 +31,8 @@ plus file reads. They are pinned by `daroobank/test_mfa_implementation_plan.py`.
 * **One login entry point, one factor.** `staff/login/` resolves to `StaffLoginView`, the only
   `LoginView` subclass among the 127 non-test project modules, and `staff/logout/` to the only
   `LogoutView`; of 55 routes the generated review counts 43 staff rows and 12 public rows. The
-  login template renders exactly two credential fields, `username` and `password`. 44 of the
-  240 test modules, excluding the suite that pins this plan, name that route, so changing its
+  login template renders exactly two credential fields, `username` and `password`. 45 of the
+  241 test modules, excluding the suite that pins this plan, name that route, so changing its
   flow is not a local edit.
 * **No factor state exists anywhere.** A scan of every field name on every installed model for
   `mfa`, `totp`, `webauthn`, `passkey`, `otp`, `factor`, `device`, `credential`, `challenge` and

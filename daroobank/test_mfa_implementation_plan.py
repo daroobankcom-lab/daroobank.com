@@ -9,7 +9,7 @@ the code and implementing one becomes a documented event rather than an edit.
 What is measured here, and what the plan says because of it:
 
 * there is one login entry point and one factor. `StaffLoginView` is the only `LoginView` subclass
-  in the project, its template renders exactly `username` and `password`, and 45 of the 241 test
+  in the project, its template renders exactly `username` and `password`, and 46 of the 242 test
   modules that are not this one name that route, so the flow is not a local edit;
 * no factor state exists. No field on any installed model matches the vocabulary of a factor, no
   module mentions TOTP, WebAuthn, a passkey or an OTP, and the four modules that mention `MFA`
@@ -104,8 +104,8 @@ MFA_MENTIONS = ['daroobank/actor_recheck.py',
                 'daroobank/session_guard.py',
                 'daroobank/settings.py']
 PROJECT_MODULE_COUNT = 127
-TEST_MODULE_COUNT = 241
-LOGIN_ROUTE_TESTS = 45
+TEST_MODULE_COUNT = 242
+LOGIN_ROUTE_TESTS = 46
 ROUTE_COUNT = 55
 STAFF_ROWS = 43
 PUBLIC_ROWS = 12

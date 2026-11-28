@@ -269,8 +269,8 @@ MEASURED = [
 # Tokens whose absence is counted over documents, with the document count each was measured at.
 # The corpus excludes the nine documents this delivery writes or edits, so these are the documents
 # that reported the absence before it, not the ones repeating it after.
-CORPUS_COUNT = 264
-DOC_TOKEN_COUNTS = {'alert': 17, 'alerting': 4, 'incident': 26, 'on-call': 2, 'dashboard': 7,
+CORPUS_COUNT = 266
+DOC_TOKEN_COUNTS = {'alert': 19, 'alerting': 4, 'incident': 26, 'on-call': 2, 'dashboard': 7,
                     'severity': 1, 'telemetry': 1, 'incident response': 1, 'data steward': 1}
 ABSENT_TOKENS = ['oncall', 'severity level', 'priority level', 'duty roster', 'alarm',
                  'escalation policy', 'postmortem', 'post-incident', 'observability', 'pager',
@@ -666,11 +666,19 @@ class RecordShapeTests(SimpleTestCase):
         self.assertEqual([date for date, _ in entries],
                          sorted((date for date, _ in entries), reverse=True),
                          'the changelog is not newest-first')
-        first_body = text.split(f'## {entries[0][0]} — {entries[0][1]}', 1)[1].split('\n## ', 1)[0]
+        # A later delivery puts its own entry above this one, so the entry that records this plan is
+        # found by what it names rather than by being first; newest-first is asserted above and is
+        # owned for the whole file by daroobank/test_release_notes_structure.py.
+        bodies = [text.split(f'## {date} — {title}', 1)[1].split('\n## ', 1)[0]
+                  for date, title in entries]
+        own = [body for body in bodies if 'MONITORING_RESPONSE_PLAN.md' in body]
+        self.assertEqual(len(own), 1,
+                         'the changelog entry that records this plan is missing or duplicated')
+        first_body = own[0]
         self.assertIn('MONITORING_RESPONSE_PLAN.md', first_body,
-                      'the newest entry does not name the plan it records')
+                      'the entry that records this plan does not name it')
         self.assertIn('0237-monitoring-response-plan.md', first_body,
-                      'the newest entry does not name the record')
+                      'the entry that records this plan does not name the record')
         self.assertIn('**Changes:**', first_body, 'the entry has no changes paragraph')
         self.assertEqual(len(re.findall(r'\*\*Changes:\*\*', first_body)), 1,
                          'the entry has more than one body')
@@ -1011,8 +1019,8 @@ class SharedPinTests(SimpleTestCase):
                          'the connection corpus is not docs/ minus the eleven documents it edits')
         self.assertEqual(CORPUS_COUNT, markdown + 1 - len(ITEM_DOCS),
                          'this corpus is not the documents minus the nine this delivery edits')
-        self.assertIn('LOGIN_ROUTE_TESTS = 46', read(MFA_SUITE),
-                      'the login-route pin moved, which this suite is not supposed to cause')
+        self.assertIn('LOGIN_ROUTE_TESTS = 47', read(MFA_SUITE),
+                      'the login-route pin moved again, and not by the record that recounts it here')
 
     def test_the_record_carries_the_red_checks_it_names(self):
         red = section(read(ADR), 'Red checks')

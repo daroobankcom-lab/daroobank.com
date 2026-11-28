@@ -104,8 +104,8 @@ MFA_MENTIONS = ['daroobank/actor_recheck.py',
                 'daroobank/session_guard.py',
                 'daroobank/settings.py']
 PROJECT_MODULE_COUNT = 127
-TEST_MODULE_COUNT = 243
-LOGIN_ROUTE_TESTS = 46
+TEST_MODULE_COUNT = 244
+LOGIN_ROUTE_TESTS = 47
 ROUTE_COUNT = 55
 STAFF_ROWS = 43
 PUBLIC_ROWS = 12

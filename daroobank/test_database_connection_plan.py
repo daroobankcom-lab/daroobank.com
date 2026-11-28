@@ -237,13 +237,13 @@ PLAN_DEPENDENCIES = ['ADR 0217', 'ADR 0222', 'ADR 0233', 'ADR 0236', 'BACKUP_REC
                      'daroobank.wsgi.application']
 # The document corpus the plan counts over: every markdown document in `docs/` that this delivery
 # neither writes nor edits.
-CORPUS_COUNT = 259
-DOC_TOKEN_COUNTS = {'statement_timeout': 5, 'replica': 9, 'superuser': 17, 'VACUUM': 3,
+CORPUS_COUNT = 261
+DOC_TOKEN_COUNTS = {'statement_timeout': 6, 'replica': 11, 'superuser': 19, 'VACUUM': 3,
                     'standby': 3, 'connect_timeout': 3, 'least privilege': 2, 'CONN_MAX_AGE': 2,
-                    'POSTGRES_CONN_MAX_AGE': 1, 'pooling': 1}
+                    'POSTGRES_CONN_MAX_AGE': 1, 'pooling': 3}
 ABSENT_DOC_TOKENS = ('max_connections', 'autovacuum', 'pooler', 'read replica')
 ABSENT_TREE_TOKENS = ('pgbouncer', 'pgpool', 'psycopg_pool', 'HAProxy', 'pg_stat_statements')
-TREE_FILE_COUNT = 744
+TREE_FILE_COUNT = 747
 PROJECT_MODULE_COUNT = 120
 SET_LOCAL_MODULES = {'daroobank/health.py': 1,
                      'staff_security/management/commands/cleanup_staff_login_windows.py': 2,
@@ -253,7 +253,7 @@ SET_LOCAL_TOTAL = 7
 LOCK_TIMEOUT_COUNT = 3
 STATEMENT_TIMEOUT_COUNT = 4
 IDLE_TRANSACTION_COUNT = 0
-TEST_TIMEOUT_MENTIONS = {'lock_timeout': 132, 'statement_timeout': 76, 'SET LOCAL': 61,
+TEST_TIMEOUT_MENTIONS = {'lock_timeout': 132, 'statement_timeout': 77, 'SET LOCAL': 62,
                          'set_config': 12, 'connect_timeout': 6}
 REQUIREMENTS_LINES = {'requirements.in': 4, 'requirements.txt': 94, 'requirements-build.txt': 9}
 COMPOSE_LINES = 44
@@ -274,6 +274,13 @@ DATABASE_ALIASES = ('default',)
 FOREIGN_KEYS = 50
 UNINDEXED_FOREIGN_KEYS = 0
 EXTENSIONS_FORBIDDEN = ('pg_stat_statements', 'pgcrypto', 'pg_trgm', 'btree_gin', 'pg_buffercache')
+
+
+def pin(text, name):
+    """The integer a suite pins under `name`, read from its source rather than imported."""
+    match = re.search(r'(?m)^%s = (\d+)$' % re.escape(name), text)
+    assert match, 'the suite stopped pinning %s' % name
+    return int(match.group(1))
 
 
 def read(path):
@@ -617,18 +624,36 @@ class MeasuredNumberTests(SimpleTestCase):
                       'the record states a red-check count that is not the list it carries')
         self.assertEqual(len(numbered(section(read(ADR), 'Red checks'))), 27,
                          'the red-check list the record names moved')
-        for path, name, value in ((DOCUMENT_LINKS, 'DOCUMENT_COUNT', 271),
-                                  (DOCUMENT_LINKS, 'ADR_COUNT', 236),
-                                  (DOCUMENT_LINKS, 'SUITE_LINE_COUNT', 26),
-                                  (MIGRATION_SUITE, 'TEST_MODULE_COUNT', 243),
-                                  (MIGRATION_SUITE, 'DOCS_MARKDOWN_COUNT', 270),
-                                  (MFA_SUITE, 'TEST_MODULE_COUNT', 242),
-                                  (SECRET_SUITE, 'TEST_MODULE_COUNT', 242),
-                                  (BACKUP_SUITE, 'DOCS_MARKDOWN_COUNT', 270),
-                                  (MFA_SUITE, 'LOGIN_ROUTE_TESTS', 46)):
+        # The three sentences above are what this record stated, and stating a value is history: ADR
+        # 0232 says the suites that count test modules `now count 238` and ADR 0233 says 239, and both
+        # have moved since without either record being rewritten. So the live pins are held to the
+        # relations that make them meaningful instead of to the values one record happened to state,
+        # and the record that moves them states the new values — ADR 0237 does, for the two documents
+        # and the one record this branch adds and the one suite it adds.
+        markdown = len(list((ROOT / 'docs').rglob('*.md')))
+        records = sorted((ROOT / 'docs' / 'ARCHITECTURE_DECISIONS').glob('[0-9][0-9][0-9][0-9]-*.md'))
+        # Each pin is held to the thing it counts, or to the pin it is defined against. The
+        # test-module counts are held to each other rather than recounted here, because the suite
+        # that owns the largest of them already counts the tree with its own module rule, and a
+        # second rule in a second suite would only disagree about `tests.py` and `migrations`.
+        migration_modules = pin(read(MIGRATION_SUITE), 'TEST_MODULE_COUNT')
+        relations = ((DOCUMENT_LINKS, 'DOCUMENT_COUNT', markdown + 1),
+                     (DOCUMENT_LINKS, 'ADR_COUNT', len(records)),
+                     (DOCUMENT_LINKS, 'SUITE_LINE_COUNT',
+                      len([record for record in records
+                           if re.search(r'(?m)^Suite:', read(record))])),
+                     (MIGRATION_SUITE, 'DOCS_MARKDOWN_COUNT', markdown),
+                     (BACKUP_SUITE, 'DOCS_MARKDOWN_COUNT', markdown),
+                     (MFA_SUITE, 'TEST_MODULE_COUNT', migration_modules - 1),
+                     (SECRET_SUITE, 'TEST_MODULE_COUNT', migration_modules - 1))
+        for path, name, value in relations:
             with self.subTest(suite=path.name, pin=name):
-                self.assertIn(f'{name} = {value}', read(path),
-                              'a global pin the record names was not moved to the value it states')
+                self.assertEqual(pin(read(path), name), value,
+                                 'a global pin is not the count of the thing it counts')
+        self.assertGreater(migration_modules, 200,
+                           'the test-module pin is small enough that the relation proves nothing')
+        self.assertIn('LOGIN_ROUTE_TESTS = 46', read(MFA_SUITE),
+                      'the login-route pin this record moved was moved again')
 
     def test_the_neighbour_documents_and_the_evidence_row_link_the_plan(self):
         for path in (DEPLOYMENT, RUNBOOK, SECURITY, TESTING, GUIDE, SCHEMA_DOC, CHANGELOG):

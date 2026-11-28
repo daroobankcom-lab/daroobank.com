@@ -132,7 +132,7 @@ measured again.
 * `docs/CHANGELOG.md`, on the session inventory: *"aliases are keyed on `SECRET_KEY`, so a rotation
   breaks correlation between reports"*.
 * `docs/SECURITY.md`: cursors are *"signed with the Django secret"*, and the control list asks for
-  *"isolated managed keys and rotation"*.
+  *"isolated managed keys and rotation"*. The three things this plan left unmeasured — how much key there is, where its value can be read, and who can read or change it — are measured in [the secrets and access plan](SECRETS_ACCESS_PLAN.md) ([ADR 0238](ARCHITECTURE_DECISIONS/0238-secrets-access-plan.md)), which prices an entropy floor at 0 changed verdicts in this tree, finds the value in exactly one host channel, and finds no mechanism behind the instruction this plan quotes.
 
 ## Candidate approach and decisions required
 

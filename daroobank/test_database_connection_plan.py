@@ -237,13 +237,13 @@ PLAN_DEPENDENCIES = ['ADR 0217', 'ADR 0222', 'ADR 0233', 'ADR 0236', 'BACKUP_REC
                      'daroobank.wsgi.application']
 # The document corpus the plan counts over: every markdown document in `docs/` that this delivery
 # neither writes nor edits.
-CORPUS_COUNT = 261
-DOC_TOKEN_COUNTS = {'statement_timeout': 6, 'replica': 11, 'superuser': 19, 'VACUUM': 3,
-                    'standby': 3, 'connect_timeout': 3, 'least privilege': 2, 'CONN_MAX_AGE': 2,
+CORPUS_COUNT = 263
+DOC_TOKEN_COUNTS = {'statement_timeout': 6, 'replica': 13, 'superuser': 21, 'VACUUM': 3,
+                        'standby': 3, 'connect_timeout': 3, 'least privilege': 4, 'CONN_MAX_AGE': 2,
                     'POSTGRES_CONN_MAX_AGE': 1, 'pooling': 3}
 ABSENT_DOC_TOKENS = ('max_connections', 'autovacuum', 'pooler', 'read replica')
 ABSENT_TREE_TOKENS = ('pgbouncer', 'pgpool', 'psycopg_pool', 'HAProxy', 'pg_stat_statements')
-TREE_FILE_COUNT = 747
+TREE_FILE_COUNT = 750
 PROJECT_MODULE_COUNT = 120
 SET_LOCAL_MODULES = {'daroobank/health.py': 1,
                      'staff_security/management/commands/cleanup_staff_login_windows.py': 2,
@@ -652,8 +652,8 @@ class MeasuredNumberTests(SimpleTestCase):
                                  'a global pin is not the count of the thing it counts')
         self.assertGreater(migration_modules, 200,
                            'the test-module pin is small enough that the relation proves nothing')
-        self.assertIn('LOGIN_ROUTE_TESTS = 46', read(MFA_SUITE),
-                      'the login-route pin this record moved was moved again')
+        self.assertIn('LOGIN_ROUTE_TESTS = 47', read(MFA_SUITE),
+                       'the login-route pin moved again, and ADR 0238 recounts it')
 
     def test_the_neighbour_documents_and_the_evidence_row_link_the_plan(self):
         for path in (DEPLOYMENT, RUNBOOK, SECURITY, TESTING, GUIDE, SCHEMA_DOC, CHANGELOG):
